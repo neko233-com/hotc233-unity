@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -42,11 +43,17 @@ namespace Hotc233.Editor.MethodBridge
 
         private readonly MethodReferenceAnalyzer _methodReferenceAnalyzer;
 
+        private readonly ParallelOptions _parallelOptions;
+
         public Analyzer(Options options)
         {
             _maxInterationCount = options.MaxIterationCount;
             _assemblyCollector = options.Collector;
             _methodReferenceAnalyzer = new MethodReferenceAnalyzer(this.OnNewMethod);
+            _parallelOptions = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Math.Max(1, Math.Min(Environment.ProcessorCount / 2, 8)),
+            };
         }
 
         private void TryAddAndWalkGenericType(GenericClass gc)
@@ -188,10 +195,12 @@ namespace Hotc233.Editor.MethodBridge
                 _newMethods = temp;
                 _newMethods.Clear();
 
-                Task.WaitAll(_processingMethods.Select(method => Task.Run(() =>
+                Debug.Log($"iteration:[{i}] analyzing {_processingMethods.Count} methods with max parallelism {_parallelOptions.MaxDegreeOfParallelism}");
+
+                Parallel.ForEach(_processingMethods, _parallelOptions, method =>
                 {
                     _methodReferenceAnalyzer.WalkMethod(method.Method, method.KlassInst, method.MethodInst);
-                })).ToArray());
+                });
                 Debug.Log($"iteration:[{i}] genericClass:{_genericTypes.Count} genericMethods:{_genericMethods.Count} newMethods:{_newMethods.Count}");
             }
         }

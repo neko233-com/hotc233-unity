@@ -118,5 +118,119 @@ namespace Hotc233.Editor.Installer
 
             UnityEditor.FileUtil.CopyFileOrDirectory(src, dst);
         }
+
+        public static bool SyncDirIncremental(string src, string dst, bool log = false)
+        {
+            if (!Directory.Exists(src))
+            {
+                throw new DirectoryNotFoundException($"source directory not found: {src}");
+            }
+
+            if (log)
+            {
+                UnityEngine.Debug.Log($"[BashUtil] SyncDirIncremental {src} => {dst}");
+            }
+
+            bool changed = false;
+            Directory.CreateDirectory(dst);
+            RemoveDeletedEntries(src, dst, ref changed, log);
+            CopyChangedEntries(src, dst, ref changed, log);
+            return changed;
+        }
+
+        private static void RemoveDeletedEntries(string src, string dst, ref bool changed, bool log)
+        {
+            foreach (string dstFile in Directory.GetFiles(dst))
+            {
+                string fileName = Path.GetFileName(dstFile);
+                string srcFile = Path.Combine(src, fileName);
+                if (File.Exists(srcFile))
+                {
+                    continue;
+                }
+
+                File.SetAttributes(dstFile, FileAttributes.Normal);
+                File.Delete(dstFile);
+                changed = true;
+                if (log)
+                {
+                    UnityEngine.Debug.Log($"[BashUtil] delete file {dstFile}");
+                }
+            }
+
+            foreach (string dstDir in Directory.GetDirectories(dst))
+            {
+                string dirName = Path.GetFileName(dstDir);
+                string srcDir = Path.Combine(src, dirName);
+                if (Directory.Exists(srcDir))
+                {
+                    RemoveDeletedEntries(srcDir, dstDir, ref changed, log);
+                    continue;
+                }
+
+                RemoveDir(dstDir, log);
+                changed = true;
+            }
+        }
+
+        private static void CopyChangedEntries(string src, string dst, ref bool changed, bool log)
+        {
+            foreach (string srcDir in Directory.GetDirectories(src))
+            {
+                string dirName = Path.GetFileName(srcDir);
+                string dstDir = Path.Combine(dst, dirName);
+                if (!Directory.Exists(dstDir))
+                {
+                    Directory.CreateDirectory(dstDir);
+                    changed = true;
+                    if (log)
+                    {
+                        UnityEngine.Debug.Log($"[BashUtil] create dir {dstDir}");
+                    }
+                }
+
+                CopyChangedEntries(srcDir, dstDir, ref changed, log);
+            }
+
+            foreach (string srcFile in Directory.GetFiles(src))
+            {
+                string fileName = Path.GetFileName(srcFile);
+                string dstFile = Path.Combine(dst, fileName);
+                if (!NeedCopy(srcFile, dstFile))
+                {
+                    continue;
+                }
+
+                File.SetAttributes(srcFile, FileAttributes.Normal);
+                if (File.Exists(dstFile))
+                {
+                    File.SetAttributes(dstFile, FileAttributes.Normal);
+                }
+                File.Copy(srcFile, dstFile, true);
+                File.SetLastWriteTimeUtc(dstFile, File.GetLastWriteTimeUtc(srcFile));
+                changed = true;
+                if (log)
+                {
+                    UnityEngine.Debug.Log($"[BashUtil] copy file {srcFile} => {dstFile}");
+                }
+            }
+        }
+
+        private static bool NeedCopy(string srcFile, string dstFile)
+        {
+            if (!File.Exists(dstFile))
+            {
+                return true;
+            }
+
+            var srcInfo = new FileInfo(srcFile);
+            var dstInfo = new FileInfo(dstFile);
+            if (srcInfo.Length != dstInfo.Length)
+            {
+                return true;
+            }
+
+            return srcInfo.LastWriteTimeUtc != dstInfo.LastWriteTimeUtc;
+        }
     }
 }

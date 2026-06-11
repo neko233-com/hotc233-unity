@@ -152,19 +152,23 @@ namespace Hotc233.Editor.Installer
             string workDir = SettingsUtil.Hotc233DataDir;
             Directory.CreateDirectory(workDir);
 
-            // 创建本地 il2cpp 工作目录
-            string localUnityDataDir = SettingsUtil.LocalUnityDataDir;
-            BashUtil.RecreateDir(localUnityDataDir);
+            // 参考 HybridCLR 的本地工作目录思路，尽量保持增量同步，避免每次整目录重拷导致编辑器长时间无响应。
+            string localIl2CppDir = SettingsUtil.LocalIl2CppDir;
+            Directory.CreateDirectory(localIl2CppDir);
 
-            // 先复制编辑器自带 il2cpp
-            BashUtil.CopyDir(editorIl2cppPath, SettingsUtil.LocalIl2CppDir, true);
+            bool editorFilesChanged = BashUtil.SyncDirIncremental(editorIl2cppPath, localIl2CppDir, true);
 
-            // 再用包内内置 libil2cpp 覆盖运行时源码
             string dstLibil2cppDir = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp";
-            BashUtil.CopyDir(libil2cppSourceDir, dstLibil2cppDir, true);
+            bool runtimeFilesChanged = BashUtil.SyncDirIncremental(libil2cppSourceDir, dstLibil2cppDir, true);
 
-            // 清理旧缓存，避免沿用过期编译结果
-            BashUtil.RemoveDir($"{SettingsUtil.ProjectDir}/Library/Il2cppBuildCache", true);
+            if (editorFilesChanged || runtimeFilesChanged)
+            {
+                BashUtil.RemoveDir($"{SettingsUtil.ProjectDir}/Library/Il2cppBuildCache", true);
+            }
+            else
+            {
+                Debug.Log("Hotc233 安装跳过了未变化文件，同步完成，保留现有 Il2CppBuildCache。");
+            }
 
             if (HasInstalledHotc233())
             {
