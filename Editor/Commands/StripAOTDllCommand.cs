@@ -53,7 +53,7 @@ namespace Hotc233.Editor.Commands
 
         private static string GetLocationPathName(string buildDir, BuildTarget target)
         {
-            switch(target)
+            switch (target)
             {
                 case BuildTarget.StandaloneWindows:
                 case BuildTarget.StandaloneWindows64: return $"{buildDir}/{PlayerSettings.productName}.exe";
@@ -97,33 +97,33 @@ namespace Hotc233.Editor.Commands
                     case BuildTarget.StandaloneWindows:
                     case BuildTarget.StandaloneWindows64:
                     {
-    #if UNITY_EDITOR_WIN
+#if UNITY_EDITOR_WIN
                         UnityEditor.WindowsStandalone.UserBuildSettings.createSolution = true;
-    #endif
-                            break;
+#endif
+                        break;
                     }
                     case BuildTarget.StandaloneOSX:
                     {
-    #if UNITY_EDITOR_OSX
+#if UNITY_EDITOR_OSX
                         UnityEditor.OSXStandalone.UserBuildSettings.createXcodeProject = true;
-    #endif
+#endif
                         break;
                     }
-    #if TUANJIE_2022_3_OR_NEWER
+#if TUANJIE_2022_3_OR_NEWER
                     case BuildTarget.HMIAndroid:
-    #endif
+#endif
                     case BuildTarget.Android:
                     {
                         EditorUserBuildSettings.exportAsGoogleAndroidProject = true;
                         break;
                     }
-    #if TUANJIE_2022_3_OR_NEWER
+#if TUANJIE_2022_3_OR_NEWER
                     case BuildTarget.OpenHarmony:
                     {
                         EditorUserBuildSettings.exportAsOpenHarmonyProject = true;
                         break;
                     }
-    #endif
+#endif
                 }
 
                 Debug.Log($"GenerateStripedAOTDlls build option:{buildOptions}");
@@ -141,7 +141,6 @@ namespace Hotc233.Editor.Commands
                 };
 
                 var report = BuildPipeline.BuildPlayer(buildPlayerOptions);
-
 
 
                 if (report.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded)
@@ -189,6 +188,7 @@ namespace Hotc233.Editor.Commands
 #endif
                 }
             }
+
             Debug.Log($"GenerateStripedAOTDlls target:{target} path:{outputPath}");
         }
     }

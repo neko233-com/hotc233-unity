@@ -2,8 +2,12 @@
     "versions": [
         {
             "unity_version": "2022-tuanjie",
-            "runtime_patch": { "branch": "v8.11.0" },
-            "il2cpp_plus": { "branch": "v2022-tuanjie-8.11.0" }
+            "runtime_patch": {
+                "branch": "v8.11.0"
+            },
+            "il2cpp_plus": {
+                "branch": "v2022-tuanjie-8.11.0"
+            }
         }
     ]
 }
