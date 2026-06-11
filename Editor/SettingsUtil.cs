@@ -26,7 +26,7 @@ namespace Hotc233.Editor
 
         public static string PackageName { get; } = "com.neko233.hotc233-unity";
 
-        public static string Hotc233DataPathInPackage => $"Assets/neko233/hotc233-unity/Data~";
+        public static string Hotc233DataPathInPackage => $"Assets/neko233/hotc233/Data~";
 
         public static string TemplatePathInPackage => $"{Hotc233DataPathInPackage}/Templates";
 
