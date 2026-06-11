@@ -1,0 +1,15 @@
+{
+  "name": "Hotc233.Editor",
+  "rootNamespace": "Hotc233.Editor",
+  "references": ["Hotc233.Runtime"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": true,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "useGUIDs": false
+}

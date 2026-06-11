@@ -1,0 +1,17 @@
+namespace Hotc233
+{
+    public enum LoadImageErrorCode
+    {
+        OK = 0,
+        BAD_IMAGE,
+        NOT_IMPLEMENT,
+        AOT_ASSEMBLY_NOT_FIND,
+        HOMOLOGOUS_ONLY_SUPPORT_AOT_ASSEMBLY,
+        HOMOLOGOUS_ASSEMBLY_HAS_LOADED,
+        INVALID_HOMOLOGOUS_MODE,
+        PDB_BAD_FILE,
+        UNKNOWN_IMAGE_FORMAT,
+        UNSUPPORT_FORMAT_VERSION,
+        UNMATCH_FORMAT_VARIANT,
+    }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "com.neko233.hotc233-unity",
+  "version": "1.0.0",
+  "displayName": "Hotc233",
+  "description": "Hotc233 is a fully featured, zero-cost, high-performance, low-memory solution for Unity's all-platform native C# hotupdate. Fully compatible with HybridCLR API. Single package, no separate installation required.",
+  "category": "Scripting",
+  "keywords": [
+    "Hotc233",
+    "HybridCLR",
+    "hotupdate",
+    "hotfix",
+    "neko233"
+  ],
+  "author": {
+    "name": "neko233"
+  }
+}

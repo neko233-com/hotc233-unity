@@ -1,0 +1,15 @@
+{
+  "name": "Hotc233.Runtime",
+  "rootNamespace": "Hotc233",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": true,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "useGUIDs": false
+}
