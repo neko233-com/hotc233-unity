@@ -44,10 +44,6 @@ namespace Hotc233.Editor.Commands
                 options |= BuildOptions.EnableDeepProfilingSupport;
             }
 
-#if UNITY_2021_2_OR_NEWER
-            options |= BuildOptions.CleanBuildCache;
-#endif
-
             return options;
         }
 

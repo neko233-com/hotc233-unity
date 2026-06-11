@@ -15,11 +15,11 @@ namespace hybridclr
 {
 	void RuntimeApi::RegisterInternalCalls()
 	{
-		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::LoadMetadataForAOTAssembly(System.Byte[],HybridCLR.HomologousImageMode)", (Il2CppMethodPointer)LoadMetadataForAOTAssembly);
-		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::GetRuntimeOption(HybridCLR.RuntimeOptionId)", (Il2CppMethodPointer)GetRuntimeOption);
-		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::SetRuntimeOption(HybridCLR.RuntimeOptionId,System.Int32)", (Il2CppMethodPointer)SetRuntimeOption);
-		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::PreJitClass(System.Type)", (Il2CppMethodPointer)PreJitClass);
-		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::PreJitMethod(System.Reflection.MethodInfo)", (Il2CppMethodPointer)PreJitMethod);
+		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::LoadMetadataForAOTAssembly(System.Byte[],Hotc233.HomologousImageMode)", (Il2CppMethodPointer)LoadMetadataForAOTAssembly);
+		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::GetRuntimeOption(Hotc233.RuntimeOptionId)", (Il2CppMethodPointer)GetRuntimeOption);
+		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::SetRuntimeOption(Hotc233.RuntimeOptionId,System.Int32)", (Il2CppMethodPointer)SetRuntimeOption);
+		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::PreJitClass(System.Type)", (Il2CppMethodPointer)PreJitClass);
+		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::PreJitMethod(System.Reflection.MethodInfo)", (Il2CppMethodPointer)PreJitMethod);
 	}
 
 	int32_t RuntimeApi::LoadMetadataForAOTAssembly(Il2CppArray* dllBytes, int32_t mode)
