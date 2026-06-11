@@ -7,6 +7,11 @@ using Debug = UnityEngine.Debug;
 
 namespace Hotc233.Editor.Installer
 {
+    /// <summary>
+    /// 用途: 管理 Hotc233 安装流程与本地 libil2cpp 覆盖逻辑。
+    /// 关键点: 当前包只面向 Unity 2022 + 团结引擎 1.8.0+；默认直接使用包内内置源码。
+    /// 注意事项: 底层运行时代码仍复用既有 native 目录结构；这里仅收口编辑器侧文案与安装入口。
+    /// </summary>
     public class InstallerController
     {
         public int MajorVersion => _curVersion.major;
@@ -17,11 +22,14 @@ namespace Hotc233.Editor.Installer
 
         public string InstalledLibil2cppVersion { get; private set; }
 
-        /// <summary>
-        /// The libil2cpp is bundled inside the package at Data~/Libil2cpp/2022-tuanjie/.
-        /// Users update it via `git pull` on the hotc233-unity repo — no separate repo needed.
-        /// </summary>
+        /// <summary>包内内置的 libil2cpp 源码目录。</summary>
         public string BundledLibil2cppDir => $"{SettingsUtil.ProjectDir}/{SettingsUtil.Hotc233DataPathInPackage}/Libil2cpp/2022-tuanjie";
+
+        private string RuntimeMarkerRelativePath => "libil2cpp/hybridclr";
+
+        private string LocalRuntimeMarkerDir => $"{SettingsUtil.LocalIl2CppDir}/{RuntimeMarkerRelativePath}";
+
+        private string BundledRuntimeMarkerDir => $"{BundledLibil2cppDir}/hybridclr";
 
         public InstallerController()
         {
@@ -51,7 +59,7 @@ namespace Hotc233.Editor.Installer
 
         public string GetCurrentUnityVersionMinCompatibleVersionStr()
         {
-            return "2022.3.0";
+            return "Unity 2022 + 团结引擎 1.8.0+";
         }
 
         public enum CompatibleType
@@ -70,7 +78,11 @@ namespace Hotc233.Editor.Installer
             }
             if (!version.isTuanjieEngine || version.major != 2022)
             {
-                return CompatibleType.MaybeIncompatible;
+                return CompatibleType.Incompatible;
+            }
+            if (!version.HasMinTuanjieVersion(1, 8, 0))
+            {
+                return CompatibleType.Incompatible;
             }
             return CompatibleType.Compatible;
         }
@@ -83,7 +95,7 @@ namespace Hotc233.Editor.Installer
             }
         }
 
-        public string LocalVersionFile => $"{SettingsUtil.LocalIl2CppDir}/libil2cpp/hybridclr/generated/libil2cpp-version.txt";
+        public string LocalVersionFile => $"{LocalRuntimeMarkerDir}/generated/libil2cpp-version.txt";
 
         private string ReadLocalVersion()
         {
@@ -106,10 +118,7 @@ namespace Hotc233.Editor.Installer
             Debug.Log($"Write installed version:'{PackageVersion}' to {LocalVersionFile}");
         }
 
-        /// <summary>
-        /// Install from the bundled libil2cpp inside the package.
-        /// The bundled libil2cpp is updated via `git pull` on the hotc233-unity repo.
-        /// </summary>
+        /// <summary>从包内内置 libil2cpp 安装 Hotc233。</summary>
         public void InstallDefaultHotc233()
         {
             string bundledDir = BundledLibil2cppDir;
@@ -117,13 +126,13 @@ namespace Hotc233.Editor.Installer
             {
                 throw new Exception(
                     $"Bundled libil2cpp not found at: {bundledDir}\n" +
-                    "Please make sure the hotc233-unity package is up-to-date (git pull).");
+                    "请先更新 hotc233-unity 仓库内容。");
             }
-            if (!Directory.Exists($"{bundledDir}/hybridclr"))
+            if (!Directory.Exists(BundledRuntimeMarkerDir))
             {
                 throw new Exception(
                     $"Invalid bundled libil2cpp at: {bundledDir}\n" +
-                    "The hybridclr subdirectory is missing. Please git pull the latest hotc233-unity.");
+                    "运行时标记目录缺失，请同步最新的 hotc233-unity 内容。");
             }
             InstallFromLocalLibil2cpp(bundledDir);
         }
@@ -137,49 +146,47 @@ namespace Hotc233.Editor.Installer
         {
             if (GetCompatibleType() == CompatibleType.Incompatible)
             {
-                Debug.LogError($"Incompatible with current version, minimum compatible version: {GetCurrentUnityVersionMinCompatibleVersionStr()}");
+                Debug.LogError($"当前环境不受支持，最低要求: {GetCurrentUnityVersionMinCompatibleVersionStr()}");
                 return;
             }
-            string workDir = SettingsUtil.HybridCLRDataDir;
+            string workDir = SettingsUtil.Hotc233DataDir;
             Directory.CreateDirectory(workDir);
 
-            // create LocalIl2Cpp
+            // 创建本地 il2cpp 工作目录
             string localUnityDataDir = SettingsUtil.LocalUnityDataDir;
             BashUtil.RecreateDir(localUnityDataDir);
 
-            // copy il2cpp from Unity Editor installation
+            // 先复制编辑器自带 il2cpp
             BashUtil.CopyDir(editorIl2cppPath, SettingsUtil.LocalIl2CppDir, true);
 
-            // replace libil2cpp with the bundled version
+            // 再用包内内置 libil2cpp 覆盖运行时源码
             string dstLibil2cppDir = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp";
             BashUtil.CopyDir(libil2cppSourceDir, dstLibil2cppDir, true);
 
-            // clean Il2cppBuildCache
+            // 清理旧缓存，避免沿用过期编译结果
             BashUtil.RemoveDir($"{SettingsUtil.ProjectDir}/Library/Il2cppBuildCache", true);
 
             if (HasInstalledHotc233())
             {
                 WriteLocalVersion();
-                Debug.Log("Hotc233 Install Successfully!");
+                Debug.Log("Hotc233 安装完成。");
             }
             else
             {
-                Debug.LogError("Hotc233 Installation failed!");
+                Debug.LogError("Hotc233 安装失败。");
             }
         }
 
         public bool HasInstalledHotc233()
         {
-            return Directory.Exists($"{SettingsUtil.LocalIl2CppDir}/libil2cpp/hybridclr");
+            return Directory.Exists(LocalRuntimeMarkerDir);
         }
 
-        /// <summary>
-        /// Check if the bundled libil2cpp exists in the package
-        /// </summary>
+        /// <summary>检查包内是否已经包含可安装的 libil2cpp。</summary>
         public bool HasBundledLibil2cpp()
         {
             return Directory.Exists(BundledLibil2cppDir)
-                && Directory.Exists($"{BundledLibil2cppDir}/hybridclr");
+                && Directory.Exists(BundledRuntimeMarkerDir);
         }
 
         private class UnityVersion
@@ -188,6 +195,26 @@ namespace Hotc233.Editor.Installer
             public int minor1;
             public int minor2;
             public bool isTuanjieEngine;
+            public int tuanjieMajor;
+            public int tuanjieMinor1;
+            public int tuanjieMinor2;
+
+            public bool HasMinTuanjieVersion(int majorVersion, int minorVersion, int patchVersion)
+            {
+                if (!this.isTuanjieEngine)
+                {
+                    return false;
+                }
+                if (this.tuanjieMajor != majorVersion)
+                {
+                    return this.tuanjieMajor > majorVersion;
+                }
+                if (this.tuanjieMinor1 != minorVersion)
+                {
+                    return this.tuanjieMinor1 > minorVersion;
+                }
+                return this.tuanjieMinor2 >= patchVersion;
+            }
 
             public override string ToString()
             {
@@ -196,6 +223,10 @@ namespace Hotc233.Editor.Installer
         }
 
         private static readonly Regex s_unityVersionPat = new Regex(@"(\d+)\.(\d+)\.(\d+)");
+
+#if TUANJIE_1_1_OR_NEWER
+        private static readonly Regex s_tuanjieVersionPat = new Regex(@"(\d+)\.(\d+)\.(\d+)");
+#endif
 
         private UnityVersion ParseUnityVersion(string versionStr)
         {
@@ -209,7 +240,29 @@ namespace Hotc233.Editor.Installer
             int minor1 = int.Parse(match.Groups[2].Value);
             int minor2 = int.Parse(match.Groups[3].Value);
             bool isTuanjieEngine = versionStr.Contains("t");
-            return new UnityVersion { major = major, minor1 = minor1, minor2 = minor2, isTuanjieEngine = isTuanjieEngine };
+
+            UnityVersion version = new UnityVersion
+            {
+                major = major,
+                minor1 = minor1,
+                minor2 = minor2,
+                isTuanjieEngine = isTuanjieEngine,
+            };
+
+#if TUANJIE_1_1_OR_NEWER
+            if (isTuanjieEngine)
+            {
+                MatchCollection tuanjieMatches = s_tuanjieVersionPat.Matches(Application.tuanjieVersion);
+                if (tuanjieMatches.Count > 0)
+                {
+                    Match tuanjieMatch = tuanjieMatches[tuanjieMatches.Count - 1];
+                    version.tuanjieMajor = int.Parse(tuanjieMatch.Groups[1].Value);
+                    version.tuanjieMinor1 = int.Parse(tuanjieMatch.Groups[2].Value);
+                    version.tuanjieMinor2 = int.Parse(tuanjieMatch.Groups[3].Value);
+                }
+            }
+#endif
+            return version;
         }
     }
 }

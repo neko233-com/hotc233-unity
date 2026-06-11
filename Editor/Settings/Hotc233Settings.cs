@@ -4,45 +4,48 @@ using UnityEngine;
 
 namespace Hotc233.Editor.Settings
 {
+    /// <summary>
+    /// Hotc233 项目级编辑器配置。
+    /// </summary>
     public class Hotc233Settings : ScriptableObject
     {
-        [Tooltip("enable Hotc233")]
+        [Tooltip("启用 Hotc233")]
         public bool enable = true;
 
-        [Tooltip("use il2cpp in unity editor installation location")]
+        [Tooltip("使用编辑器安装目录内置的 il2cpp")]
         public bool useGlobalIl2cpp;
 
-        [Tooltip("hot update assembly definitions(asd)")]
+        [Tooltip("热更新程序集 asmdef 列表")]
         public AssemblyDefinitionAsset[] hotUpdateAssemblyDefinitions;
 
-        [Tooltip("hot update assembly names(without .dll suffix)")]
+        [Tooltip("热更新程序集名称，不带 .dll 后缀")]
         public string[] hotUpdateAssemblies;
 
-        [Tooltip("preserved hot update assembly names(without .dll suffix)")]
+        [Tooltip("需要保留的热更新程序集名称，不带 .dll 后缀")]
         public string[] preserveHotUpdateAssemblies;
 
-        [Tooltip("output directory of compiling hot update assemblies")]
-        public string hotUpdateDllCompileOutputRootDir = "HybridCLRData/HotUpdateDlls";
+        [Tooltip("热更新程序集编译输出目录")]
+        public string hotUpdateDllCompileOutputRootDir = "Hotc233Data/HotUpdateDlls";
 
-        [Tooltip("searching paths of external hot update assemblies")]
+        [Tooltip("外部热更新程序集搜索目录")]
         public string[] externalHotUpdateAssembliyDirs;
 
-        [Tooltip("output directory of stripped AOT assemblies")]
-        public string strippedAOTDllOutputRootDir = "HybridCLRData/AssembliesPostIl2CppStrip";
+        [Tooltip("裁剪后 AOT 程序集输出目录")]
+        public string strippedAOTDllOutputRootDir = "Hotc233Data/AssembliesPostIl2CppStrip";
 
-        [Tooltip("supplementary metadata assembly names(without .dll suffix)")]
+        [Tooltip("补充元数据程序集名称，不带 .dll 后缀")]
         public string[] patchAOTAssemblies;
 
-        [Tooltip("output file of automatic generated link.xml by scanning hot update assemblies")]
-        public string outputLinkFile = "HybridCLRGenerate/link.xml";
+        [Tooltip("自动生成的 link.xml 输出路径")]
+        public string outputLinkFile = "Hotc233Generate/link.xml";
 
-        [Tooltip("output file of automatic generated AOTGenericReferences.cs")]
-        public string outputAOTGenericReferenceFile = "HybridCLRGenerate/AOTGenericReferences.cs";
+        [Tooltip("自动生成的 AOTGenericReferences.cs 输出路径")]
+        public string outputAOTGenericReferenceFile = "Hotc233Generate/AOTGenericReferences.cs";
 
-        [Tooltip("max iteration count of searching generic methods in hot update assemblies")]
+        [Tooltip("扫描热更新泛型引用时的最大迭代次数")]
         public int maxGenericReferenceIteration = 10;
 
-        [Tooltip("max iteration count of searching method bridge generic methods in AOT assemblies")]
+        [Tooltip("扫描 MethodBridge 泛型引用时的最大迭代次数")]
         public int maxMethodBridgeGenericIteration = 10;
 
         private static Hotc233Settings s_Instance;

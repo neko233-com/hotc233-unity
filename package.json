@@ -2,11 +2,11 @@
   "name": "com.neko233.hotc233-unity",
   "version": "1.0.0",
   "displayName": "Hotc233",
-  "description": "Hotc233 is a fully featured, zero-cost, high-performance, low-memory solution for Unity's all-platform native C# hotupdate. Fully compatible with HybridCLR API. Single package, no separate installation required.",
+  "description": "Hotc233 is a single-repository native C# hot update solution for Unity 2022 and Tuanjie Engine 1.8.0+. Single package, bundled libil2cpp, no extra package installation required.",
   "category": "Scripting",
   "keywords": [
     "Hotc233",
-    "HybridCLR",
+    "Tuanjie",
     "hotupdate",
     "hotfix",
     "neko233"

@@ -67,7 +67,7 @@ namespace Hotc233.Editor.Commands
 
         public static void GenerateStripedAOTDlls(BuildTarget target)
         {
-            string outputPath = $"{SettingsUtil.HybridCLRDataDir}/StrippedAOTDllsTempProj/{target}";
+            string outputPath = $"{SettingsUtil.Hotc233DataDir}/StrippedAOTDllsTempProj/{target}";
             BashUtil.RemoveDir(outputPath);
 
             var buildOptions = GetBuildPlayerOptions(target);

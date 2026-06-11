@@ -10,9 +10,14 @@ using MonoHook;
 using Hotc233.Editor.BuildProcessors;
 using System.IO;
 
-namespace Hotc233.Editor.ThirdParty.UnityHook.MonoHook
+namespace Hotc233.Editor
 {
-#if UNITY_2021_1_OR_NEWER && !UNITY_2023_1_OR_NEWER
+#if UNITY_2022
+    /// <summary>
+    /// 用途: 在 Unity 裁剪 AOT 程序集后，把结果同步到 Hotc233 配置的输出目录。
+    /// 关键点: 只保留 Unity 2022 所需分支，避免继续维护无关版本逻辑。
+    /// 注意事项: 该 Hook 依赖 UnityEditorInternal.AssemblyStripper 的现有签名。
+    /// </summary>
     [InitializeOnLoad]
     public class CopyStrippedAOTAssembliesHook
     {

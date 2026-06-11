@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace Hotc233.Editor.Installer
 {
+    /// <summary>
+    /// Hotc233 安装窗口。
+    /// </summary>
     public class InstallerWindow : EditorWindow
     {
         private InstallerController _controller;
@@ -52,13 +55,13 @@ namespace Hotc233.Editor.Installer
             if (!hasBundled)
             {
                 EditorGUILayout.HelpBox(
-                    "Bundled libil2cpp not found! Please git pull the hotc233-unity repo to get the latest libil2cpp.",
+                    "未找到包内内置 libil2cpp，请先同步 hotc233-unity 仓库内容。",
                     MessageType.Error);
             }
             else
             {
                 EditorGUILayout.HelpBox(
-                    "libil2cpp is bundled inside the package. Update via: git pull",
+                    "当前包已内置 libil2cpp，后续只需要更新 hotc233-unity 仓库即可。",
                     MessageType.Info);
             }
 
@@ -75,12 +78,12 @@ namespace Hotc233.Editor.Installer
                 }
 
                 EditorGUILayout.BeginHorizontal();
-                _installFromDir = EditorGUILayout.Toggle("Copy libil2cpp from local", _installFromDir, GUILayout.MinWidth(100));
+                _installFromDir = EditorGUILayout.Toggle("从本地目录覆盖 libil2cpp", _installFromDir, GUILayout.MinWidth(100));
                 EditorGUI.BeginDisabledGroup(!_installFromDir);
                 EditorGUILayout.TextField(_installLibil2cppSourceDir, GUILayout.Width(400));
                 if (GUILayout.Button("Choose", GUILayout.Width(100)))
                 {
-                    _installLibil2cppSourceDir = EditorUtility.OpenFolderPanel("Select libil2cpp", Application.dataPath, "libil2cpp");
+                    _installLibil2cppSourceDir = EditorUtility.OpenFolderPanel("选择 libil2cpp 目录", Application.dataPath, "libil2cpp");
                 }
                 EditorGUI.EndDisabledGroup();
                 EditorGUILayout.EndHorizontal();
@@ -100,7 +103,7 @@ namespace Hotc233.Editor.Installer
             else
             {
                 EditorGUILayout.HelpBox(
-                    $"Incompatible with current version, minimum compatible version:{_controller.GetCurrentUnityVersionMinCompatibleVersionStr()}",
+                    $"当前环境不受支持，最低要求: {_controller.GetCurrentUnityVersionMinCompatibleVersionStr()}",
                     MessageType.Error);
             }
 
@@ -113,12 +116,12 @@ namespace Hotc233.Editor.Installer
             {
                 if (!Directory.Exists(_installLibil2cppSourceDir))
                 {
-                    Debug.LogError($"Source libil2cpp:'{_installLibil2cppSourceDir}' doesn't exist.");
+                    Debug.LogError($"源 libil2cpp 目录不存在: '{_installLibil2cppSourceDir}'。");
                     return;
                 }
                 if (!File.Exists($"{_installLibil2cppSourceDir}/il2cpp-config.h") || !File.Exists($"{_installLibil2cppSourceDir}/hybridclr/RuntimeApi.cpp"))
                 {
-                    Debug.LogError($"Source libil2cpp:'{_installLibil2cppSourceDir}' is invalid (missing il2cpp-config.h or hybridclr/RuntimeApi.cpp)");
+                    Debug.LogError($"源 libil2cpp 目录无效: '{_installLibil2cppSourceDir}'，缺少必要运行时标记文件。");
                     return;
                 }
                 _controller.InstallFromLocalLibil2cpp(_installLibil2cppSourceDir);

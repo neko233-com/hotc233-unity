@@ -9,6 +9,9 @@ using Hotc233.Editor.Settings;
 
 namespace Hotc233.Editor
 {
+    /// <summary>
+    /// Hotc233 编辑器侧路径与配置入口。
+    /// </summary>
     public static class SettingsUtil
     {
         public static bool Enable
@@ -35,9 +38,9 @@ namespace Hotc233.Editor
 
         public static string AssembliesPostIl2CppStripDir => Hotc233Settings.Instance.strippedAOTDllOutputRootDir;
 
-        public static string HybridCLRDataDir => $"{ProjectDir}/HybridCLRData";
+        public static string Hotc233DataDir => $"{ProjectDir}/Hotc233Data";
 
-        public static string LocalUnityDataDir => $"{HybridCLRDataDir}/LocalIl2CppData-{Application.platform}";
+        public static string LocalUnityDataDir => $"{Hotc233DataDir}/LocalIl2CppData-{Application.platform}";
 
         public static string LocalIl2CppDir => $"{LocalUnityDataDir}/il2cpp";
 

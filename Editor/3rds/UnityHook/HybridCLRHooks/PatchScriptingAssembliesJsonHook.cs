@@ -10,10 +10,15 @@ using MonoHook;
 using Hotc233.Editor.BuildProcessors;
 using System.IO;
 
-namespace Hotc233.Editor.ThirdParty.UnityHook.MonoHook
+namespace Hotc233.Editor
 {
-#if UNITY_2021_1_OR_NEWER && (UNITY_WEBGL || UNITY_WEIXINMINIGAME)
+#if UNITY_2022 && (UNITY_WEBGL || UNITY_WEIXINMINIGAME)
     [InitializeOnLoad]
+    /// <summary>
+    /// 用途: 在 WebGL / 微信小游戏打包缓存生成后，补丁 ScriptingAssemblies 列表。
+    /// 关键点: 仅覆盖当前项目实际使用的 Unity 2022 平台链路。
+    /// 注意事项: Hook 的代理函数必须保留最小方法体长度，不能删空。
+    /// </summary>
     public class PatchScriptingAssembliesJsonHook
     {
         private static MethodHook _hook;
@@ -35,13 +40,13 @@ namespace Hotc233.Editor.ThirdParty.UnityHook.MonoHook
 
         private static string BuildMainWindowTitle()
         {
-        var cacheDir = $"{Application.dataPath}/../Library/PlayerDataCache";
-        if (Directory.Exists(cacheDir))
+            string cacheDir = $"{Application.dataPath}/../Library/PlayerDataCache";
+            if (Directory.Exists(cacheDir))
             {
-                foreach (var tempJsonPath in Directory.GetDirectories(cacheDir, "*", SearchOption.TopDirectoryOnly))
+                foreach (string tempJsonPath in Directory.GetDirectories(cacheDir, "*", SearchOption.TopDirectoryOnly))
                 {
                     string dirName = Path.GetFileName(tempJsonPath);
- #if UNITY_WEIXINMINIGAME
+#if UNITY_WEIXINMINIGAME
                     if (!dirName.Contains("WeixinMiniGame"))
                     {
                         continue;
@@ -53,7 +58,7 @@ namespace Hotc233.Editor.ThirdParty.UnityHook.MonoHook
                     }
 #endif
 
-                    var patcher = new PatchScriptingAssemblyList();
+                    PatchScriptingAssemblyList patcher = new PatchScriptingAssemblyList();
                     patcher.PathScriptingAssembilesFile(tempJsonPath);
                 }
             }
