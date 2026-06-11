@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEngine;
+using Hotc233.Editor.Settings;
 
 namespace Hotc233.Editor.Commands
 {
@@ -17,24 +21,321 @@ namespace Hotc233.Editor.Commands
         [MenuItem("Hotc233/Generate/All", priority = 200)]
         public static void GenerateAll()
         {
+            GenerateAll(EditorUserBuildSettings.activeBuildTarget, EditorUserBuildSettings.development, false);
+        }
+
+        [MenuItem("Hotc233/Generate/All_ForceRebuild", priority = 201)]
+        public static void GenerateAllForceRebuild()
+        {
+            GenerateAll(EditorUserBuildSettings.activeBuildTarget, EditorUserBuildSettings.development, true);
+        }
+
+        public static void GenerateAll(BuildTarget target, bool developmentBuild, bool forceRebuild)
+        {
             var installer = new Installer.InstallerController();
             if (!installer.HasInstalledHotc233())
             {
                 throw new BuildFailedException($"You have not initialized Hotc233, please install it via menu 'Hotc233/Installer'");
             }
-            BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
-            CompileDllCommand.CompileDll(target, EditorUserBuildSettings.development);
-            Il2CppDefGeneratorCommand.GenerateIl2CppDef();
 
-            // 这几个生成依赖HotUpdateDlls
-            LinkGeneratorCommand.GenerateLinkXml(target);
+            PrebuildPipeline.Run(target, developmentBuild, forceRebuild);
+        }
+    }
 
-            // 生成裁剪后的aot dll
-            StripAOTDllCommand.GenerateStripedAOTDlls(target);
+    internal static class PrebuildPipeline
+    {
+        [Serializable]
+        private sealed class PipelineState
+        {
+            public List<StageState> stages = new List<StageState>();
+        }
 
-            // 桥接函数生成依赖于AOT dll，必须保证已经build过，生成AOT dll
-            MethodBridgeGeneratorCommand.GenerateMethodBridgeAndReversePInvokeWrapper(target);
-            AOTReferenceGeneratorCommand.GenerateAOTGenericReference(target);
+        [Serializable]
+        private sealed class StageState
+        {
+            public string name;
+            public string fingerprint;
+            public string updatedAtUtc;
+        }
+
+        private readonly struct PipelineContext
+        {
+            public PipelineContext(BuildTarget target, bool developmentBuild)
+            {
+                Target = target;
+                DevelopmentBuild = developmentBuild;
+            }
+
+            public BuildTarget Target { get; }
+
+            public bool DevelopmentBuild { get; }
+        }
+
+        public static void Run(BuildTarget target, bool developmentBuild, bool forceRebuild)
+        {
+            var context = new PipelineContext(target, developmentBuild);
+            var state = LoadState(context);
+
+            RunStage(context, state, "CompileDll", forceRebuild, ComputeCompileFingerprint, HasCompiledDlls, () =>
+            {
+                CompileDllCommand.CompileDll(target, developmentBuild);
+            });
+
+            RunStage(context, state, "GenerateIl2CppDef", forceRebuild, ComputeProjectFingerprint, HasIl2CppDefOutputs, () =>
+            {
+                Il2CppDefGeneratorCommand.GenerateIl2CppDef();
+            });
+
+            RunStage(context, state, "GenerateLinkXml", forceRebuild, ComputeProjectFingerprint, HasLinkOutput, () =>
+            {
+                LinkGeneratorCommand.GenerateLinkXml(target);
+            });
+
+            RunStage(context, state, "GenerateStrippedAotDlls", forceRebuild, ComputeStripFingerprint, HasStrippedAotDlls, () =>
+            {
+                StripAOTDllCommand.GenerateStripedAOTDlls(target);
+            });
+
+            RunStage(context, state, "GenerateMethodBridge", forceRebuild, ComputeMethodBridgeFingerprint, HasMethodBridgeOutput, () =>
+            {
+                MethodBridgeGeneratorCommand.GenerateMethodBridgeAndReversePInvokeWrapper(target);
+            });
+
+            RunStage(context, state, "GenerateAotReference", forceRebuild, ComputeAotReferenceFingerprint, HasAotReferenceOutput, () =>
+            {
+                AOTReferenceGeneratorCommand.GenerateAOTGenericReference(target);
+            });
+
+            SaveState(context, state);
+        }
+
+        private static void RunStage(PipelineContext context, PipelineState state, string stageName, bool forceRebuild,
+            Func<PipelineContext, string> computeFingerprint, Func<PipelineContext, bool> hasOutputs, Action action)
+        {
+            string fingerprint = computeFingerprint(context);
+            StageState stageState = GetOrCreateStageState(state, stageName);
+            bool outputsReady = hasOutputs(context);
+            bool fingerprintMatches = stageState.fingerprint == fingerprint;
+
+            if (!forceRebuild && outputsReady && fingerprintMatches)
+            {
+                Debug.Log($"[PrebuildPipeline] Skip {stageName} for {context.Target} (cache hit)");
+                return;
+            }
+
+            Debug.Log($"[PrebuildPipeline] Run {stageName} for {context.Target} (force:{forceRebuild}, outputsReady:{outputsReady}, fingerprintMatches:{fingerprintMatches})");
+            action();
+            stageState.fingerprint = fingerprint;
+            stageState.updatedAtUtc = DateTime.UtcNow.ToString("O");
+        }
+
+        private static StageState GetOrCreateStageState(PipelineState state, string stageName)
+        {
+            StageState stageState = state.stages.FirstOrDefault(stage => stage.name == stageName);
+            if (stageState != null)
+            {
+                return stageState;
+            }
+
+            stageState = new StageState { name = stageName };
+            state.stages.Add(stageState);
+            return stageState;
+        }
+
+        private static PipelineState LoadState(PipelineContext context)
+        {
+            string stateFile = GetStateFilePath(context);
+            if (!File.Exists(stateFile))
+            {
+                return new PipelineState();
+            }
+
+            try
+            {
+                return JsonUtility.FromJson<PipelineState>(File.ReadAllText(stateFile)) ?? new PipelineState();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[PrebuildPipeline] Failed to load state file '{stateFile}', rebuild all stages. {exception.Message}");
+                return new PipelineState();
+            }
+        }
+
+        private static void SaveState(PipelineContext context, PipelineState state)
+        {
+            string stateFile = GetStateFilePath(context);
+            Directory.CreateDirectory(Path.GetDirectoryName(stateFile) ?? SettingsUtil.Hotc233DataDir);
+            File.WriteAllText(stateFile, JsonUtility.ToJson(state, true));
+        }
+
+        private static string GetStateFilePath(PipelineContext context)
+        {
+            return Path.Combine(SettingsUtil.Hotc233DataDir, "PrebuildCache", $"{context.Target}-{(context.DevelopmentBuild ? "dev" : "release")}.json");
+        }
+
+        private static string ComputeCompileFingerprint(PipelineContext context)
+        {
+            return ComputeFingerprint(context, false, false, false);
+        }
+
+        private static string ComputeProjectFingerprint(PipelineContext context)
+        {
+            return ComputeFingerprint(context, true, false, false);
+        }
+
+        private static string ComputeStripFingerprint(PipelineContext context)
+        {
+            return ComputeFingerprint(context, true, true, false);
+        }
+
+        private static string ComputeMethodBridgeFingerprint(PipelineContext context)
+        {
+            return ComputeFingerprint(context, true, true, true);
+        }
+
+        private static string ComputeAotReferenceFingerprint(PipelineContext context)
+        {
+            return ComputeFingerprint(context, true, false, true);
+        }
+
+        private static string ComputeFingerprint(PipelineContext context, bool includeBuildSettings, bool includeScenes, bool includeOutputs)
+        {
+            var parts = new List<string>
+            {
+                $"target={context.Target}",
+                $"development={context.DevelopmentBuild}",
+                $"settings={ReadFileIfExists(Path.Combine(SettingsUtil.ProjectDir, "ProjectSettings", "Hotc233Settings.asset"))}",
+                $"assemblies={string.Join(";", SettingsUtil.HotUpdateAssemblyNamesIncludePreserved.OrderBy(name => name, StringComparer.Ordinal))}",
+                $"patchAot={string.Join(";", SettingsUtil.AOTAssemblyNames.OrderBy(name => name, StringComparer.Ordinal))}",
+            };
+
+            if (includeBuildSettings)
+            {
+                parts.Add($"buildSettings={ReadFileIfExists(Path.Combine(SettingsUtil.ProjectDir, "ProjectSettings", "EditorBuildSettings.asset"))}");
+            }
+
+            if (includeScenes)
+            {
+                parts.Add($"enabledScenes={string.Join(";", EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).OrderBy(path => path, StringComparer.Ordinal))}");
+            }
+
+            foreach (string sourceFile in EnumerateHotUpdateSourceFiles())
+            {
+                var fileInfo = new FileInfo(sourceFile);
+                parts.Add($"src|{sourceFile}|{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}");
+            }
+
+            if (includeOutputs)
+            {
+                foreach (string outputFile in EnumerateOutputFiles(context))
+                {
+                    if (!File.Exists(outputFile))
+                    {
+                        parts.Add($"out|{outputFile}|missing");
+                        continue;
+                    }
+
+                    var fileInfo = new FileInfo(outputFile);
+                    parts.Add($"out|{outputFile}|{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}");
+                }
+            }
+
+            using var sha256 = SHA256.Create();
+            byte[] hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(string.Join("\n", parts)));
+            return BitConverter.ToString(hashBytes).Replace("-", string.Empty);
+        }
+
+        private static IEnumerable<string> EnumerateHotUpdateSourceFiles()
+        {
+            return SettingsUtil.Hotc233Settings.hotUpdateAssemblyDefinitions
+                .Where(asset => asset != null)
+                .Select(asset => AssetDatabase.GetAssetPath(asset))
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .SelectMany(path => EnumerateAssemblyDirectoryFiles(Path.GetDirectoryName(path) ?? string.Empty))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.Ordinal);
+        }
+
+        private static IEnumerable<string> EnumerateAssemblyDirectoryFiles(string assetDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(assetDirectory))
+            {
+                yield break;
+            }
+
+            string absoluteDirectory = Path.Combine(SettingsUtil.ProjectDir, assetDirectory);
+            if (!Directory.Exists(absoluteDirectory))
+            {
+                yield break;
+            }
+
+            foreach (string file in Directory.GetFiles(absoluteDirectory, "*", SearchOption.AllDirectories)
+                .Where(file => !file.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)))
+            {
+                yield return file;
+            }
+        }
+
+        private static IEnumerable<string> EnumerateOutputFiles(PipelineContext context)
+        {
+            string hotUpdateDir = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(context.Target);
+            foreach (string assemblyName in SettingsUtil.HotUpdateAssemblyNamesExcludePreserved)
+            {
+                yield return Path.Combine(hotUpdateDir, assemblyName + ".dll");
+            }
+
+            yield return Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hybridclr", "Generated", "UnityVersion.h");
+            yield return Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hybridclr", "Generated", "AssemblyManifest.cpp");
+            yield return Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputLinkFile);
+            yield return Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputAOTGenericReferenceFile);
+            yield return Path.Combine(SettingsUtil.GeneratedCppDir, "MethodBridge.cpp");
+
+            string strippedAotDir = SettingsUtil.GetAssembliesPostIl2CppStripDir(context.Target);
+            if (Directory.Exists(strippedAotDir))
+            {
+                foreach (string aotDll in Directory.GetFiles(strippedAotDir, "*.dll", SearchOption.TopDirectoryOnly).OrderBy(path => path, StringComparer.Ordinal))
+                {
+                    yield return aotDll;
+                }
+            }
+        }
+
+        private static bool HasCompiledDlls(PipelineContext context)
+        {
+            string hotUpdateDir = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(context.Target);
+            return SettingsUtil.HotUpdateAssemblyNamesExcludePreserved.All(assemblyName => File.Exists(Path.Combine(hotUpdateDir, assemblyName + ".dll")));
+        }
+
+        private static bool HasIl2CppDefOutputs(PipelineContext context)
+        {
+            return File.Exists(Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hybridclr", "Generated", "UnityVersion.h"))
+                && File.Exists(Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hybridclr", "Generated", "AssemblyManifest.cpp"));
+        }
+
+        private static bool HasLinkOutput(PipelineContext context)
+        {
+            return File.Exists(Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputLinkFile));
+        }
+
+        private static bool HasStrippedAotDlls(PipelineContext context)
+        {
+            string strippedAotDir = SettingsUtil.GetAssembliesPostIl2CppStripDir(context.Target);
+            return Directory.Exists(strippedAotDir) && Directory.GetFiles(strippedAotDir, "*.dll", SearchOption.TopDirectoryOnly).Length > 0;
+        }
+
+        private static bool HasMethodBridgeOutput(PipelineContext context)
+        {
+            return File.Exists(Path.Combine(SettingsUtil.GeneratedCppDir, "MethodBridge.cpp"));
+        }
+
+        private static bool HasAotReferenceOutput(PipelineContext context)
+        {
+            return File.Exists(Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputAOTGenericReferenceFile));
+        }
+
+        private static string ReadFileIfExists(string path)
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
         }
     }
 }
