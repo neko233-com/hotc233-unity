@@ -25,6 +25,9 @@ namespace Hotc233.Editor.Settings
         [MenuItem("hotc233/Language/Auto Detect", true)]
         private static bool ValidateAutoLanguage()
         {
+            // Validation callbacks run when Unity draws the menu; this is the
+            // only reliable place to keep the checkmark synchronized with the
+            // persisted ProjectSettings value.
             Menu.SetChecked("hotc233/Language/Auto Detect", Hotc233Settings.Instance.logLanguage == Hotc233LogLanguage.Auto);
             return true;
         }
@@ -51,6 +54,8 @@ namespace Hotc233.Editor.Settings
 
         private static void SetLanguage(Hotc233LogLanguage language)
         {
+            // Store the choice in ProjectSettings/Hotc233Settings.asset so the
+            // selection survives editor restarts and is available to batch tools.
             Hotc233Settings.Instance.logLanguage = language;
             Hotc233Settings.Save();
             Debug.Log(Hotc233Localization.Format("language.changed", Hotc233Localization.LanguageLabel(language)));

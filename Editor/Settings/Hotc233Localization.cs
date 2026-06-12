@@ -6,6 +6,9 @@ namespace Hotc233.Editor.Settings
 {
     public static class Hotc233Localization
     {
+        // Editor logs are the only localized surface for now. Keeping messages in
+        // one table makes CompileDll and Generate/All use the same language rules
+        // without requiring every command to know about system-language detection.
         private static readonly Dictionary<string, (string zh, string en)> s_Messages =
             new Dictionary<string, (string zh, string en)>(StringComparer.Ordinal)
             {
@@ -79,6 +82,9 @@ namespace Hotc233.Editor.Settings
                     return configured;
                 }
 
+                // Auto is evaluated at read time so a project can be shared by
+                // Chinese and English editor users without committing a language
+                // preference into ProjectSettings.
                 return IsSystemChinese() ? Hotc233LogLanguage.Chinese : Hotc233LogLanguage.English;
             }
         }
@@ -121,6 +127,9 @@ namespace Hotc233.Editor.Settings
 
         private static bool IsSystemChinese()
         {
+            // Unity splits Chinese variants into names such as ChineseSimplified
+            // and ChineseTraditional, so string matching is more future-proof
+            // across supported editor versions than checking one enum value.
             string languageName = Application.systemLanguage.ToString();
             return languageName.IndexOf("Chinese", StringComparison.OrdinalIgnoreCase) >= 0;
         }

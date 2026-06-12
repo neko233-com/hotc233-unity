@@ -6,6 +6,9 @@ namespace Hotc233.Editor.Settings
 {
     public enum Hotc233LogLanguage
     {
+        // Auto keeps the package friendly for shared repositories: every editor
+        // user gets logs in their system language unless the project explicitly
+        // pins Chinese or English.
         Auto = 0,
         Chinese = 1,
         English = 2,
@@ -92,6 +95,9 @@ namespace Hotc233.Editor.Settings
                 return;
             }
 
+            // InternalEditorUtility writes a Unity-native serialized asset under
+            // ProjectSettings, which is how this package persists editor-only
+            // preferences without requiring a runtime asset in Assets/.
             string filePath = GetFilePath();
             string directoryName = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(directoryName))

@@ -9,6 +9,10 @@ namespace Hotc233.Editor
     {
         private const string PackageRoot = "Assets/neko233/hotc233";
         private const string DefaultOutputDirectory = "Build/Packages";
+        // Unity's package exporter intentionally omits package-private "~"
+        // folders. hotc233-unity keeps bundled libil2cpp data in Data~, so the
+        // exported .unitypackage is useful as a snapshot but not as the canonical
+        // distribution format.
         private const string PartialPackageWarning =
             "Unity .unitypackage export does not include package-private folders ending with '~' such as Data~ and Documentation~. " +
             "Use the Assets/neko233/hotc233 folder or UPM/local package distribution for a complete hotc233-unity package.";
@@ -82,6 +86,9 @@ namespace Hotc233.Editor
                 return string.Empty;
             }
 
+            // Avoid pulling an editor JSON dependency into this tiny exporter.
+            // package.json is controlled by the package, so a focused version
+            // scan is enough and keeps this menu available in older Unity installs.
             string json = File.ReadAllText(packageJsonPath);
             const string marker = "\"version\"";
             int markerIndex = json.IndexOf(marker, StringComparison.Ordinal);

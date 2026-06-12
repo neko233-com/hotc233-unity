@@ -16,8 +16,14 @@ namespace Hotc233.Editor.Commands
     public static class PrebuildCommand
     {
         /// <summary>
-        /// 按照必要的顺序，执行所有生成操作，适合打包前操作
+        /// Runs every generation step required before an IL2CPP player build.
         /// </summary>
+        /// <remarks>
+        /// The order is intentional: hot update DLLs and linker data must exist
+        /// before stripped AOT assemblies are collected, and stripped AOT
+        /// assemblies are required before MethodBridge and AOT reference output
+        /// can be generated.
+        /// </remarks>
         [MenuItem("hotc233/Generate/All", priority = 200)]
         public static void GenerateAll()
         {
@@ -52,6 +58,10 @@ namespace Hotc233.Editor.Commands
 
         private static void SaveDirtyOpenScenesWithoutPrompt()
         {
+            // In the interactive editor, BuildPipeline.BuildPlayer can show a modal
+            // "scene not saved" prompt. Generate/All may call a hidden player build
+            // to collect stripped AOT DLLs, so save dirty scenes up front and keep
+            // the command usable from menus, CI wrappers, and automation scripts.
             if (Application.isBatchMode)
             {
                 return;
@@ -67,6 +77,9 @@ namespace Hotc233.Editor.Commands
 
                 if (string.IsNullOrEmpty(scene.path))
                 {
+                    // Untitled scenes have no deterministic path. We cannot save
+                    // them silently without choosing a location for the user, so
+                    // warn and let Unity keep that scene in memory.
                     Debug.LogWarning(Hotc233Localization.Format("generate.skipUnsavedScene", scene.name));
                     continue;
                 }
@@ -83,6 +96,9 @@ namespace Hotc233.Editor.Commands
 
     internal static class PrebuildPipeline
     {
+        // The cache is deliberately stored outside generated C++ and DLL output.
+        // Deleting build artifacts should force regeneration through hasOutputs,
+        // while keeping this small state file lets unchanged stages skip work.
         [Serializable]
         private sealed class PipelineState
         {
@@ -156,6 +172,8 @@ namespace Hotc233.Editor.Commands
             bool outputsReady = hasOutputs(context);
             bool fingerprintMatches = stageState.fingerprint == fingerprint;
 
+            // A stage can only be skipped when both the output files still exist
+            // and the inputs that matter to that stage have not changed.
             if (!forceRebuild && outputsReady && fingerprintMatches)
             {
                 Debug.Log(Hotc233Localization.Format("pipeline.skip", stageName, context.Target));
