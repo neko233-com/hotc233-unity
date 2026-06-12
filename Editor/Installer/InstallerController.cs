@@ -8,7 +8,7 @@ using Debug = UnityEngine.Debug;
 namespace Hotc233.Editor.Installer
 {
     /// <summary>
-    /// 用途: 管理 Hotc233 安装流程与本地 libil2cpp 覆盖逻辑。
+    /// 用途: 管理 Hotc233 内置 libil2cpp 就绪流程与本地 libil2cpp 覆盖逻辑。
     /// 关键点: 当前包只面向 Unity 2022 + 团结引擎 1.8.0+；默认直接使用包内内置源码。
     /// 注意事项: 底层运行时代码仍复用既有 native 目录结构；这里仅收口编辑器侧文案与安装入口。
     /// </summary>
@@ -118,7 +118,13 @@ namespace Hotc233.Editor.Installer
             Debug.Log($"Write installed version:'{PackageVersion}' to {LocalVersionFile}");
         }
 
-        /// <summary>从包内内置 libil2cpp 安装 Hotc233。</summary>
+        /// <summary>确保包内内置 libil2cpp 已同步到 Unity 可使用的本地工作目录。</summary>
+        public void EnsureBuiltinRuntimeReady()
+        {
+            InstallDefaultHotc233();
+        }
+
+        /// <summary>从包内内置 libil2cpp 同步 Hotc233 运行时。</summary>
         public void InstallDefaultHotc233()
         {
             string bundledDir = BundledLibil2cppDir;

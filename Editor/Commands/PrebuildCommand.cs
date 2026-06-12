@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using Hotc233.Editor.Settings;
 
@@ -17,14 +18,13 @@ namespace Hotc233.Editor.Commands
         /// <summary>
         /// 按照必要的顺序，执行所有生成操作，适合打包前操作
         /// </summary>
-        [MenuItem("Hotc233/Generate/All", priority = 200)]
-        [MenuItem("Hotc233/Generate/All", priority = 200)]
+        [MenuItem("hotc233/Generate/All", priority = 200)]
         public static void GenerateAll()
         {
             GenerateAll(EditorUserBuildSettings.activeBuildTarget, EditorUserBuildSettings.development, false);
         }
 
-        [MenuItem("Hotc233/Generate/All_ForceRebuild", priority = 201)]
+        [MenuItem("hotc233/Generate/All_ForceRebuild", priority = 201)]
         public static void GenerateAllForceRebuild()
         {
             GenerateAll(EditorUserBuildSettings.activeBuildTarget, EditorUserBuildSettings.development, true);
@@ -32,13 +32,52 @@ namespace Hotc233.Editor.Commands
 
         public static void GenerateAll(BuildTarget target, bool developmentBuild, bool forceRebuild)
         {
+            Debug.Log(Hotc233Localization.Format("generate.start", target, developmentBuild, forceRebuild));
+            SaveDirtyOpenScenesWithoutPrompt();
+
             var installer = new Installer.InstallerController();
             if (!installer.HasInstalledHotc233())
             {
-                throw new BuildFailedException($"You have not initialized Hotc233, please install it via menu 'Hotc233/Installer'");
+                installer.EnsureBuiltinRuntimeReady();
+            }
+
+            if (!installer.HasInstalledHotc233())
+            {
+                throw new BuildFailedException(Hotc233Localization.Text("generate.runtimeInitFailed"));
             }
 
             PrebuildPipeline.Run(target, developmentBuild, forceRebuild);
+            Debug.Log(Hotc233Localization.Format("generate.finish", target, developmentBuild, forceRebuild));
+        }
+
+        private static void SaveDirtyOpenScenesWithoutPrompt()
+        {
+            if (Application.isBatchMode)
+            {
+                return;
+            }
+
+            for (int index = 0; index < EditorSceneManager.sceneCount; index++)
+            {
+                var scene = EditorSceneManager.GetSceneAt(index);
+                if (!scene.IsValid() || !scene.isDirty)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(scene.path))
+                {
+                    Debug.LogWarning(Hotc233Localization.Format("generate.skipUnsavedScene", scene.name));
+                    continue;
+                }
+
+                if (EditorSceneManager.SaveScene(scene))
+                {
+                    Debug.Log(Hotc233Localization.Format("generate.saveDirtyScene", scene.path));
+                }
+            }
+
+            AssetDatabase.SaveAssets();
         }
     }
 
@@ -119,11 +158,11 @@ namespace Hotc233.Editor.Commands
 
             if (!forceRebuild && outputsReady && fingerprintMatches)
             {
-                Debug.Log($"[PrebuildPipeline] Skip {stageName} for {context.Target} (cache hit)");
+                Debug.Log(Hotc233Localization.Format("pipeline.skip", stageName, context.Target));
                 return;
             }
 
-            Debug.Log($"[PrebuildPipeline] Run {stageName} for {context.Target} (force:{forceRebuild}, outputsReady:{outputsReady}, fingerprintMatches:{fingerprintMatches})");
+            Debug.Log(Hotc233Localization.Format("pipeline.run", stageName, context.Target, forceRebuild, outputsReady, fingerprintMatches));
             action();
             stageState.fingerprint = fingerprint;
             stageState.updatedAtUtc = DateTime.UtcNow.ToString("O");
@@ -156,7 +195,7 @@ namespace Hotc233.Editor.Commands
             }
             catch (Exception exception)
             {
-                Debug.LogWarning($"[PrebuildPipeline] Failed to load state file '{stateFile}', rebuild all stages. {exception.Message}");
+                Debug.LogWarning(Hotc233Localization.Format("pipeline.stateLoadFailed", stateFile, exception.Message));
                 return new PipelineState();
             }
         }

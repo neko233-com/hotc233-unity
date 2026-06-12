@@ -9,6 +9,7 @@ namespace Hotc233.Editor.Settings
         private SerializedObject _serializedObject;
         private SerializedProperty _enable;
         private SerializedProperty _useGlobalIl2cpp;
+        private SerializedProperty _logLanguage;
         private SerializedProperty _hotUpdateAssemblyDefinitions;
         private SerializedProperty _hotUpdateAssemblies;
         private SerializedProperty _preserveHotUpdateAssemblies;
@@ -35,6 +36,7 @@ namespace Hotc233.Editor.Settings
             _serializedObject = new SerializedObject(setting);
             _enable = _serializedObject.FindProperty("enable");
             _useGlobalIl2cpp = _serializedObject.FindProperty("useGlobalIl2cpp");
+            _logLanguage = _serializedObject.FindProperty("logLanguage");
             _hotUpdateAssemblyDefinitions = _serializedObject.FindProperty("hotUpdateAssemblyDefinitions");
             _hotUpdateAssemblies = _serializedObject.FindProperty("hotUpdateAssemblies");
             _preserveHotUpdateAssemblies = _serializedObject.FindProperty("preserveHotUpdateAssemblies");
@@ -58,6 +60,7 @@ namespace Hotc233.Editor.Settings
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.PropertyField(_enable);
             EditorGUILayout.PropertyField(_useGlobalIl2cpp);
+            EditorGUILayout.PropertyField(_logLanguage);
             EditorGUILayout.PropertyField(_hotUpdateAssemblyDefinitions);
             EditorGUILayout.PropertyField(_hotUpdateAssemblies);
             EditorGUILayout.PropertyField(_preserveHotUpdateAssemblies);

@@ -13,7 +13,7 @@ namespace Hotc233.Editor.Commands
     public static class Il2CppDefGeneratorCommand
     {
 
-        [MenuItem("Hotc233/Generate/Il2CppDef", priority = 104)]
+        [MenuItem("hotc233/Generate/Il2CppDef", priority = 104)]
         public static void GenerateIl2CppDef()
         {
             var options = new Il2CppDef.Il2CppDefGenerator.Options()

@@ -4,6 +4,13 @@ using UnityEngine;
 
 namespace Hotc233.Editor.Settings
 {
+    public enum Hotc233LogLanguage
+    {
+        Auto = 0,
+        Chinese = 1,
+        English = 2,
+    }
+
     /// <summary>
     /// Hotc233 项目级编辑器配置。
     /// </summary>
@@ -14,6 +21,9 @@ namespace Hotc233.Editor.Settings
 
         [Tooltip("使用编辑器安装目录内置的 il2cpp")]
         public bool useGlobalIl2cpp;
+
+        [Tooltip("日志语言。Auto 会根据系统语言自动选择中文或英文；手动选择会保存到 ProjectSettings。")]
+        public Hotc233LogLanguage logLanguage = Hotc233LogLanguage.Auto;
 
         [Tooltip("热更新程序集 asmdef 列表")]
         public AssemblyDefinitionAsset[] hotUpdateAssemblyDefinitions;

@@ -364,7 +364,7 @@ namespace Hotc233.Editor.MethodBridge
                     TypeDef typeDef = typeSig.ToTypeDefOrRef().ResolveTypeDef();
                     if (typeDef == null)
                     {
-                        throw new Exception($"type:{typeSig} definition could not be found. Please try `Hotc233/Generate/LinkXml`, then Build once to generate the AOT dll, and then regenerate the bridge function");
+                        throw new Exception($"type:{typeSig} definition could not be found. Please try `hotc233/Generate/LinkXml`, then Build once to generate the AOT dll, and then regenerate the bridge function");
                     }
                     if (typeDef.IsEnum)
                     {
@@ -1053,7 +1053,7 @@ const ReversePInvokeMethodData hybridclr::interpreter::g_reversePInvokeMethodStu
                     TypeDef typeDef = type.ToTypeDefOrRef().ResolveTypeDef();
                     if (typeDef == null)
                     {
-                        throw new Exception($"type:{type} definition could not be found. Please try `Hotc233/Generate/LinkXml`, then Build once to generate the AOT dll, and then regenerate the bridge function");
+                        throw new Exception($"type:{type} definition could not be found. Please try `hotc233/Generate/LinkXml`, then Build once to generate the AOT dll, and then regenerate the bridge function");
                     }
                     if (typeDef.IsEnum)
                     {

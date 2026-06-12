@@ -49,7 +49,7 @@ namespace Hotc233.Editor.HotUpdate
                 }
                 else if (!_hotUpdateAssNames.Contains(refAssName))
                 {
-                    UnityEngine.Debug.LogError($"Missing AOT Assembly: {refAssName}");
+                    UnityEngine.Debug.LogWarning($"Missing AOT Assembly: {refAssName}");
                     anyMissing = true;
                 }
             }
@@ -64,7 +64,7 @@ namespace Hotc233.Editor.HotUpdate
                 }
                 if (typeRef.ResolveTypeDef() == null)
                 {
-                    UnityEngine.Debug.LogError($"Missing Type: {typeRef.FullName}");
+                    UnityEngine.Debug.LogWarning($"Missing Type: {typeRef.FullName}");
                     anyMissing = true;
                 }
             }
@@ -85,7 +85,7 @@ namespace Hotc233.Editor.HotUpdate
                     IField field = (IField)memberRef;
                     if (field.ResolveFieldDef() == null)
                     {
-                        UnityEngine.Debug.LogError($"Missing Field: {memberRef.FullName}");
+                        UnityEngine.Debug.LogWarning($"Missing Field: {memberRef.FullName}");
                         anyMissing = true;
                     }
                 }
@@ -98,7 +98,7 @@ namespace Hotc233.Editor.HotUpdate
                         {
                             continue;
                         }
-                        UnityEngine.Debug.LogError($"Missing Method: {memberRef.FullName}");
+                        UnityEngine.Debug.LogWarning($"Missing Method: {memberRef.FullName}");
                         anyMissing = true;
                     }
                 }

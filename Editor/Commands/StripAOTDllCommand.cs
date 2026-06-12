@@ -14,7 +14,7 @@ namespace Hotc233.Editor.Commands
 {
     public static class StripAOTDllCommand
     {
-        [MenuItem("Hotc233/Generate/AOTDlls", priority = 105)]
+        [MenuItem("hotc233/Generate/AOTDlls", priority = 105)]
         public static void GenerateStripedAOTDlls()
         {
             GenerateStripedAOTDlls(EditorUserBuildSettings.activeBuildTarget);
@@ -141,7 +141,9 @@ namespace Hotc233.Editor.Commands
 
                 if (report.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded)
                 {
-                    throw new Exception("GenerateStripedAOTDlls failed");
+                    throw new Exception(
+                        $"GenerateStripedAOTDlls failed for {target}: result={report.summary.result}, errors={report.summary.totalErrors}, warnings={report.summary.totalWarnings}. " +
+                        "Check Console for Unity BuildPipeline details, including missing IL2CPP platform support modules.");
                 }
             }
             finally

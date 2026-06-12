@@ -160,7 +160,7 @@ Library/EditorForBuild/AssetBundles/hotc233_binary_payload
 入口：
 
 ```text
-Hotc233/EditorForBuild/Run Full AB Verification
+hotc233/EditorForBuild/Run Full AB Verification
 UnityHotc.EditorForBuild.Hotc233BuildAutomation.CI_RunFullAbVerification
 ```
 
@@ -214,8 +214,8 @@ all   -> build + player + device
 CI 推荐命令：
 
 ```powershell
-cd D:\Code\Poko-Dev-Projects\unity-hotc\tools
-go run ./hotc233ctl all -project D:\Code\Poko-Dev-Projects\unity-hotc -target StandaloneWindows64 -version dev
+cd D:\Code\neko233-Projects\unity-hotc233-demo\tools
+go run ./hotc233ctl all -project D:\Code\neko233-Projects\unity-hotc233-demo -target StandaloneWindows64 -version dev
 ```
 
 ## 数据流

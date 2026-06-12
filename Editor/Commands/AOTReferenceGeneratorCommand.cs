@@ -15,7 +15,7 @@ namespace Hotc233.Editor.Commands
     public static class AOTReferenceGeneratorCommand
     {
 
-        [MenuItem("Hotc233/Generate/AOTGenericReference", priority = 102)]
+        [MenuItem("hotc233/Generate/AOTGenericReference", priority = 102)]
         public static void CompileAndGenerateAOTGenericReference()
         {
             BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
@@ -48,7 +48,7 @@ namespace Hotc233.Editor.Commands
 
 
 
-        //[MenuItem("Hotc233/Generate/AOTGenericReference2", priority = 103)]
+        //[MenuItem("hotc233/Generate/AOTGenericReference2", priority = 103)]
         //public static void GeneratedAOTGenericReferenceExcludeExists()
         //{
         //    GeneratedAOTGenericReferenceExcludeExists(EditorUserBuildSettings.activeBuildTarget);
@@ -81,7 +81,7 @@ namespace Hotc233.Editor.Commands
                 : new List<string>();
             if (aotAssemblyNames.Count == 0)
             {
-                throw new Exception($"no aot assembly found. please run `Hotc233/Generate/All` or `Hotc233/Generate/AotDlls` to generate aot dlls before runing `Hotc233/Generate/AOTGenericReference`");
+                throw new Exception($"no aot assembly found. please run `hotc233/Generate/All` or `hotc233/Generate/AotDlls` to generate aot dlls before runing `hotc233/Generate/AOTGenericReference`");
             }
             AssemblyReferenceDeepCollector aotCollector = new AssemblyReferenceDeepCollector(MetaUtil.CreateAOTAssemblyResolver(target), aotAssemblyNames);
             var aotAnalyzer = new Analyzer(new Analyzer.Options

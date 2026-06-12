@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Hotc233.Editor.Installer
 {
     /// <summary>
-    /// Hotc233 安装窗口。
+    /// Hotc233 内置运行时窗口。
     /// </summary>
     public class InstallerWindow : EditorWindow
     {
@@ -42,7 +42,7 @@ namespace Hotc233.Editor.Installer
             GUILayout.Space(10f);
 
             EditorGUILayout.BeginVertical("box");
-            EditorGUILayout.LabelField($"Installed: {hasInstall}", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField($"Builtin runtime ready: {hasInstall}", EditorStyles.boldLabel);
             GUILayout.Space(10f);
 
             EditorGUILayout.LabelField($"Package Version:      v{_controller.PackageVersion}");
@@ -92,7 +92,7 @@ namespace Hotc233.Editor.Installer
 
                 EditorGUILayout.BeginHorizontal();
                 EditorGUI.BeginDisabledGroup(!hasBundled && !_installFromDir);
-                if (GUILayout.Button("Install", GUILayout.Width(100)))
+                if (GUILayout.Button("Sync Builtin Runtime", GUILayout.Width(160)))
                 {
                     InstallHotc233();
                     GUIUtility.ExitGUI();

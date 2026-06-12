@@ -1,8 +1,10 @@
-# Hotc233
+# hotc233-unity
 
-Hotc233 是 Unity / Tuanjie 的 C# 热更新库。目标：一个包内完成运行时加载、元数据补足、编辑器生成、构建接入、自动验证。
+hotc233-unity 是 Unity / Tuanjie 的 C# 热更新库。目标：一个包内完成运行时加载、元数据补足、编辑器生成、构建接入、自动验证。
 
-当前工程已接好完整验证链：点击菜单或跑 Go 工具后，自动编译热更程序集，产出 `.dll.bytes`，打入 AssetBundle，再从 AssetBundle 读回二进制并执行自测入口。
+> 包名和仓库名为 `hotc233-unity` / `com.neko233.hotc233-unity`。运行时代码命名空间仍保留 `Hotc233`，用于保持 API 兼容。
+
+当前工程已接好完整验证链：点击菜单或跑 Go 工具后，自动同步包内内置运行时、编译热更程序集，产出 `.dll.bytes`，打入 AssetBundle，再从 AssetBundle 读回二进制并执行自测入口。
 
 ## 能力
 
@@ -13,6 +15,7 @@ Hotc233 是 Unity / Tuanjie 的 C# 热更新库。目标：一个包内完成运
 - 自动把 `.dll` 转成 `.dll.bytes`，打进 AssetBundle。
 - 自动从 AssetBundle 读回 `.dll.bytes`，验证加载和反射调用。
 - 外部自动化工具统一使用 Go 1.26。
+- 使用包内 `Data~/Libil2cpp`，不需要 HybridCLR 式外部 install。
 
 ## 目录
 
@@ -43,11 +46,12 @@ loader.LoadRuntimeMetadata(metadataBinaries, HomologousImageMode.SuperSet);
 loader.LoadHotUpdateAssemblies(hotUpdateBinaries);
 
 var result = loader.InvokeStatic(
-    "UnityHotc.CodeHotUpdate.HotUpdateEntry",
+    "UnityHotc.CodeHotUpdate.HotUpdateApp",
     "RunSelfTest");
 ```
 
 `metadataBinaries` 和 `hotUpdateBinaries` 都是 `IEnumerable<NamedBinary>`。调用方负责从本地文件、远端 CDN、AssetBundle 或资源系统拿到 `byte[]`。
+`HotUpdateBinaryLoader` 会通过 `Hotc233RuntimeDiagnostics` 打印 session、平台、二进制大小、短 hash、程序集名和入口调用结果，真机失败时优先看这些日志。
 
 ## 工程接入
 
@@ -66,17 +70,87 @@ Framework_HotUpdate
       -> HotUpdateLogic
 ```
 
+### 如何定义哪些程序集是热更程序集
+
+打开 Unity 菜单：
+
+```text
+hotc233/Settings...
+```
+
+在 **Hot Update Assembly Definitions** 中拖入需要热更的 `AssemblyDefinitionAsset`。这些 asmdef 会被 `CompileDll` / `Generate/All` 编译成热更 DLL，并在运行时由 `HotUpdateBinaryLoader` 从 `byte[]` 加载。
+
+建议拆分方式：
+
+| 层级 | 示例 | 说明 |
+|------|------|------|
+| 基础层 | `Framework_HotUpdate` | 日志、基础工具、纯 C# 基础设施。不能引用业务层。 |
+| 功能层 | `Feature_HotUpdate` | C# 语法探针、Unity API 探针、可复用玩法功能。 |
+| 入口层 | `HotUpdateLogic` | 业务入口、UI/Prefab 绑定入口、`RunFullVerification` 等。 |
+
+不要把主工程 AOT 程序集、第三方插件程序集、Editor 程序集放进热更 asmdef 列表。热更程序集应当是“需要远端更新、运行时通过 byte[] 加载”的业务代码；主工程只通过反射、公共接口、资源实例化或自定义启动器接入它。
+
+### 分发给其他项目
+
+推荐分发方式是 **UPM/local package 或直接复制 `Assets/neko233/hotc233` 完整目录**。这个目录里的 `Data~` 是编辑器生成 MethodBridge、AOT 元数据和内置 libil2cpp runtime 的关键输入，不能丢。
+
+Unity 菜单提供了 `.unitypackage` 导出：
+
+```text
+hotc233/Export/Export unitypackage...
+hotc233/Export/Export unitypackage to Build/Packages
+```
+
+但要注意：Unity 的 `ExportPackage` 不会完整包含 `Data~`、`Documentation~` 这类以 `~` 结尾的 package-private 目录。当前验证导出的 `Build/Packages/hotc233-1.0.0.unitypackage` 约 **0.55 MB**，只包含 Unity AssetDatabase 可见的 `Runtime`、`Editor`、`Plugins` 等资产，不包含完整 `Data~/Libil2cpp`。因此：
+
+- 只把这个 `.unitypackage` 给其他项目，会缺内置 runtime data，后续 `hotc233/Generate/All` 可能失败。
+- 完整给其他项目使用时，应给完整目录或 UPM/local package，而不是只给 `.unitypackage`。
+- `.unitypackage` 菜单适合导出可见脚本/插件资产快照，不适合作为完整 hotc233 runtime 分发包。
+
+### 接入一个新项目需要改多少
+
+通常不需要大规模改业务代码，但需要做这几件结构性工作：
+
+1. 把希望热更的业务代码移动到独立 asmdef。
+2. 清理主工程对热更业务类型的编译期直接引用。
+3. 在 `hotc233/Settings...` 配置热更 asmdef 和 AOT 元数据程序集。
+4. 在构建前执行 `hotc233/Generate/All`。
+5. 把生成的热更 DLL 和 AOT 元数据 DLL 作为 `.dll.bytes` 交给资源系统发布。
+6. 启动时先加载 AOT 元数据，再加载热更 DLL，最后调用热更入口。
+
+如果项目原本已经按 asmdef 分层，改动通常集中在启动加载和资源发布；如果业务代码全部在 `Assembly-CSharp` 且主工程直接到处引用业务类型，需要先拆程序集边界。
+
+### 包体和构建影响
+
+当前 `Assets/neko233/hotc233` 目录约 **10.19 MB / 1228 个文件**：
+
+| 目录 | 体积 | 说明 |
+|------|------|------|
+| `Data~` | 约 8.23 MB | 内置 `Libil2cpp` runtime 源码、模板和基准文件，是编辑器生成阶段的主要体积来源。 |
+| `Plugins` | 约 1.16 MB | 编辑器分析依赖，例如 dnlib / LZ4。 |
+| `Editor` | 约 0.73 MB | 生成命令、构建处理、设置窗口、导出工具。 |
+| `Runtime` | 约 0.05 MB | Player 运行时 API、二进制加载器和诊断。 |
+
+完整目录或 UPM/local package 会让工程仓库增加约 10 MB 级别的源码/工具文件。单独导出的 `.unitypackage` 只有约 0.55 MB，但它不是完整分发包，因为缺 `Data~`。最终 Player 包体并不等于直接增加 10 MB：`Editor`、`Documentation~`、大部分生成工具不会进入 Player；真正影响发布包的是你发布的热更 `.dll.bytes`、AOT metadata `.dll.bytes`、资源包清单和平台生成产物。
+
+构建影响主要来自：
+
+- IL2CPP 出包前需要生成 MethodBridge / ReversePInvokeWrapper / link.xml / AOTGenericReference。
+- 需要裁剪并发布 AOT 元数据 DLL。
+- 资源包会额外携带热更 DLL bytes 和 metadata bytes。
+- 首次切平台或强制重建时耗时更明显；后续 `PrebuildCache` 命中会跳过未变化阶段。
+
 ## 一键 AB 验证
 
 Unity 菜单：
 
 ```text
-Hotc233/EditorForBuild/Run Full AB Verification
+hotc233/EditorForBuild/Run Full AB Verification
 ```
 
 它会自动执行：
 
-1. 检查 Hotc233 安装状态。
+1. 检查/同步 Hotc233 内置运行时状态。
 2. 写入热更 asmdef 设置。
 3. 确保 `Assets/Scenes/main.scene` 在 Build Settings。
 4. 生成热更 DLL 和运行时元数据。
@@ -85,8 +159,24 @@ Hotc233/EditorForBuild/Run Full AB Verification
 7. 从 AssetBundle 加载 `.dll.bytes`。
 8. 加载运行时元数据。
 9. 加载热更程序集。
-10. 调用 `UnityHotc.CodeHotUpdate.HotUpdateEntry.RunSelfTest`。
+10. 调用 `UnityHotc.CodeHotUpdate.HotUpdateApp.RunFullVerification`。
 11. 写出 `Assets/EditorForBuild/Generated/verification-report.json`。
+
+完整验证包含 `ReflectionComprehensiveProbe`：Assembly/Module/Type、构造、字段/属性、方法重载、私有成员、事件/委托、Attribute、泛型方法/类型、数组/Enum/Nullable、InterfaceMap/嵌套类型、可选参数和 TargetInvocationException。
+
+## C# 语法与反射支持
+
+当前示例工程的 `RunFullVerification` 会执行 95 个 hotc233 探针。已验证通过的 C# 能力如下：
+
+| 类别 | 已验证能力 | 接入注意 |
+|------|------------|----------|
+| 基础语法 | lambda / 闭包、泛型方法、泛型类型、yield 迭代器、委托闭包、异常过滤器 `when` | 热更代码必须位于 `Hot Update Assembly Definitions` 中登记的 asmdef。 |
+| 类型系统 | 接口分派、struct by ref、Nullable、Enum flags/parse、多维数组、锯齿数组、event、ValueTuple、模式匹配、ArraySegment / Memory 类操作 | 发包前运行 `hotc233/Generate/All`，确保 AOT 元数据和 link 保护已刷新。 |
+| 反射 | Assembly / Module / Type 查询、构造函数、Activator、字段、属性、方法重载、私有成员、事件、Delegate.CreateDelegate、Attribute、泛型方法、泛型类型、数组、Enum、Nullable、InterfaceMap、嵌套类型、可选参数、TargetInvocationException | 支持反射；被 IL2CPP 裁剪的 AOT 类型仍需要进入 AOT metadata 或 link.xml 保护范围。 |
+| LINQ | Sum、Average、Count、LongCount、Min、Max、Aggregate、Distinct、Union、Intersect、Except、GroupBy、Join、Zip、OrderBy、ThenBy、SelectMany、All、Any、Contains、Single、ElementAt、Take、Skip、Concat、SequenceEqual、ToDictionary、ToLookup | 性能敏感路径以 Player / 真机数据为准。 |
+| Unity API | ScriptableObject、UnityEvent、Coroutine、UGUI、2D Sprite、3D Mesh、Timeline、async/await Task、SceneManagement、平台/设备/屏幕/输入基础 API | Prefab / ScriptableObject 中的热更类型必须在热更 DLL 加载后再实例化。 |
+
+反射不是“文档声称支持”：当前仓库的 `ReflectionComprehensiveProbe` 会实际调用上述反射场景，失败会让验证流程失败。最终发布仍应以目标平台 IL2CPP 矩阵报告为准。
 
 成功报告包含：
 
@@ -97,14 +187,40 @@ Hotc233/EditorForBuild/Run Full AB Verification
 }
 ```
 
+## 性能对比采集
+
+需要 hotc233 / 原生 Mono / 原生 IL2CPP 三方性能对比时，运行：
+
+```text
+hotc233/EditorForBuild/Run Performance Comparison Baselines
+```
+
+该入口会在 `StandaloneWindows64` 下构建并运行三种 Player：
+
+1. hotc233：IL2CPP Player 中加载热更 DLL 后执行 `PerformanceProbe.Run()`。
+2. 原生 Mono：主工程原生编译后执行 `NativePerformanceProbe.Run()`。
+3. 原生 IL2CPP：主工程原生编译后执行 `NativePerformanceProbe.Run()`。
+
+输出：
+
+```text
+Assets/EditorForBuild/Generated/performance-hotc233-player.json
+Assets/EditorForBuild/Generated/native-performance-mono.json
+Assets/EditorForBuild/Generated/native-performance-il2cpp.json
+Assets/EditorForBuild/Generated/performance-comparison-report.md
+Assets/EditorForBuild/Generated/performance-comparison-report.json
+```
+
+`performance-comparison-report.md` 按 HybridCLR 风格显示比例：原生 IL2CPP ops/s 固定为 **100%**，hotc233 与原生 Mono 都用 `自身 ops/s / 原生 IL2CPP ops/s * 100%` 量化。不要用 Editor 安全模式的 `performance-report.json` 冒充这个对比表。
+
 ## Go 自动化
 
 外部工具统一 Go 1.26。
 
 ```powershell
-cd D:\Code\Poko-Dev-Projects\unity-hotc\tools
+cd D:\Code\neko233-Projects\unity-hotc233-demo\tools
 go test ./hotc233ctl/... ./server_hotupdate/...
-go run ./hotc233ctl all -project D:\Code\Poko-Dev-Projects\unity-hotc -target StandaloneWindows64 -version dev
+go run ./hotc233ctl all -project D:\Code\neko233-Projects\unity-hotc233-demo -target StandaloneWindows64 -version dev
 ```
 
 命令：
@@ -139,3 +255,32 @@ Assets/neko233/hotc233/Documentation~/architecture.md
 - asmdef 依赖必须单向，基础层不能反向引用业务层。
 - 自动化生成目录可以删除，下一次验证会重建。
 - CI 推荐只调用 Go 工具，不手写 Unity 命令行。
+- 规范见 `Assets/neko233/hotc233/AGENTS.md`。
+- 与 HybridCLR 差距检查见 `docs/hybridclr-gap-analysis.md`。
+
+## 日志语言
+
+`CompileDll` 和 `Generate/All` 的关键日志支持中文 / English：
+
+```text
+hotc233/Language/Auto Detect
+hotc233/Language/Chinese
+hotc233/Language/English
+```
+
+默认是 `Auto Detect`，会根据 `Application.systemLanguage` 自动选择中文或英文。手动切到 `Chinese` 或 `English` 后会写入 `ProjectSettings/Hotc233Settings.asset`，之后重启 Unity 仍会记住。
+
+也可以在 `hotc233/Settings...` 的 `Log Language` 字段里修改。
+
+## 导出 unitypackage
+
+包自身可以通过 Unity 菜单导出：
+
+```text
+hotc233/Export/Export unitypackage...
+hotc233/Export/Export unitypackage to Build/Packages
+```
+
+默认只导出 Unity AssetDatabase 可见的 `Assets/neko233/hotc233` 资产。示例工程里的 `Assets/CodeHotUpdate`、`Assets/EditorForBuild`、`Assets/Resources-HotUpdate`、`Packages/YooAsset` 不会被打进包里；`Data~` / `Documentation~` 也不会完整进入 `.unitypackage`。
+
+结论：`.unitypackage` **不能作为完整 hotc233 runtime 分发包单独给其他项目使用**。完整分发请使用 UPM/local package 或复制完整 `Assets/neko233/hotc233` 目录。接入方仍要按上文定义热更 asmdef、配置生成项、把 `.dll.bytes` 接入自己的资源系统，并在启动流程里调用加载器。

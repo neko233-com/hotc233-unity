@@ -47,7 +47,7 @@ namespace Hotc233.Editor.Commands
             Debug.LogFormat("[MethodBridgeGeneratorCommand] output:{0}", outputFile);
         }
 
-        [MenuItem("Hotc233/Generate/MethodBridgeAndReversePInvokeWrapper", priority = 101)]
+        [MenuItem("hotc233/Generate/MethodBridgeAndReversePInvokeWrapper", priority = 101)]
         public static void GenerateMethodBridgeAndReversePInvokeWrapper()
         {
             BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
@@ -62,7 +62,7 @@ namespace Hotc233.Editor.Commands
                 : new List<string>();
             if (aotAssemblyNames.Count == 0)
             {
-                throw new Exception($"no aot assembly found. please run `Hotc233/Generate/All` or `Hotc233/Generate/AotDlls` to generate aot dlls before runing `Hotc233/Generate/MethodBridge`");
+                throw new Exception($"no aot assembly found. please run `hotc233/Generate/All` or `hotc233/Generate/AotDlls` to generate aot dlls before runing `hotc233/Generate/MethodBridge`");
             }
             AssemblyReferenceDeepCollector collector = new AssemblyReferenceDeepCollector(MetaUtil.CreateAOTAssemblyResolver(target), aotAssemblyNames);
 

@@ -1,0 +1,21 @@
+# Unity generated state
+Library/
+Temp/
+Obj/
+Build/
+Builds/
+Logs/
+UserSettings/
+
+# IDE / OS files
+.vs/
+.idea/
+.vscode/
+*.csproj
+*.sln
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Package export snapshots
+*.unitypackage
