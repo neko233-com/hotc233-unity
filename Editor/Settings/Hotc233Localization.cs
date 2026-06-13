@@ -42,8 +42,8 @@ namespace Hotc233.Editor.Settings
                 },
                 {
                     "generate.runtimeInitFailed",
-                    ("Hotc233 内置 libil2cpp 初始化失败。请检查 Assets/neko233/hotc233/Data~/Libil2cpp。",
-                        "Hotc233 builtin libil2cpp initialization failed. Check Assets/neko233/hotc233/Data~/Libil2cpp.")
+                    ("Hotc233 内置 libil2cpp 初始化失败。请检查 Assets/neko233/hotc233-unity/Data~/Libil2cpp。",
+                        "Hotc233 builtin libil2cpp initialization failed. Check Assets/neko233/hotc233-unity/Data~/Libil2cpp.")
                 },
                 {
                     "generate.saveDirtyScene",

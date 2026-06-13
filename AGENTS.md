@@ -11,7 +11,7 @@
 
 ## 内置运行时规范
 
-- 包内运行时目录：`Assets/neko233/hotc233/Data~/Libil2cpp/2022-tuanjie`。
+- 包内运行时目录：`Assets/neko233/hotc233-unity/Data~/Libil2cpp/2022-tuanjie`。
 - 本地工作目录：`Hotc233Data/LocalIl2CppData-{Application.platform}/il2cpp`。
 - `Generate/All`、构建前检查、EditorForBuild 自动化必须自动调用 `EnsureBuiltinRuntimeReady()`。
 - 不允许因为未手动打开窗口而失败；只有包内运行时缺失或 Unity/Tuanjie 版本不兼容时才失败。

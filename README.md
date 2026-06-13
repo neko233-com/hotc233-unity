@@ -20,7 +20,7 @@ hotc233-unity 是 Unity / Tuanjie 的 C# 热更新库。目标：一个包内完
 ## 目录
 
 ```text
-Assets/neko233/hotc233/
+Assets/neko233/hotc233-unity/
   Runtime/              运行时 API 和二进制加载器
   Editor/               编辑器生成、构建处理、设置面板
   Data~/                内置运行时源码、模板、基准库文件
@@ -92,7 +92,109 @@ hotc233/Settings...
 
 ### 分发给其他项目
 
-推荐分发方式是 **UPM/local package 或直接复制 `Assets/neko233/hotc233` 完整目录**。这个目录里的 `Data~` 是编辑器生成 MethodBridge、AOT 元数据和内置 libil2cpp runtime 的关键输入，不能丢。
+推荐分发方式是 **Git 管理的完整目录**，目标路径固定为：
+
+```text
+Assets/neko233/hotc233-unity
+```
+
+这个目录里的 `Data~` 是编辑器生成 MethodBridge、AOT 元数据和内置 libil2cpp runtime 的关键输入，不能丢。
+
+最直接的安装方式：
+
+```bash
+mkdir -p Assets/neko233
+git clone https://github.com/neko233-com/hotc233-unity.git Assets/neko233/hotc233-unity
+```
+
+如果项目想用 submodule 管理：
+
+```bash
+mkdir -p Assets/neko233
+git submodule add https://github.com/neko233-com/hotc233-unity.git Assets/neko233/hotc233-unity
+git submodule update --init --recursive
+```
+
+### 一键 Git 安装 MenuItem
+
+也可以在目标项目中新建 `Assets/Editor/InstallHotc233Unity.cs`，复制下面脚本，然后点击：
+
+```text
+Tools/hotc233-unity/Install or Update from Git
+```
+
+```csharp
+using System;
+using System.Diagnostics;
+using System.IO;
+using UnityEditor;
+using Debug = UnityEngine.Debug;
+
+public static class InstallHotc233Unity
+{
+    private const string RepoUrl = "https://github.com/neko233-com/hotc233-unity.git";
+    private const string InstallPath = "Assets/neko233/hotc233-unity";
+
+    [MenuItem("Tools/hotc233-unity/Install or Update from Git")]
+    public static void InstallOrUpdate()
+    {
+        Directory.CreateDirectory("Assets/neko233");
+
+        if (Directory.Exists(Path.Combine(InstallPath, ".git")))
+        {
+            RunGit("pull --ff-only", InstallPath);
+        }
+        else if (Directory.Exists(InstallPath))
+        {
+            throw new InvalidOperationException(
+                InstallPath + " already exists but is not a git checkout. Move it away or delete it first.");
+        }
+        else
+        {
+            RunGit($"clone {RepoUrl} \"{InstallPath}\"", Directory.GetCurrentDirectory());
+        }
+
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        Debug.Log("[hotc233-unity] Installed or updated at " + InstallPath);
+    }
+
+    private static void RunGit(string arguments, string workingDirectory)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            Arguments = arguments,
+            WorkingDirectory = Path.GetFullPath(workingDirectory),
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        using (var process = Process.Start(startInfo))
+        {
+            if (process == null)
+            {
+                throw new InvalidOperationException("Failed to start git.");
+            }
+
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(error);
+            }
+
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                Debug.Log(output);
+            }
+        }
+    }
+}
+```
 
 Unity 菜单提供了 `.unitypackage` 导出：
 
@@ -122,7 +224,7 @@ hotc233/Export/Export unitypackage to Build/Packages
 
 ### 包体和构建影响
 
-当前 `Assets/neko233/hotc233` 目录约 **10.19 MB / 1228 个文件**：
+当前 `Assets/neko233/hotc233-unity` 目录约 **10.19 MB / 1228 个文件**：
 
 | 目录 | 体积 | 说明 |
 |------|------|------|
@@ -245,7 +347,7 @@ go run ./hotc233ctl all -project D:\Code\neko233-Projects\unity-hotc233-demo -ta
 架构见：
 
 ```text
-Assets/neko233/hotc233/Documentation~/architecture.md
+Assets/neko233/hotc233-unity/Documentation~/architecture.md
 ```
 
 ## 约束
@@ -255,7 +357,7 @@ Assets/neko233/hotc233/Documentation~/architecture.md
 - asmdef 依赖必须单向，基础层不能反向引用业务层。
 - 自动化生成目录可以删除，下一次验证会重建。
 - CI 推荐只调用 Go 工具，不手写 Unity 命令行。
-- 规范见 `Assets/neko233/hotc233/AGENTS.md`。
+- 规范见 `Assets/neko233/hotc233-unity/AGENTS.md`。
 - 与 HybridCLR 差距检查见 `docs/hybridclr-gap-analysis.md`。
 
 ## 日志语言
@@ -281,6 +383,6 @@ hotc233/Export/Export unitypackage...
 hotc233/Export/Export unitypackage to Build/Packages
 ```
 
-默认只导出 Unity AssetDatabase 可见的 `Assets/neko233/hotc233` 资产。示例工程里的 `Assets/CodeHotUpdate`、`Assets/EditorForBuild`、`Assets/Resources-HotUpdate`、`Packages/YooAsset` 不会被打进包里；`Data~` / `Documentation~` 也不会完整进入 `.unitypackage`。
+默认只导出 Unity AssetDatabase 可见的 `Assets/neko233/hotc233-unity` 资产。示例工程里的 `Assets/CodeHotUpdate`、`Assets/EditorForBuild`、`Assets/Resources-HotUpdate`、`Packages/YooAsset` 不会被打进包里；`Data~` / `Documentation~` 也不会完整进入 `.unitypackage`。
 
-结论：`.unitypackage` **不能作为完整 hotc233 runtime 分发包单独给其他项目使用**。完整分发请使用 UPM/local package 或复制完整 `Assets/neko233/hotc233` 目录。接入方仍要按上文定义热更 asmdef、配置生成项、把 `.dll.bytes` 接入自己的资源系统，并在启动流程里调用加载器。
+结论：`.unitypackage` **不能作为完整 hotc233 runtime 分发包单独给其他项目使用**。完整分发请使用 UPM/local package 或复制完整 `Assets/neko233/hotc233-unity` 目录。接入方仍要按上文定义热更 asmdef、配置生成项、把 `.dll.bytes` 接入自己的资源系统，并在启动流程里调用加载器。

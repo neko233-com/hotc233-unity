@@ -31,7 +31,7 @@ namespace Hotc233.Editor.Settings
             DrawDocButton("新手文档：CompileDll vs GenerateAll", "docs/hotc233-getting-started.md");
             DrawDocButton("验证矩阵与不支持用法", "docs/unsupported-csharp-usage.md");
             DrawDocButton("项目验证流程", "docs/README.md");
-            DrawDocButton("包内架构说明", "Assets/neko233/hotc233/README.md");
+            DrawDocButton("包内架构说明", "Assets/neko233/hotc233-unity/README.md");
 
             EditorGUILayout.Space(8);
             EditorGUILayout.LabelField("常用菜单", EditorStyles.boldLabel);

@@ -7,7 +7,7 @@ namespace Hotc233.Editor
 {
     public static class PackageExporter
     {
-        private const string PackageRoot = "Assets/neko233/hotc233";
+        private const string PackageRoot = "Assets/neko233/hotc233-unity";
         private const string DefaultOutputDirectory = "Build/Packages";
         // Unity's package exporter intentionally omits package-private "~"
         // folders. hotc233-unity keeps bundled libil2cpp data in Data~, so the
@@ -15,7 +15,7 @@ namespace Hotc233.Editor
         // distribution format.
         private const string PartialPackageWarning =
             "Unity .unitypackage export does not include package-private folders ending with '~' such as Data~ and Documentation~. " +
-            "Use the Assets/neko233/hotc233 folder or UPM/local package distribution for a complete hotc233-unity package.";
+            "Use the Assets/neko233/hotc233-unity folder or UPM/local package distribution for a complete hotc233-unity package.";
 
         [MenuItem("hotc233/Export/Export unitypackage...", priority = 500)]
         public static void ExportPackageWithDialog()

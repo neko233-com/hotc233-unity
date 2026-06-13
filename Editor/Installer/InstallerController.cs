@@ -42,7 +42,7 @@ namespace Hotc233.Editor.Installer
         {
             try
             {
-                string packageJson = $"{SettingsUtil.ProjectDir}/Assets/neko233/hotc233/package.json";
+                string packageJson = $"{SettingsUtil.ProjectDir}/Assets/neko233/hotc233-unity/package.json";
                 if (File.Exists(packageJson))
                 {
                     var json = File.ReadAllText(packageJson);
