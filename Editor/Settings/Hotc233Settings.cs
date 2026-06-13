@@ -84,7 +84,21 @@ namespace Hotc233.Editor.Settings
         {
             string filePath = GetFilePath();
             Object[] objs = InternalEditorUtility.LoadSerializedFileAndForget(filePath);
-            s_Instance = objs.Length > 0 ? (Hotc233Settings)objs[0] : (s_Instance ?? CreateInstance<Hotc233Settings>());
+            if (objs.Length > 0 && objs[0] is Hotc233Settings settings)
+            {
+                s_Instance = settings;
+                return s_Instance;
+            }
+
+            if (objs.Length > 0 && objs[0] != null)
+            {
+                Debug.LogWarning(
+                    $"[hotc233] Ignoring incompatible settings asset at {filePath}: " +
+                    $"{objs[0].GetType().FullName}. It will be recreated with the current package script GUID.");
+            }
+
+            s_Instance = s_Instance ?? CreateInstance<Hotc233Settings>();
+            Save();
             return s_Instance;
         }
 
