@@ -21,6 +21,7 @@ hotc233-unity 的生态目标是：接入路径简单、版本来源单一、验
 | GitHub Release | ✅ | tag 触发打包 zip、sha256 和 Release |
 | 文档网站 | ✅ | GitHub Pages 自动部署 `docs/` |
 | 平台矩阵 | ✅ | Windows/Linux/macOS/Android/iOS/WebGL IL2CPP 已验证 |
+| `.meta` 策略 | ✅ | 包仓库不提交 `.meta`，由宿主 Unity / Tuanjie 本地生成 GUID |
 | 真机矩阵 | ⚠️ | Android/iOS/WebGL 浏览器 smoke 待补 |
 | 竞品同场景 benchmark | ⚠️ | HybridCLR、ILRuntime、xLua 需要接入同 benchmark 后才能填百分比 |
 | 社区案例 | ⚠️ | 需要更多最小项目、资源系统接入样例和常见错误库 |
