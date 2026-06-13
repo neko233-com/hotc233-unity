@@ -115,6 +115,40 @@ git submodule add https://github.com/neko233-com/hotc233-unity.git Assets/neko23
 git submodule update --init --recursive
 ```
 
+### 项目根目录一键命令行安装
+
+在 Unity 项目根目录执行下面任意一种命令。默认安装到 `Assets/neko233/hotc233-unity`；如果目录已经是 Git checkout，会自动 `git pull --ff-only` 更新。
+
+Windows cmd：
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.ps1 | iex"
+```
+
+PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.ps1 | iex
+```
+
+macOS / Linux / Git Bash：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.sh | sh
+```
+
+如果希望用 submodule 管理，先设置环境变量再执行同一条安装命令：
+
+```bat
+set HOTC233_USE_SUBMODULE=1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.ps1 | iex"
+```
+
+```bash
+export HOTC233_USE_SUBMODULE=1
+curl -fsSL https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.sh | sh
+```
+
 ### 一键 Git 安装 MenuItem
 
 也可以在目标项目中新建 `Assets/Editor/InstallHotc233Unity.cs`，复制下面脚本，然后点击：
