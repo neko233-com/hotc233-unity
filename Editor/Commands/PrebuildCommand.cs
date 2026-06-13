@@ -67,6 +67,7 @@ namespace Hotc233.Editor.Commands
                 return;
             }
 
+            var blockedByUntitledScene = false;
             for (int index = 0; index < EditorSceneManager.sceneCount; index++)
             {
                 var scene = EditorSceneManager.GetSceneAt(index);
@@ -78,8 +79,9 @@ namespace Hotc233.Editor.Commands
                 if (string.IsNullOrEmpty(scene.path))
                 {
                     // Untitled scenes have no deterministic path. We cannot save
-                    // them silently without choosing a location for the user, so
-                    // warn and let Unity keep that scene in memory.
+                    // them silently without choosing a location for the user.
+                    // Stop before BuildPipeline can show a blocking modal dialog.
+                    blockedByUntitledScene = true;
                     Debug.LogWarning(Hotc233Localization.Format("generate.skipUnsavedScene", scene.name));
                     continue;
                 }
@@ -88,6 +90,11 @@ namespace Hotc233.Editor.Commands
                 {
                     Debug.Log(Hotc233Localization.Format("generate.saveDirtyScene", scene.path));
                 }
+            }
+
+            if (blockedByUntitledScene)
+            {
+                throw new BuildFailedException(Hotc233Localization.Text("generate.unsavedSceneBlocked"));
             }
 
             AssetDatabase.SaveAssets();

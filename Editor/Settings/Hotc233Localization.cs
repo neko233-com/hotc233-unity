@@ -56,6 +56,11 @@ namespace Hotc233.Editor.Settings
                         "[hotc233] Found an untitled scene without a path; cannot auto-save: {0}")
                 },
                 {
+                    "generate.unsavedSceneBlocked",
+                    ("Generate/All 已中止：存在未保存路径的新场景。请先保存或关闭该场景，避免 Unity 弹出 Scene(s) Have Been Modified 阻塞自动化。",
+                        "Generate/All stopped because an untitled dirty scene is open. Save or close that scene first to avoid Unity's blocking Scene(s) Have Been Modified dialog.")
+                },
+                {
                     "pipeline.skip",
                     ("[PrebuildPipeline] 跳过 {0}：目标平台={1}（缓存命中）",
                         "[PrebuildPipeline] Skip {0}: target={1} (cache hit)")

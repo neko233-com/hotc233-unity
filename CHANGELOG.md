@@ -20,6 +20,7 @@ All notable changes to hotc233-unity are tracked here.
 - Documented the public docs URL, ecosystem roadmap, and platform support verification policy.
 - Updated platform support docs to mark Linux and macOS IL2CPP as verified.
 - Stopped tracking Unity `.meta` files in the package repository so host projects can generate editor-specific GUIDs locally.
+- Hardened `Generate/All` against Unity's blocking `Scene(s) Have Been Modified` dialog by saving dirty saved scenes up front and stopping early when an untitled dirty scene cannot be saved silently.
 
 ### Known Gaps
 

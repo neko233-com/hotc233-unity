@@ -477,6 +477,12 @@ hotc233/Language/English
 
 也可以在 `hotc233/Settings...` 的 `Log Language` 字段里修改。
 
+## 自动化场景保存
+
+`hotc233/Generate/All` 会在生成前自动保存已经有路径的 dirty 场景，避免 Unity 在隐藏 BuildPlayer 阶段弹出 `Scene(s) Have Been Modified` 阻塞自动化。
+
+如果当前打开的是还没有保存路径的 Untitled dirty 场景，hotc233 会直接中止 `Generate/All` 并输出日志。请先手动保存或关闭该场景，再重新运行生成命令。这样不会静默丢场景，也不会让 CI、菜单自动化或 MCP 流程卡在人工点击弹窗上。
+
 ## 导出 unitypackage
 
 包自身可以通过 Unity 菜单导出：
