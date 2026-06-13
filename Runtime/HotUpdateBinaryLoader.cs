@@ -12,6 +12,7 @@ namespace Hotc233
         private readonly List<Assembly> assemblies = new List<Assembly>();
         private readonly Dictionary<string, Type> typeCache = new Dictionary<string, Type>(StringComparer.Ordinal);
         private readonly Dictionary<string, MethodInfo> staticMethodCache = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Delegate> staticDelegateCache = new Dictionary<string, Delegate>(StringComparer.Ordinal);
 
         public IReadOnlyList<Assembly> Assemblies => assemblies;
 
@@ -64,6 +65,7 @@ namespace Hotc233
                 assemblies.Add(assembly);
                 typeCache.Clear();
                 staticMethodCache.Clear();
+                staticDelegateCache.Clear();
                 Hotc233RuntimeDiagnostics.Info("assembly.load.ok", $"{assembly.GetName().Name} from {binary.Name}");
             }
 
@@ -107,6 +109,59 @@ namespace Hotc233
             catch (TargetInvocationException exception)
             {
                 Hotc233RuntimeDiagnostics.Error("entry.invoke.failed", Hotc233RuntimeDiagnostics.DescribeException(exception.InnerException ?? exception, $"{type.FullName}.{methodName}"));
+                throw;
+            }
+        }
+
+        public TDelegate CreateStaticDelegate<TDelegate>(string typeName, string methodName)
+            where TDelegate : class
+        {
+            if (string.IsNullOrWhiteSpace(typeName))
+            {
+                throw new ArgumentException("Type name is required.", nameof(typeName));
+            }
+
+            if (string.IsNullOrWhiteSpace(methodName))
+            {
+                throw new ArgumentException("Method name is required.", nameof(methodName));
+            }
+
+            var delegateType = typeof(TDelegate);
+            if (!typeof(Delegate).IsAssignableFrom(delegateType))
+            {
+                throw new ArgumentException($"{delegateType.FullName} is not a delegate type.", nameof(TDelegate));
+            }
+
+            var type = ResolveType(typeName);
+            if (type == null)
+            {
+                Hotc233RuntimeDiagnostics.Error("entry.type.missing", $"{typeName}; loaded={string.Join(",", assemblies.Select(assembly => assembly.GetName().Name))}");
+                throw new MissingMemberException($"Type not found in loaded hot update assemblies: {typeName}");
+            }
+
+            string cacheKey = type.FullName + "::" + methodName + "::" + delegateType.AssemblyQualifiedName;
+            if (staticDelegateCache.TryGetValue(cacheKey, out var cachedDelegate))
+            {
+                return (TDelegate)(object)cachedDelegate;
+            }
+
+            var method = ResolveStaticMethod(type, methodName);
+            if (method == null)
+            {
+                Hotc233RuntimeDiagnostics.Error("entry.method.missing", $"{type.FullName}.{methodName}");
+                throw new MissingMethodException(type.FullName, methodName);
+            }
+
+            try
+            {
+                var createdDelegate = Delegate.CreateDelegate(delegateType, method);
+                staticDelegateCache[cacheKey] = createdDelegate;
+                Hotc233RuntimeDiagnostics.Info("entry.delegate.created", $"{type.FullName}.{methodName} as {delegateType.FullName}");
+                return (TDelegate)(object)createdDelegate;
+            }
+            catch (ArgumentException exception)
+            {
+                Hotc233RuntimeDiagnostics.Error("entry.delegate.failed", Hotc233RuntimeDiagnostics.DescribeException(exception, $"{type.FullName}.{methodName} as {delegateType.FullName}"));
                 throw;
             }
         }

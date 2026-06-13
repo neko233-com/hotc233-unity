@@ -44,6 +44,7 @@ tools/hotc233ctl/
 ## 运行时最小用法
 
 ```csharp
+using System;
 using Hotc233;
 
 var loader = new HotUpdateBinaryLoader();
@@ -54,10 +55,16 @@ loader.LoadHotUpdateAssemblies(hotUpdateBinaries);
 var result = loader.InvokeStatic(
     "UnityHotc.CodeHotUpdate.HotUpdateApp",
     "RunSelfTest");
+
+// 高频入口建议缓存成强类型委托，避免每次调用都走 MethodInfo.Invoke。
+var runSelfTest = loader.CreateStaticDelegate<Func<string>>(
+    "UnityHotc.CodeHotUpdate.HotUpdateApp",
+    "RunSelfTest");
+var fastResult = runSelfTest();
 ```
 
 `metadataBinaries` 和 `hotUpdateBinaries` 都是 `IEnumerable<NamedBinary>`。调用方负责从本地文件、远端 CDN、AssetBundle 或资源系统拿到 `byte[]`。
-`HotUpdateBinaryLoader` 会通过 `Hotc233RuntimeDiagnostics` 打印 session、平台、二进制大小、短 hash、程序集名和入口调用结果，真机失败时优先看这些日志。重复调用 `InvokeStatic` 时会复用已解析的 Type / MethodInfo；高频业务内循环仍建议在热更程序集内部批处理，避免宿主和热更入口之间来回反射调用。
+`HotUpdateBinaryLoader` 会通过 `Hotc233RuntimeDiagnostics` 打印 session、平台、二进制大小、短 hash、程序集名和入口调用结果，真机失败时优先看这些日志。重复调用 `InvokeStatic` 时会复用已解析的 Type / MethodInfo；如果宿主需要高频调用同一个热更静态入口，优先用 `CreateStaticDelegate<TDelegate>` 缓存强类型委托。更高频的业务内循环仍建议放在热更程序集内部批处理，避免宿主和热更入口之间来回跨边界调用。
 
 ## 工程接入
 
