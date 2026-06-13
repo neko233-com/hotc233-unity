@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>hotc233-unity Docs</title>
+  <meta name="description" content="hotc233-unity documentation for Unity and Tuanjie C# hot update workflows.">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f2933;
+      --muted: #5b6673;
+      --line: #d6dde6;
+      --panel: #f7f9fb;
+      --brand: #0f766e;
+      --accent: #b45309;
+      --ok: #157347;
+      --warn: #9a6700;
+      --bad: #b42318;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #ffffff;
+      line-height: 1.6;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 64px;
+    }
+
+    .brand {
+      font-weight: 760;
+      font-size: 20px;
+      color: var(--brand);
+    }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-size: 14px;
+    }
+
+    a {
+      color: var(--brand);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .hero {
+      padding: 54px 0 34px;
+    }
+
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-size: 42px;
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .commands {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 28px 0 0;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    section {
+      padding: 30px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 26px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #ffffff;
+    }
+
+    .card p,
+    .note {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--panel);
+    }
+
+    .ok {
+      color: var(--ok);
+      font-weight: 700;
+    }
+
+    .warn {
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+    .bad {
+      color: var(--bad);
+      font-weight: 700;
+    }
+
+    code {
+      font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.95em;
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 24px 0 36px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 820px) {
+      .commands,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+
+      .nav {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 14px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <div class="brand">hotc233-unity</div>
+      <nav class="links" aria-label="Documentation">
+        <a href="#install">安装</a>
+        <a href="#workflow">工作流</a>
+        <a href="#platforms">平台</a>
+        <a href="ecosystem.md">生态路线</a>
+        <a href="platforms.md">平台口径</a>
+        <a href="https://github.com/neko233-com/hotc233-unity">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap hero">
+      <h1>一个 Git 仓库接入 Unity / Tuanjie C# 热更新。</h1>
+      <p class="lead">hotc233-unity 固定安装在 <code>Assets/neko233/hotc233-unity</code>，内置生成工具、运行时加载器、元数据补足流程、验证入口和发布自动化。</p>
+      <div class="commands" id="install">
+        <pre><code>powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.ps1 | iex"</code></pre>
+        <pre><code>curl -fsSL https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.sh | sh</code></pre>
+      </div>
+    </div>
+
+    <section id="workflow">
+      <div class="wrap">
+        <h2>工作流</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>1. 拆分热更程序集</h3>
+            <p>把需要热更的业务代码放进独立 asmdef，主工程通过入口、接口、反射或资源实例化连接热更逻辑。</p>
+          </article>
+          <article class="card">
+            <h3>2. 生成热更产物</h3>
+            <p>运行 <code>hotc233/Generate/All</code>，生成热更 DLL、AOT metadata、bridge、link 保护和资源二进制。</p>
+          </article>
+          <article class="card">
+            <h3>3. 构建前验证</h3>
+            <p>用 <code>hotc233/EditorForBuild/Run Full AB Verification</code> 或项目 CI 确认 DLL bytes 能从资源系统加载并执行。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="platforms">
+      <div class="wrap">
+        <h2>平台支持口径</h2>
+        <p class="note">平台支持声明和当前仓库验证证据分开记录。发版前以目标平台最新 IL2CPP 验证报告为准。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>平台</th>
+              <th>当前口径</th>
+              <th>验证要求</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Windows IL2CPP</td>
+              <td class="ok">已验证</td>
+              <td>构建并运行 Player 探针。</td>
+            </tr>
+            <tr>
+              <td>Android IL2CPP</td>
+              <td class="ok">已验证</td>
+              <td>构建验证已通过；发版前补真机安装和启动探针。</td>
+            </tr>
+            <tr>
+              <td>iOS IL2CPP</td>
+              <td class="ok">已构建验证</td>
+              <td>Windows 可验证导出链路；最终需要 macOS/Xcode 真机部署。</td>
+            </tr>
+            <tr>
+              <td>WebGL 2 / WebGL IL2CPP</td>
+              <td class="ok">已构建验证</td>
+              <td>构建验证已通过；最终补浏览器托管 smoke。</td>
+            </tr>
+            <tr>
+              <td>Linux IL2CPP</td>
+              <td class="warn">理论支持</td>
+              <td>需要 Linux module/runner 后纳入矩阵。</td>
+            </tr>
+            <tr>
+              <td>macOS IL2CPP</td>
+              <td class="warn">理论支持</td>
+              <td>需要 macOS runner 后纳入矩阵。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>生态路线</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>文档站</h3>
+            <p>GitHub Pages 自动发布本目录，作为 README 之外的稳定入口。</p>
+          </article>
+          <article class="card">
+            <h3>Release tag</h3>
+            <p>版本通过 <code>package.json</code>、<code>CHANGELOG.md</code>、Git tag 和 GitHub Release 管理。</p>
+          </article>
+          <article class="card">
+            <h3>同 benchmark 对比</h3>
+            <p>竞品百分比只接受同项目、同机器、同业务场景采集，避免混用外部宣传数字。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Documentation is generated from the hotc233-unity repository and deployed by GitHub Actions.</span>
+    </div>
+  </footer>
+</body>
+</html>

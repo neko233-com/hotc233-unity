@@ -4,6 +4,12 @@ hotc233-unity 是 Unity / Tuanjie 的 C# 热更新库。目标：一个包内完
 
 > 包名和仓库名为 `hotc233-unity` / `com.neko233.hotc233-unity`。运行时代码命名空间仍保留 `Hotc233`，用于保持 API 兼容。
 
+文档网站：
+
+```text
+https://neko233-com.github.io/hotc233-unity/
+```
+
 当前工程已接好完整验证链：点击菜单或跑 Go 工具后，自动同步包内内置运行时、编译热更程序集，产出 `.dll.bytes`，打入 AssetBundle，再从 AssetBundle 读回二进制并执行自测入口。
 
 ## 能力
@@ -384,6 +390,25 @@ go run ./hotc233ctl all -project D:\Code\neko233-Projects\unity-hotc233-demo -ta
 Assets/neko233/hotc233-unity/Documentation~/architecture.md
 ```
 
+文档站源码在：
+
+```text
+Assets/neko233/hotc233-unity/docs/
+```
+
+GitHub Pages 会在 `main` 分支推送后自动发布：
+
+```text
+.github/workflows/docs.yml
+```
+
+生态和平台口径：
+
+```text
+docs/ecosystem.md
+docs/platforms.md
+```
+
 ## 版本与 Release
 
 hotc233-unity 只维护一个 Git 仓库：
@@ -400,7 +425,26 @@ https://github.com/neko233-com/hotc233-unity.git
 4. 打 tag：`v<package.json version>`，例如 `v1.0.0`。
 5. 推送 tag 后，`.github/workflows/release.yml` 会校验版本、检查内部 native 命名、打包 zip、生成 sha256，并创建 GitHub Release。
 
+文档站发布流程：
+
+1. PR 和 push 都会运行 `.github/workflows/docs.yml` 的 docs 验证。
+2. `main` 分支 push 通过后自动发布 `docs/` 到 GitHub Pages。
+3. Pages 地址固定为 `https://neko233-com.github.io/hotc233-unity/`。
+
 CI 会阻止 `Data~`、`Editor`、`Runtime` 内部重新出现历史 `hybridclr` 命名；文档里作为竞品对比出现的 HybridCLR 不受这个规则影响。
+
+## 生态路线
+
+hotc233-unity 当前生态重点：
+
+| 方向 | 状态 | 下一步 |
+|------|------|--------|
+| 单仓库分发 | ✅ | 继续保持 `Assets/neko233/hotc233-unity` Git 管理 |
+| 一键安装 | ✅ | 增加更多失败诊断和代理/镜像说明 |
+| Release tag | ✅ | 每个版本自动打 zip、sha256、GitHub Release |
+| 文档网站 | ✅ | GitHub Pages 自动发布，后续补常见错误和图文流程 |
+| 平台矩阵 | ⚠️ | Linux/macOS runner、Android/iOS 真机、WebGL 浏览器 smoke |
+| 竞品实测 | ⚠️ | HybridCLR、ILRuntime、xLua 接入同 benchmark 后再填百分比 |
 
 ## 约束
 

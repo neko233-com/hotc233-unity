@@ -31,6 +31,11 @@ jobs:
               throw "Required package path missing: $path"
             }
           }
+          foreach ($path in @("docs/index.html", "docs/ecosystem.md", "docs/platforms.md", ".github/workflows/docs.yml", "scripts/verify-docs.py")) {
+            if (-not (Test-Path $path)) {
+              throw "Required docs path missing: $path"
+            }
+          }
 
       - name: Guard internal Hotc233 native naming
         shell: bash
@@ -47,6 +52,13 @@ jobs:
           $script = Get-Content install-hotc233-unity.ps1 -Raw
           [scriptblock]::Create($script) | Out-Null
           sh -n install-hotc233-unity.sh
+
+      - name: Check docs entry links
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "https://neko233-com.github.io/hotc233-unity/" README.md
+          python3 scripts/verify-docs.py
 
       - name: Git diff whitespace check
         shell: bash
