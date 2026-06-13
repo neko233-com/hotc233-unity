@@ -33,7 +33,7 @@ hotc233-unity 的生态目标是：接入路径简单、版本来源单一、验
 - 一个 Git 仓库即可安装到 Unity 项目。
 - 内置 libil2cpp runtime data，不依赖额外 runtime 安装包。
 - 支持热更 DLL、AOT metadata、AssetBundle bytes 验证链。
-- 已完成 Windows/Android/iOS/WebGL 的 IL2CPP 构建验证。
+- 已完成 Windows/Linux/macOS/Android/iOS/WebGL 的 IL2CPP 验证口径，其中真机和浏览器 smoke 仍按项目发布链路补齐。
 
 不能提前宣传：
 
