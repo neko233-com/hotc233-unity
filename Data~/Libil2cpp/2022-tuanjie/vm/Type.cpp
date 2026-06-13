@@ -27,7 +27,7 @@
 #include "il2cpp-tabledefs.h"
 #include "vm/Array.h"
 
-#include "hybridclr/metadata/MetadataUtil.h"
+#include "hotc233/metadata/MetadataUtil.h"
 
 static char* copy_name(const char* name)
 {
@@ -1321,7 +1321,7 @@ namespace vm
         {
             delegate->target = target;
             delegate->method = method;
-            delegate->invoke_impl = hybridclr::InitAndGetInterpreterDirectlyCallMethodPointer(method);
+            delegate->invoke_impl = hotc233::InitAndGetInterpreterDirectlyCallMethodPointer(method);
             delegate->invoke_impl_this = target;
             //il2cpp::vm::Exception::Raise(il2cpp::vm::Exception::GetNotSupportedException("interperter delegate can't be constructed by InvokeDelegateConstructor"));
             return;

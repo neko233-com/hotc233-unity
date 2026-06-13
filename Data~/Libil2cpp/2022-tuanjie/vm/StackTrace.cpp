@@ -17,7 +17,7 @@
 #include <map>
 #include <cstdio>
 
-#include "hybridclr/interpreter/InterpreterModule.h"
+#include "hotc233/interpreter/InterpreterModule.h"
 
 namespace il2cpp
 {
@@ -118,7 +118,7 @@ namespace vm
         inline const StackFrames* GetStackFrames()
         {
             StackFrames* stackFrames = GetStackFramesRaw();
-            hybridclr::interpreter::InterpreterModule::GetCurrentThreadMachineState().SetupFramesDebugInfo(stackFrames);
+            hotc233::interpreter::InterpreterModule::GetCurrentThreadMachineState().SetupFramesDebugInfo(stackFrames);
             return stackFrames;
         }
 
@@ -266,7 +266,7 @@ namespace vm
 
             os::StackTrace::WalkStack(&NativeMethodStack::GetStackFramesCallback, stackFrames, os::StackTrace::kFirstCalledToLastCalled);
 
-            hybridclr::interpreter::InterpreterModule::GetCurrentThreadMachineState().CollectFrames(stackFrames);
+            hotc233::interpreter::InterpreterModule::GetCurrentThreadMachineState().CollectFrames(stackFrames);
 
             return stackFrames;
         }

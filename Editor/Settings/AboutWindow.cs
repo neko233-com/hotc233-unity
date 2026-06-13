@@ -38,7 +38,7 @@ namespace Hotc233.Editor.Settings
             EditorGUILayout.HelpBox(
                 "CompileDll：只编译热更 DLL（开发调试用）。\n" +
                 "Generate/All：发布前完整生成（桥接 + 裁剪元数据 + AOT 参考）。\n" +
-                "EditorForBuild/Run Full Verification + Comparison：一键 AB + YooAsset + HybridCLR 对比报告。",
+                "EditorForBuild/Run Full Verification + Comparison：一键 AB + YooAsset + Hotc233 对比报告。",
                 MessageType.Info);
 
             EditorGUILayout.Space(8);

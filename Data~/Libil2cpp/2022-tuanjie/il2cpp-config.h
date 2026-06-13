@@ -4,9 +4,9 @@
 
 #define UNITY_ENGINE_TUANJIE 1
 
-#include "hybridclr/generated/UnityVersion.h"
+#include "hotc233/generated/UnityVersion.h"
 
-#if HYBRIDCLR_TUANJIE_VERSION >= 10301
+#if HOTC233_TUANJIE_VERSION >= 10301
 #define SUPPORT_METHOD_RETURN_TYPE_CUSTOM_ATTRIBUTE 1
 #endif
 
@@ -38,7 +38,7 @@
 
 
 #if SLIM_GLOBAL_METADATA_FILE == 1
-#error "hybridclr doesn't support 'SLIM_GLOBAL_METADATA_FILE == 1' "
+#error "hotc233 doesn't support 'SLIM_GLOBAL_METADATA_FILE == 1' "
 #endif
 
 #ifndef IL2CPP_METHOD_ATTR

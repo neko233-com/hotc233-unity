@@ -119,7 +119,7 @@ namespace Hotc233.Editor.Installer
                     Debug.LogError($"源 libil2cpp 目录不存在: '{_installLibil2cppSourceDir}'。");
                     return;
                 }
-                if (!File.Exists($"{_installLibil2cppSourceDir}/il2cpp-config.h") || !File.Exists($"{_installLibil2cppSourceDir}/hybridclr/RuntimeApi.cpp"))
+                if (!File.Exists($"{_installLibil2cppSourceDir}/il2cpp-config.h") || !File.Exists($"{_installLibil2cppSourceDir}/hotc233/RuntimeApi.cpp"))
                 {
                     Debug.LogError($"源 libil2cpp 目录无效: '{_installLibil2cppSourceDir}'，缺少必要运行时标记文件。");
                     return;

@@ -27,7 +27,7 @@
 #include "Cpp/Atomic.h"
 #include "Cpp/ReentrantLock.h"
 
-#include "hybridclr/interpreter/InterpreterModule.h"
+#include "hotc233/interpreter/InterpreterModule.h"
 
 namespace il2cpp
 {
@@ -270,7 +270,7 @@ namespace vm
 #if IL2CPP_MONO_DEBUGGER
         utils::Debugger::FreeThreadLocalData();
 #endif
-        hybridclr::interpreter::InterpreterModule::FreeThreadLocalMachineState();
+        hotc233::interpreter::InterpreterModule::FreeThreadLocalMachineState();
         os::Thread::DetachCurrentThread();
         s_CurrentThread.SetValue(NULL);
     }

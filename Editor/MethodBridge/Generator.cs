@@ -788,7 +788,7 @@ namespace Hotc233.Editor.MethodBridge
             }
 
             lines.Add(@"
-const ReversePInvokeMethodData hybridclr::interpreter::g_reversePInvokeMethodStub[]
+const ReversePInvokeMethodData hotc233::interpreter::g_reversePInvokeMethodStub[]
 {
 ");
             lines.AddRange(stubCodes);
@@ -1111,7 +1111,7 @@ const ReversePInvokeMethodData hybridclr::interpreter::g_reversePInvokeMethodStu
 
         private void GenerateStructureSignatureStub(List<TypeInfo> types, List<string> lines)
         {
-            lines.Add("const FullName2Signature hybridclr::interpreter::g_fullName2SignatureStub[] = {");
+            lines.Add("const FullName2Signature hotc233::interpreter::g_fullName2SignatureStub[] = {");
             foreach (var type in types)
             {
                 TypeInfo isoType = ToIsomorphicType(type);
@@ -1124,7 +1124,7 @@ const ReversePInvokeMethodData hybridclr::interpreter::g_reversePInvokeMethodStu
         private void GenerateManaged2NativeStub(List<MethodDesc> methods, List<string> lines)
         {
             lines.Add($@"
-const Managed2NativeMethodInfo hybridclr::interpreter::g_managed2nativeStub[] = 
+const Managed2NativeMethodInfo hotc233::interpreter::g_managed2nativeStub[] =
 {{
 ");
 
@@ -1140,7 +1140,7 @@ const Managed2NativeMethodInfo hybridclr::interpreter::g_managed2nativeStub[] =
         private void GenerateNative2ManagedStub(List<MethodDesc> methods, List<string> lines)
         {
             lines.Add($@"
-const Native2ManagedMethodInfo hybridclr::interpreter::g_native2managedStub[] = 
+const Native2ManagedMethodInfo hotc233::interpreter::g_native2managedStub[] =
 {{
 ");
 
@@ -1156,7 +1156,7 @@ const Native2ManagedMethodInfo hybridclr::interpreter::g_native2managedStub[] =
         private void GenerateAdjustThunkStub(List<MethodDesc> methods, List<string> lines)
         {
             lines.Add($@"
-const NativeAdjustThunkMethodInfo hybridclr::interpreter::g_adjustThunkStub[] = 
+const NativeAdjustThunkMethodInfo hotc233::interpreter::g_adjustThunkStub[] =
 {{
 ");
 
@@ -1276,7 +1276,7 @@ static void __M2NF_{methodInfo.Signature}(Il2CppMethodPointer methodPointer, uin
         private void GenerateManaged2NativeFunctionPointerMethodStub(List<CalliMethodInfo> calliMethodSignatures, List<string> lines)
         {
             lines.Add(@"
-const Managed2NativeFunctionPointerCallData hybridclr::interpreter::g_managed2NativeFunctionPointerCallStub[]
+const Managed2NativeFunctionPointerCallData hotc233::interpreter::g_managed2NativeFunctionPointerCallStub[]
 {
 ");
             foreach (var method in calliMethodSignatures)

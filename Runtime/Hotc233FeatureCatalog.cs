@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Hotc233
 {
     /// <summary>
-    /// Canonical feature matrix for markdown reports (HybridCLR baseline vs hotc233).
+    /// Canonical feature matrix for markdown reports.
     /// </summary>
     public static class Hotc233FeatureCatalog
     {
@@ -22,7 +22,7 @@ namespace Hotc233
             UnityRuntime,
             UnityResource,
             YooAssetResource,
-            HybridClrCommercial,
+            CommercialCompatibility,
             Workflow,
         }
 
@@ -124,12 +124,16 @@ namespace Hotc233
             Def("linq-todictionary", "LINQ ToDictionary", FeatureCategory.CSharpLanguage, "linq-todictionary", true),
             Def("linq-tolookup", "LINQ ToLookup", FeatureCategory.CSharpLanguage, "linq-tolookup", true),
             // DHE simulation (previously unsupported)
-            Def("dhe-metadata", "DHE 元数据补充", FeatureCategory.HybridClrCommercial, "dhe-metadata", true,
-                "hotc233 RuntimeMetadata 补丁模拟 DHE 元数据补充"),
-            Def("dhe-generic-patch", "DHE 泛型实例化补丁", FeatureCategory.HybridClrCommercial, "dhe-generic-patch", true),
-            Def("dhe-aot-access", "DHE AOT 类型访问", FeatureCategory.HybridClrCommercial, "dhe-aot-access", true),
-            Def("dhe-cross-asm", "DHE 跨程序集泛型解析", FeatureCategory.HybridClrCommercial, "dhe-cross-asm", true),
-            Def("dhe-runtime-subst", "DHE 运行时类型替换", FeatureCategory.HybridClrCommercial, "dhe-runtime-subst", true),
+            Def("dhe-metadata", "DHE 兼容探针：元数据补充", FeatureCategory.CommercialCompatibility, "dhe-metadata", true,
+                "兼容探针，不代表覆盖商业版 DHE"),
+            Def("dhe-generic-patch", "DHE 兼容探针：泛型实例化", FeatureCategory.CommercialCompatibility, "dhe-generic-patch", true,
+                "兼容探针，不代表覆盖商业版 DHE"),
+            Def("dhe-aot-access", "DHE 兼容探针：AOT 类型访问", FeatureCategory.CommercialCompatibility, "dhe-aot-access", true,
+                "兼容探针，不代表覆盖商业版 DHE"),
+            Def("dhe-cross-asm", "DHE 兼容探针：跨程序集泛型解析", FeatureCategory.CommercialCompatibility, "dhe-cross-asm", true,
+                "兼容探针，不代表覆盖商业版 DHE"),
+            Def("dhe-runtime-subst", "DHE 兼容探针：运行时类型替换", FeatureCategory.CommercialCompatibility, "dhe-runtime-subst", true,
+                "兼容探针，不代表覆盖商业版 DHE"),
             // Timeline custom track E2E (previously unsupported)
             Def("tl-graph-create", "PlayableGraph 创建", FeatureCategory.UnityRuntime, "tl-graph-create", true),
             Def("tl-custom-behaviour", "自定义 PlayableBehaviour", FeatureCategory.UnityRuntime, "tl-custom-behaviour", true),

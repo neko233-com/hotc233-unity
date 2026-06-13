@@ -341,8 +341,8 @@ namespace Hotc233.Editor.Commands
                 yield return Path.Combine(hotUpdateDir, assemblyName + ".dll");
             }
 
-            yield return Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hybridclr", "Generated", "UnityVersion.h");
-            yield return Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hybridclr", "Generated", "AssemblyManifest.cpp");
+            yield return Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "UnityVersion.h");
+            yield return Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "AssemblyManifest.cpp");
             yield return Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputLinkFile);
             yield return Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputAOTGenericReferenceFile);
             yield return Path.Combine(SettingsUtil.GeneratedCppDir, "MethodBridge.cpp");
@@ -365,8 +365,8 @@ namespace Hotc233.Editor.Commands
 
         private static bool HasIl2CppDefOutputs(PipelineContext context)
         {
-            return File.Exists(Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hybridclr", "Generated", "UnityVersion.h"))
-                && File.Exists(Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hybridclr", "Generated", "AssemblyManifest.cpp"));
+            return File.Exists(Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "UnityVersion.h"))
+                && File.Exists(Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "AssemblyManifest.cpp"));
         }
 
         private static bool HasLinkOutput(PipelineContext context)

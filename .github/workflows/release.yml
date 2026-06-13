@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate package and tag
+        id: version
+        shell: pwsh
+        run: |
+          $package = Get-Content package.json -Raw | ConvertFrom-Json
+          $version = [string]$package.version
+          if (-not ($version -match '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')) {
+            throw "package.json version must be SemVer: $version"
+          }
+          $expectedTag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "Release tag $env:GITHUB_REF_NAME does not match package.json version $expectedTag"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$expectedTag" >> $env:GITHUB_OUTPUT
+
+      - name: Guard internal Hotc233 native naming
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -E 'hybridclr|HybridCLR|HYBRIDCLR|HybridClr' -- Data~ Editor Runtime; then
+            echo "Internal runtime/editor code must use hotc233 naming. Competitor comparison text belongs in docs only." >&2
+            exit 1
+          fi
+
+      - name: Build release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          mkdir -p dist
+          git archive --format=zip --output="dist/hotc233-unity-${version}.zip" HEAD
+          (cd dist && sha256sum "hotc233-unity-${version}.zip" > "hotc233-unity-${version}.zip.sha256")
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotc233-unity-${{ steps.version.outputs.version }}
+          path: dist/*
+
+      - name: Create GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.version }}"
+          gh release create "$tag" dist/* \
+            --title "hotc233-unity ${version}" \
+            --notes-file CHANGELOG.md

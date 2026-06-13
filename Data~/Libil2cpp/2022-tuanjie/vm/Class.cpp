@@ -46,10 +46,10 @@
 #include <stdarg.h>
 
 #include <set>
-#include "hybridclr/metadata/MetadataUtil.h"
-#include "hybridclr/interpreter/Engine.h"
-#include "hybridclr/interpreter/Interpreter.h"
-#include "hybridclr/interpreter/InterpreterModule.h"
+#include "hotc233/metadata/MetadataUtil.h"
+#include "hotc233/interpreter/Engine.h"
+#include "hotc233/interpreter/Interpreter.h"
+#include "hotc233/interpreter/InterpreterModule.h"
 
 namespace il2cpp
 {
@@ -1202,7 +1202,7 @@ namespace vm
                     newMethod->methodPointer = stubs.methodPointer;
                     newMethod->virtualMethodPointer = stubs.virtualMethodPointer;
                 }
-                newMethod->isInterpterImpl = hybridclr::interpreter::InterpreterModule::IsImplementsByInterpreter(newMethod);
+                newMethod->isInterpterImpl = hotc233::interpreter::InterpreterModule::IsImplementsByInterpreter(newMethod);
     }
 
 
@@ -2258,8 +2258,8 @@ namespace vm
             {
                 return klass;
             }
-            hybridclr::interpreter::MachineState& state = hybridclr::interpreter::InterpreterModule::GetCurrentThreadMachineState();
-            const hybridclr::interpreter::InterpFrame* frame = state.GetTopFrame();
+            hotc233::interpreter::MachineState& state = hotc233::interpreter::InterpreterModule::GetCurrentThreadMachineState();
+            const hotc233::interpreter::InterpFrame* frame = state.GetTopFrame();
             if (frame)
             {
                 const Il2CppImage* interpImage = frame->method->klass->image;

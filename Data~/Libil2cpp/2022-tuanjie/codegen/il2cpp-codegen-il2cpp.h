@@ -35,7 +35,7 @@ NORETURN void il2cpp_codegen_raise_exception(il2cpp_hresult_t hresult, bool defa
 #define IL2CPP_PUSH_ACTIVE_EXCEPTION(Exception) \
     __active_exceptions.push(Exception)
 
-#if HYBRIDCLR_UNITY_VERSION >= 20220311
+#if HOTC233_UNITY_VERSION >= 20220311
 #define IL2CPP_POP_ACTIVE_EXCEPTION(ExcType) \
     (ExcType)__active_exceptions.pop()
 #else

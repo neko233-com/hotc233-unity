@@ -23,9 +23,9 @@
 #include "il2cpp-runtime-stats.h"
 #include <string>
 
-#include "hybridclr/metadata/MetadataUtil.h"
-#include "hybridclr/metadata/MetadataModule.h"
-#include "hybridclr/interpreter/InterpreterModule.h"
+#include "hotc233/metadata/MetadataUtil.h"
+#include "hotc233/metadata/MetadataModule.h"
+#include "hotc233/interpreter/InterpreterModule.h"
 
 using il2cpp::metadata::GenericMetadata;
 using il2cpp::metadata::GenericSharing;
@@ -313,7 +313,7 @@ namespace metadata
         }
 
         newMethod->has_full_generic_sharing_signature = hasFullGenericSharingSignature;
-        bool isInterpMethod = hybridclr::metadata::IsInterpreterMethod(newMethod);
+        bool isInterpMethod = hotc233::metadata::IsInterpreterMethod(newMethod);
         if (!isInterpMethod)
         {
             newMethod->has_full_generic_sharing_signature = hasFullGenericSharingSignature;
@@ -381,24 +381,24 @@ namespace metadata
             newMethod->virtualMethodPointerCallByInterp = newMethod->virtualMethodPointer;
         }
 
-        bool isAotImplByInterp = hybridclr::metadata::MetadataModule::IsImplementedByInterpreter(newMethod);
-        bool isAdjustorThunkMethod = IS_CLASS_VALUE_TYPE(newMethod->klass) && hybridclr::metadata::IsInstanceMethod(newMethod);
+        bool isAotImplByInterp = hotc233::metadata::MetadataModule::IsImplementedByInterpreter(newMethod);
+        bool isAdjustorThunkMethod = IS_CLASS_VALUE_TYPE(newMethod->klass) && hotc233::metadata::IsInstanceMethod(newMethod);
         if (isInterpMethod || (isAotImplByInterp && (newMethod->methodPointer == nullptr || newMethod->methodPointer == AnUnresolvedCallStubWasNotFound || newMethod->methodPointer == (Il2CppMethodPointer)AnUnresolvedCallStubWasNotFoundValueType)))
         {
-            newMethod->invoker_method = hybridclr::interpreter::InterpreterModule::GetMethodInvoker(newMethod);
-            newMethod->methodPointer = newMethod->methodPointerCallByInterp = hybridclr::interpreter::InterpreterModule::GetMethodPointer(newMethod);
+            newMethod->invoker_method = hotc233::interpreter::InterpreterModule::GetMethodInvoker(newMethod);
+            newMethod->methodPointer = newMethod->methodPointerCallByInterp = hotc233::interpreter::InterpreterModule::GetMethodPointer(newMethod);
             newMethod->virtualMethodPointer = newMethod->virtualMethodPointerCallByInterp = isAdjustorThunkMethod ?
-                hybridclr::interpreter::InterpreterModule::GetAdjustThunkMethodPointer(newMethod) :
-                (newMethod->methodPointerCallByInterp != hybridclr::interpreter::InterpreterModule::NotSupportNative2Managed ?
-                    newMethod->methodPointerCallByInterp : hybridclr::interpreter::InterpreterModule::NotSupportAdjustorThunk);
+                hotc233::interpreter::InterpreterModule::GetAdjustThunkMethodPointer(newMethod) :
+                (newMethod->methodPointerCallByInterp != hotc233::interpreter::InterpreterModule::NotSupportNative2Managed ?
+                    newMethod->methodPointerCallByInterp : hotc233::interpreter::InterpreterModule::NotSupportAdjustorThunk);
             if (indirectCallViaInvokers)
             {
                 FullySharedGenericMethodInfo* sharedMethodInfo = reinterpret_cast<FullySharedGenericMethodInfo*>(newMethod);
-                if (!hybridclr::interpreter::InterpreterModule::HasImplementCallNative2Managed(newMethod))
+                if (!hotc233::interpreter::InterpreterModule::HasImplementCallNative2Managed(newMethod))
                 {
                     newMethod->methodPointer = newMethod->methodPointerCallByInterp = sharedMethodInfo->rawDirectMethodPointer;
                 }
-                if (!hybridclr::interpreter::InterpreterModule::HasImplementCallVirtualNative2Managed(newMethod))
+                if (!hotc233::interpreter::InterpreterModule::HasImplementCallVirtualNative2Managed(newMethod))
                 {
                     newMethod->virtualMethodPointer = newMethod->virtualMethodPointerCallByInterp = sharedMethodInfo->rawVirtualMethodPointer;
                 }

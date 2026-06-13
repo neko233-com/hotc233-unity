@@ -384,6 +384,24 @@ go run ./hotc233ctl all -project D:\Code\neko233-Projects\unity-hotc233-demo -ta
 Assets/neko233/hotc233-unity/Documentation~/architecture.md
 ```
 
+## 版本与 Release
+
+hotc233-unity 只维护一个 Git 仓库：
+
+```text
+https://github.com/neko233-com/hotc233-unity.git
+```
+
+多版本分发通过 `package.json` 的 `version`、Git tag 和 GitHub Actions 完成。发布流程：
+
+1. 修改 `package.json` 版本号。
+2. 更新 `CHANGELOG.md`。
+3. 提交到 `main`。
+4. 打 tag：`v<package.json version>`，例如 `v1.0.0`。
+5. 推送 tag 后，`.github/workflows/release.yml` 会校验版本、检查内部 native 命名、打包 zip、生成 sha256，并创建 GitHub Release。
+
+CI 会阻止 `Data~`、`Editor`、`Runtime` 内部重新出现历史 `hybridclr` 命名；文档里作为竞品对比出现的 HybridCLR 不受这个规则影响。
+
 ## 约束
 
 - 热更 DLL 必须以 `.dll.bytes` 作为资源发布，避免平台导入器误处理。

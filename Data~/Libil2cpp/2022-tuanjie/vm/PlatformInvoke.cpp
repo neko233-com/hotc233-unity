@@ -18,9 +18,9 @@
 #include "utils/StringUtils.h"
 #include "vm-utils/VmStringUtils.h"
 
-#include "hybridclr/metadata/MetadataUtil.h"
-#include "hybridclr/metadata/MetadataModule.h"
-#include "hybridclr/interpreter/InterpreterModule.h"
+#include "hotc233/metadata/MetadataUtil.h"
+#include "hotc233/metadata/MetadataModule.h"
+#include "hotc233/interpreter/InterpreterModule.h"
 
 #include <stdint.h>
 #include <algorithm>
@@ -440,10 +440,10 @@ namespace vm
             return reinterpret_cast<intptr_t>(d->delegate_trampoline);
 
         const MethodInfo* method = d->method;
-        if (method && hybridclr::metadata::IsInterpreterImplement(method))
+        if (method && hotc233::metadata::IsInterpreterImplement(method))
         {
             Il2CppCallConvention callConvention = GetDelegateCallConvention(d);
-            return reinterpret_cast<intptr_t>(hybridclr::interpreter::InterpreterModule::GetReversePInvokeWrapper(d->method->klass->image, method, callConvention));
+            return reinterpret_cast<intptr_t>(hotc233::interpreter::InterpreterModule::GetReversePInvokeWrapper(d->method->klass->image, method, callConvention));
         }
 
         Il2CppMethodPointer reversePInvokeWrapper = MetadataCache::GetReversePInvokeWrapper(d->method->klass->image, d->method);

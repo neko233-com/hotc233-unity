@@ -57,8 +57,8 @@
 
 #include "GlobalMetadataFileInternals.h"
 
-#include "hybridclr/metadata/MetadataUtil.h"
-#include "hybridclr/metadata/MetadataModule.h"
+#include "hotc233/metadata/MetadataUtil.h"
+#include "hotc233/metadata/MetadataModule.h"
 
 
 static int32_t s_MetadataImagesCount = 0;
@@ -93,9 +93,9 @@ static T MetadataOffset(const void* metadata, size_t sectionOffset, size_t itemI
 
 const char* il2cpp::vm::GlobalMetadata::GetStringFromIndex(StringIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetStringFromEncodeIndex(index);
+        return hotc233::metadata::MetadataModule::GetStringFromEncodeIndex(index);
     }
     IL2CPP_ASSERT(index <= s_GlobalMetadataHeader->stringSize);
     return MetadataOffset<const char*>(s_GlobalMetadata, s_GlobalMetadataHeader->stringOffset, index);
@@ -109,9 +109,9 @@ static const char* GetWindowsRuntimeStringFromIndex(StringIndex index)
 
 const Il2CppMethodDefinition* il2cpp::vm::GlobalMetadata::GetMethodDefinitionFromIndex(MethodIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetMethodDefinitionFromIndex(index);
+        return hotc233::metadata::MetadataModule::GetMethodDefinitionFromIndex(index);
     }
     IL2CPP_ASSERT(index >= 0 && static_cast<uint32_t>(index) <= s_GlobalMetadataHeader->methodsSize / sizeof(Il2CppMethodDefinition));
     return MetadataOffset<const Il2CppMethodDefinition*>(s_GlobalMetadata, s_GlobalMetadataHeader->methodsOffset, index);
@@ -120,18 +120,18 @@ const Il2CppMethodDefinition* il2cpp::vm::GlobalMetadata::GetMethodDefinitionFro
 
 MethodIndex il2cpp::vm::GlobalMetadata::GetMethodIndexFromDefinition(const Il2CppMethodDefinition* methodDef)
 {
-    if (hybridclr::metadata::IsInterpreterMethod(methodDef))
+    if (hotc233::metadata::IsInterpreterMethod(methodDef))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(methodDef)->GetMethodIndexFromDefinition(methodDef);
+        return hotc233::metadata::MetadataModule::GetImage(methodDef)->GetMethodIndexFromDefinition(methodDef);
     }
     return (MethodIndex)(methodDef - MetadataOffset<const Il2CppMethodDefinition*>(s_GlobalMetadata, s_GlobalMetadataHeader->methodsOffset, 0));
 }
 
 const MethodInfo* il2cpp::vm::GlobalMetadata::GetMethodInfoFromMethodDefinitionIndex(MethodIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetMethodInfoFromMethodDefinitionIndex(index);
+        return hotc233::metadata::MetadataModule::GetMethodInfoFromMethodDefinitionIndex(index);
     }
     IL2CPP_ASSERT(index >= 0 && static_cast<uint32_t>(index) <= s_GlobalMetadataHeader->methodsSize / sizeof(Il2CppMethodDefinition));
 
@@ -160,9 +160,9 @@ static const Il2CppEventDefinition* GetEventDefinitionFromIndex(const Il2CppImag
 
 static const Il2CppPropertyDefinition* GetPropertyDefinitionFromIndex(const Il2CppImage* image, PropertyIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterImage(image))
+    if (hotc233::metadata::IsInterpreterImage(image))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(image)->GetPropertyDefinitionFromIndex(hybridclr::metadata::DecodeMetadataIndex(index));
+        return hotc233::metadata::MetadataModule::GetImage(image)->GetPropertyDefinitionFromIndex(hotc233::metadata::DecodeMetadataIndex(index));
     }
     IL2CPP_ASSERT(index >= 0 && static_cast<uint32_t>(index) <= s_GlobalMetadataHeader->propertiesSize / sizeof(Il2CppPropertyDefinition));
     const Il2CppPropertyDefinition* properties = (const Il2CppPropertyDefinition*)((const char*)s_GlobalMetadata + s_GlobalMetadataHeader->propertiesOffset);
@@ -171,9 +171,9 @@ static const Il2CppPropertyDefinition* GetPropertyDefinitionFromIndex(const Il2C
 
 const Il2CppParameterDefinition* il2cpp::vm::GlobalMetadata::GetParameterDefinitionFromIndex(const Il2CppClass* klass, ParameterIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterType(klass))
+    if (hotc233::metadata::IsInterpreterType(klass))
     {
-        return hybridclr::metadata::MetadataModule::GetParameterDefinitionFromIndex(klass->image, index);
+        return hotc233::metadata::MetadataModule::GetParameterDefinitionFromIndex(klass->image, index);
     }
     IL2CPP_ASSERT(index >= 0 && static_cast<uint32_t>(index) <= s_GlobalMetadataHeader->parametersSize / sizeof(Il2CppParameterDefinition));    const Il2CppParameterDefinition* parameters = (const Il2CppParameterDefinition*)((const char*)s_GlobalMetadata + s_GlobalMetadataHeader->parametersOffset);
     return parameters + index;
@@ -182,9 +182,9 @@ const Il2CppParameterDefinition* il2cpp::vm::GlobalMetadata::GetParameterDefinit
 
 const Il2CppParameterDefinition* il2cpp::vm::GlobalMetadata::GetParameterDefinitionFromIndex(const Il2CppMethodDefinition* methodDef, ParameterIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(methodDef->nameIndex))
+    if (hotc233::metadata::IsInterpreterIndex(methodDef->nameIndex))
     {
-        return hybridclr::metadata::MetadataModule::GetParameterDefinitionFromIndex(hybridclr::metadata::MetadataModule::GetImage(methodDef)->GetIl2CppImage(), index);
+        return hotc233::metadata::MetadataModule::GetParameterDefinitionFromIndex(hotc233::metadata::MetadataModule::GetImage(methodDef)->GetIl2CppImage(), index);
     }
     IL2CPP_ASSERT(index >= 0 && static_cast<uint32_t>(index) <= s_GlobalMetadataHeader->parametersSize / sizeof(Il2CppParameterDefinition));
     const Il2CppParameterDefinition* parameters = (const Il2CppParameterDefinition*)((const char*)s_GlobalMetadata + s_GlobalMetadataHeader->parametersOffset);
@@ -762,9 +762,9 @@ const MethodInfo* il2cpp::vm::GlobalMetadata::GetAssemblyEntryPoint(const Il2Cpp
 
 Il2CppMetadataTypeHandle il2cpp::vm::GlobalMetadata::GetAssemblyTypeHandle(const Il2CppImage* image, AssemblyTypeIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(image->token))
+    if (hotc233::metadata::IsInterpreterIndex(image->token))
     {
-        return hybridclr::metadata::MetadataModule::GetAssemblyTypeHandleFromRawIndex(image, index);
+        return hotc233::metadata::MetadataModule::GetAssemblyTypeHandleFromRawIndex(image, index);
     }
 
     const Il2CppImageGlobalMetadata* imageMetadata = GetImageMetadata(image);
@@ -777,9 +777,9 @@ Il2CppMetadataTypeHandle il2cpp::vm::GlobalMetadata::GetAssemblyTypeHandle(const
 const Il2CppAssembly* il2cpp::vm::GlobalMetadata::GetReferencedAssembly(const Il2CppAssembly* assembly, int32_t referencedAssemblyTableIndex, const Il2CppAssembly assembliesTable[], int assembliesCount)
 {
     IL2CPP_ASSERT(referencedAssemblyTableIndex < assembly->referencedAssemblyCount);
-    if (hybridclr::metadata::IsInterpreterImage(assembly->image))
+    if (hotc233::metadata::IsInterpreterImage(assembly->image))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(assembly->image)->GetReferencedAssembly(referencedAssemblyTableIndex, assembliesTable, assembliesCount);
+        return hotc233::metadata::MetadataModule::GetImage(assembly->image)->GetReferencedAssembly(referencedAssemblyTableIndex, assembliesTable, assembliesCount);
     }
 
     referencedAssemblyTableIndex = assembly->referencedAssemblyStart + referencedAssemblyTableIndex;
@@ -791,9 +791,9 @@ const Il2CppAssembly* il2cpp::vm::GlobalMetadata::GetReferencedAssembly(const Il
 
 Il2CppMetadataTypeHandle il2cpp::vm::GlobalMetadata::GetAssemblyExportedTypeHandle(const Il2CppImage* image, AssemblyExportedTypeIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetAssemblyExportedTypeHandleFromEncodeIndex(index);
+        return hotc233::metadata::MetadataModule::GetAssemblyExportedTypeHandleFromEncodeIndex(index);
     }
 
     if (index == kTypeDefinitionIndexInvalid)
@@ -816,9 +816,9 @@ static const Il2CppTypeDefinition* GetTypeDefinitionForIndex(TypeDefinitionIndex
 {
     if (index == kTypeDefinitionIndexInvalid)
         return NULL;
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return (const Il2CppTypeDefinition*)hybridclr::metadata::MetadataModule::GetAssemblyTypeHandleFromEncodeIndex(index);
+        return (const Il2CppTypeDefinition*)hotc233::metadata::MetadataModule::GetAssemblyTypeHandleFromEncodeIndex(index);
     }
 
     IL2CPP_ASSERT(index >= 0 && static_cast<uint32_t>(index) < s_GlobalMetadataHeader->typeDefinitionsSize / sizeof(Il2CppTypeDefinition));
@@ -829,9 +829,9 @@ static const Il2CppTypeDefinition* GetTypeDefinitionForIndex(TypeDefinitionIndex
 static TypeDefinitionIndex GetIndexForTypeDefinitionInternal(const Il2CppTypeDefinition* typeDefinition)
 {
     IL2CPP_ASSERT(typeDefinition);
-    if (hybridclr::metadata::IsInterpreterType(typeDefinition))
+    if (hotc233::metadata::IsInterpreterType(typeDefinition))
     {
-        return static_cast<TypeDefinitionIndex>(hybridclr::metadata::MetadataModule::GetTypeEncodeIndex(typeDefinition));
+        return static_cast<TypeDefinitionIndex>(hotc233::metadata::MetadataModule::GetTypeEncodeIndex(typeDefinition));
     }
 
     const Il2CppTypeDefinition* typeDefinitions = (const Il2CppTypeDefinition*)((const char*)s_GlobalMetadata + s_GlobalMetadataHeader->typeDefinitionsOffset);
@@ -845,9 +845,9 @@ static TypeDefinitionIndex GetIndexForTypeDefinitionInternal(const Il2CppTypeDef
 
 Il2CppClass* il2cpp::vm::GlobalMetadata::GetTypeInfoFromTypeDefinitionIndex(TypeDefinitionIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetTypeInfoFromTypeDefinitionEncodeIndex(index);
+        return hotc233::metadata::MetadataModule::GetTypeInfoFromTypeDefinitionEncodeIndex(index);
     }
     if (index == kTypeIndexInvalid)
         return NULL;
@@ -878,9 +878,9 @@ const Il2CppType* il2cpp::vm::GlobalMetadata::GetInterfaceFromOffset(const Il2Cp
 const Il2CppType* il2cpp::vm::GlobalMetadata::GetInterfaceFromOffset(const Il2CppTypeDefinition* typeDefinition, TypeInterfaceIndex offset)
 {
     IL2CPP_ASSERT(offset >= 0 && offset < typeDefinition->interfaces_count);
-    if (hybridclr::metadata::IsInterpreterType(typeDefinition))
+    if (hotc233::metadata::IsInterpreterType(typeDefinition))
     {
-        return hybridclr::metadata::MetadataModule::GetInterfaceFromOffset(typeDefinition, offset);
+        return hotc233::metadata::MetadataModule::GetInterfaceFromOffset(typeDefinition, offset);
     }
 
     InterfacesIndex index = typeDefinition->interfacesStart + offset;
@@ -901,9 +901,9 @@ Il2CppInterfaceOffsetInfo il2cpp::vm::GlobalMetadata::GetInterfaceOffsetInfo(con
 {
     IL2CPP_ASSERT(index >= 0 && index < typeDefine->interface_offsets_count);
 
-    if (hybridclr::metadata::IsInterpreterType(typeDefine))
+    if (hotc233::metadata::IsInterpreterType(typeDefine))
     {
-        return hybridclr::metadata::MetadataModule::GetInterfaceOffsetInfo(typeDefine, index);
+        return hotc233::metadata::MetadataModule::GetInterfaceOffsetInfo(typeDefine, index);
     }
 
     index = index + typeDefine->interfaceOffsetsStart;
@@ -964,9 +964,9 @@ Il2CppClass* il2cpp::vm::GlobalMetadata::GetNestedTypeFromOffset(const Il2CppCla
 
     IL2CPP_ASSERT(offset >= 0 && offset < typeDefinition->nested_type_count);
 
-    if (hybridclr::metadata::IsInterpreterType(klass))
+    if (hotc233::metadata::IsInterpreterType(klass))
     {
-        return hybridclr::metadata::MetadataModule::GetNestedTypeFromOffset(klass, offset);
+        return hotc233::metadata::MetadataModule::GetNestedTypeFromOffset(klass, offset);
     }
 
     NestedTypeIndex index = typeDefinition->nestedTypesStart + offset;
@@ -984,9 +984,9 @@ Il2CppMetadataTypeHandle il2cpp::vm::GlobalMetadata::GetNestedTypes(Il2CppMetada
         return NULL;
 
     const Il2CppTypeDefinition* typeDefinition = reinterpret_cast<const Il2CppTypeDefinition*>(handle);
-    if (hybridclr::metadata::IsInterpreterType(typeDefinition))
+    if (hotc233::metadata::IsInterpreterType(typeDefinition))
     {
-        return hybridclr::metadata::MetadataModule::GetNestedTypes(handle, iter);
+        return hotc233::metadata::MetadataModule::GetNestedTypes(handle, iter);
     }
 
     const TypeDefinitionIndex* nestedTypeIndices = (const TypeDefinitionIndex*)((const char*)s_GlobalMetadata + s_GlobalMetadataHeader->nestedTypesOffset);
@@ -1029,9 +1029,9 @@ static int CompareTokens(const void* pkey, const void* pelem)
 
 static const Il2CppImageGlobalMetadata* GetImageForCustomAttributeIndex(CustomAttributeIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return reinterpret_cast<const Il2CppImageGlobalMetadata*>(hybridclr::metadata::MetadataModule::GetImageByEncodedIndex(index)->GetIl2CppImage()->metadataHandle);
+        return reinterpret_cast<const Il2CppImageGlobalMetadata*>(hotc233::metadata::MetadataModule::GetImageByEncodedIndex(index)->GetIl2CppImage()->metadataHandle);
     }
 
     for (int32_t imageIndex = 0; imageIndex < s_MetadataImagesCount; imageIndex++)
@@ -1051,9 +1051,9 @@ static CustomAttributeIndex GetCustomAttributeIndex(const Il2CppCustomAttributeD
     if (attrDataRange == NULL)
         return kCustomAttributeIndexInvalid;
 
-    if (hybridclr::metadata::IsInterpreterIndex(GET_CUSTOM_ATTRIBUTE_TYPE_RANGE_START(*attrDataRange)))
+    if (hotc233::metadata::IsInterpreterIndex(GET_CUSTOM_ATTRIBUTE_TYPE_RANGE_START(*attrDataRange)))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(hybridclr::metadata::DecodeImageIndex(GET_CUSTOM_ATTRIBUTE_TYPE_RANGE_START(*attrDataRange)))
+        return hotc233::metadata::MetadataModule::GetImage(hotc233::metadata::DecodeImageIndex(GET_CUSTOM_ATTRIBUTE_TYPE_RANGE_START(*attrDataRange)))
             ->GetCustomAttributeIndex(attrDataRange->token);
     }
 
@@ -1088,9 +1088,9 @@ static CustomAttributeIndex GetCustomAttributeIndex(const Il2CppImage* image, ui
 
 Il2CppMetadataCustomAttributeHandle il2cpp::vm::GlobalMetadata::GetCustomAttributeTypeToken(const Il2CppImage* image, uint32_t token)
 {
-    if (hybridclr::metadata::IsInterpreterImage(image))
+    if (hotc233::metadata::IsInterpreterImage(image))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(image)->GetCustomAttributeTypeToken(token);
+        return hotc233::metadata::MetadataModule::GetImage(image)->GetCustomAttributeTypeToken(token);
     }
     const Il2CppCustomAttributeDataRange* attributeTypeRange = MetadataOffset<const Il2CppCustomAttributeDataRange*>(s_GlobalMetadata, s_GlobalMetadataHeader->attributeDataRangeOffset, 0);
     Il2CppCustomAttributeDataRange key = {0};
@@ -1106,9 +1106,9 @@ static il2cpp::metadata::CustomAttributeDataReader CreateCustomAttributeDataRead
     if (handle == NULL)
         return il2cpp::metadata::CustomAttributeDataReader::Empty();
 
-    if (hybridclr::metadata::IsInterpreterImage(image))
+    if (hotc233::metadata::IsInterpreterImage(image))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(image)->CreateCustomAttributeDataReader(handle);
+        return hotc233::metadata::MetadataModule::GetImage(image)->CreateCustomAttributeDataReader(handle);
     }
     Il2CppCustomAttributeDataRange* range = (Il2CppCustomAttributeDataRange*)handle;
     const Il2CppCustomAttributeDataRange* next = range + 1;
@@ -1131,9 +1131,9 @@ il2cpp::metadata::CustomAttributeDataReader il2cpp::vm::GlobalMetadata::GetCusto
 
 const Il2CppMethodDefinition* il2cpp::vm::GlobalMetadata::GetMethodDefinitionFromVTableSlot(const Il2CppTypeDefinition* typeDefinition, int32_t vTableSlot)
 {
-    if (hybridclr::metadata::IsInterpreterType(typeDefinition))
+    if (hotc233::metadata::IsInterpreterType(typeDefinition))
     {
-        return hybridclr::metadata::MetadataModule::GetMethodDefinitionFromVTableSlot(typeDefinition, vTableSlot);
+        return hotc233::metadata::MetadataModule::GetMethodDefinitionFromVTableSlot(typeDefinition, vTableSlot);
     }
 
     uint32_t index = typeDefinition->vtableStart + vTableSlot;
@@ -1153,9 +1153,9 @@ const Il2CppMethodDefinition* il2cpp::vm::GlobalMetadata::GetMethodDefinitionFro
 
 const MethodInfo* il2cpp::vm::GlobalMetadata::GetMethodInfoFromVTableSlot(const Il2CppClass* klass, int32_t vTableSlot)
 {
-    if (hybridclr::metadata::IsInterpreterType(klass))
+    if (hotc233::metadata::IsInterpreterType(klass))
     {
-        return hybridclr::metadata::MetadataModule::GetMethodInfoFromVTableSlot(klass, vTableSlot);
+        return hotc233::metadata::MetadataModule::GetMethodInfoFromVTableSlot(klass, vTableSlot);
     }
     const Il2CppTypeDefinition* typeDefinition = reinterpret_cast<const Il2CppTypeDefinition*>(klass->typeMetadataHandle);
 
@@ -1181,9 +1181,9 @@ static const Il2CppFieldDefaultValue* GetFieldDefaultValueEntry(const FieldInfo*
 
     fieldIndex += reinterpret_cast<const Il2CppTypeDefinition*>(parent->typeMetadataHandle)->fieldStart;
 
-    if (hybridclr::metadata::IsInterpreterIndex((uint32_t)fieldIndex))
+    if (hotc233::metadata::IsInterpreterIndex((uint32_t)fieldIndex))
     {
-        return hybridclr::metadata::MetadataModule::GetFieldDefaultValueEntry((uint32_t)fieldIndex);
+        return hotc233::metadata::MetadataModule::GetFieldDefaultValueEntry((uint32_t)fieldIndex);
     }
 
     Il2CppFieldDefaultValue key;
@@ -1198,9 +1198,9 @@ static const uint8_t* GetFieldOrParameterDefalutValue(uint32_t index)
 {
     if (index == kDefaultValueIndexNull)
         return NULL;
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetFieldOrParameterDefalutValue(index);
+        return hotc233::metadata::MetadataModule::GetFieldOrParameterDefalutValue(index);
     }
 
     IL2CPP_ASSERT(index >= 0 && index <= s_GlobalMetadataHeader->fieldAndParameterDefaultValueDataSize / sizeof(uint8_t));
@@ -1238,9 +1238,9 @@ static const Il2CppParameterDefaultValue * GetParameterDefaultValueEntry(const M
         return NULL;
 
     ParameterIndex parameterIndex = methodDefinition->parameterStart + parameterPosition;
-    if (hybridclr::metadata::IsInterpreterMethod(method))
+    if (hotc233::metadata::IsInterpreterMethod(method))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(method->klass)
+        return hotc233::metadata::MetadataModule::GetImage(method->klass)
             ->GetParameterDefaultValueEntryByRawIndex(parameterIndex);
     }
     Il2CppParameterDefaultValue key;
@@ -1279,9 +1279,9 @@ TypeDefinitionIndex il2cpp::vm::GlobalMetadata::GetIndexForTypeDefinition(const 
 
 uint32_t il2cpp::vm::GlobalMetadata::GetFieldOffset(const Il2CppClass* klass, int32_t fieldIndexInType, FieldInfo* field)
 {
-    if (hybridclr::metadata::IsInterpreterType(klass))
+    if (hotc233::metadata::IsInterpreterType(klass))
     {
-        return hybridclr::metadata::MetadataModule::GetFieldOffset(klass, fieldIndexInType, field);
+        return hotc233::metadata::MetadataModule::GetFieldOffset(klass, fieldIndexInType, field);
     }
     uint32_t typeIndex = GetIndexForTypeDefinition(klass);
     IL2CPP_ASSERT(typeIndex <= static_cast<uint32_t>(s_Il2CppMetadataRegistration->typeDefinitionsSizesCount));
@@ -1296,7 +1296,7 @@ static int CompareFieldMarshaledSize(const void* pkey, const void* pelem)
 
 int il2cpp::vm::GlobalMetadata::GetFieldMarshaledSizeForField(const FieldInfo* field)
 {
-    if (hybridclr::metadata::IsInterpreterType(field->parent))
+    if (hotc233::metadata::IsInterpreterType(field->parent))
     {
         return -1;
     }
@@ -1321,9 +1321,9 @@ int il2cpp::vm::GlobalMetadata::GetFieldMarshaledSizeForField(const FieldInfo* f
 
 static const Il2CppFieldDefinition* GetFieldDefinitionFromIndex(FieldIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetFieldDefinitionFromEncodeIndex(index);
+        return hotc233::metadata::MetadataModule::GetFieldDefinitionFromEncodeIndex(index);
     }
     IL2CPP_ASSERT(index >= 0 && static_cast<uint32_t>(index) <= s_GlobalMetadataHeader->fieldsSize / sizeof(Il2CppFieldDefinition));    const Il2CppFieldDefinition* fields = (const Il2CppFieldDefinition*)((const char*)s_GlobalMetadata + s_GlobalMetadataHeader->fieldsOffset);
     return fields + index;
@@ -1391,9 +1391,9 @@ Il2CppMetadataParameterInfo il2cpp::vm::GlobalMetadata::GetParameterInfo(const I
 
 Il2CppMetadataPropertyInfo il2cpp::vm::GlobalMetadata::GetPropertyInfo(const Il2CppClass* klass, TypePropertyIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterType(klass))
+    if (hotc233::metadata::IsInterpreterType(klass))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(klass)->GetPropertyInfo(klass, index);
+        return hotc233::metadata::MetadataModule::GetImage(klass)->GetPropertyInfo(klass, index);
     }
     const Il2CppTypeDefinition* typeDefintion = reinterpret_cast<const Il2CppTypeDefinition*>(klass->typeMetadataHandle);
 
@@ -1419,9 +1419,9 @@ Il2CppMetadataPropertyInfo il2cpp::vm::GlobalMetadata::GetPropertyInfo(const Il2
 
 Il2CppMetadataEventInfo il2cpp::vm::GlobalMetadata::GetEventInfo(const Il2CppClass* klass, TypeEventIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterType(klass))
+    if (hotc233::metadata::IsInterpreterType(klass))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(klass)->GetEventInfo(klass, index);
+        return hotc233::metadata::MetadataModule::GetImage(klass)->GetEventInfo(klass, index);
     }
     const Il2CppTypeDefinition* typeDefintion = reinterpret_cast<const Il2CppTypeDefinition*>(klass->typeMetadataHandle);
 
@@ -1462,9 +1462,9 @@ static const Il2CppGenericContainer* GetGenericContainerFromIndexInternal(Generi
     if (index == kGenericContainerIndexInvalid)
         return NULL;
 
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetGenericContainerFromEncodeIndex(index);
+        return hotc233::metadata::MetadataModule::GetGenericContainerFromEncodeIndex(index);
     }
     IL2CPP_ASSERT(index >= 0 && static_cast<uint32_t>(index) <= s_GlobalMetadataHeader->genericContainersSize / sizeof(Il2CppGenericContainer));    const Il2CppGenericContainer* genericContainers = (const Il2CppGenericContainer*)((const char*)s_GlobalMetadata + s_GlobalMetadataHeader->genericContainersOffset);
     return genericContainers + index;
@@ -1549,9 +1549,9 @@ Il2CppMetadataGenericParameterHandle il2cpp::vm::GlobalMetadata::GetGenericParam
 
     IL2CPP_ASSERT(index >= 0 && index < genericContainer->type_argc);
 
-    if (hybridclr::metadata::IsInterpreterIndex(genericContainer->ownerIndex))
+    if (hotc233::metadata::IsInterpreterIndex(genericContainer->ownerIndex))
     {
-        return (Il2CppMetadataGenericParameterHandle)hybridclr::metadata::MetadataModule::GetImage(hybridclr::metadata::DecodeImageIndex(genericContainer->ownerIndex))->GetGenericParameterByRawIndex(genericContainer, index);
+        return (Il2CppMetadataGenericParameterHandle)hotc233::metadata::MetadataModule::GetImage(hotc233::metadata::DecodeImageIndex(genericContainer->ownerIndex))->GetGenericParameterByRawIndex(genericContainer, index);
     }
 
     return GetGenericParameterFromIndexInternal(genericContainer->genericParameterStart + index);
@@ -1565,9 +1565,9 @@ const Il2CppType* il2cpp::vm::GlobalMetadata::GetGenericParameterConstraintFromI
 
     index = genericParameter->constraintsStart + index;
 
-    if (hybridclr::metadata::IsInterpreterIndex(genericParameter->ownerIndex))
+    if (hotc233::metadata::IsInterpreterIndex(genericParameter->ownerIndex))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(hybridclr::metadata::DecodeImageIndex(genericParameter->ownerIndex))
+        return hotc233::metadata::MetadataModule::GetImage(hotc233::metadata::DecodeImageIndex(genericParameter->ownerIndex))
             ->GetGenericParameterConstraintFromIndex(index);
     }
 
@@ -1675,9 +1675,9 @@ int32_t il2cpp::vm::GlobalMetadata::StructLayoutPack(Il2CppMetadataTypeHandle ha
 
 static const Il2CppImage* GetImageForTypeDefinitionIndex(TypeDefinitionIndex index)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetImage(hybridclr::metadata::DecodeImageIndex(index))->GetIl2CppImage();
+        return hotc233::metadata::MetadataModule::GetImage(hotc233::metadata::DecodeImageIndex(index))->GetIl2CppImage();
     }
     for (int32_t imageIndex = 0; imageIndex < s_MetadataImagesCount; imageIndex++)
     {
@@ -1695,10 +1695,10 @@ Il2CppClass* il2cpp::vm::GlobalMetadata::FromTypeDefinition(TypeDefinitionIndex 
 {
     const Il2CppTypeDefinition* typeDefinition;
     const Il2CppTypeDefinitionSizes* typeDefinitionSizes;
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        typeDefinition = (const Il2CppTypeDefinition *)hybridclr::metadata::MetadataModule::GetAssemblyTypeHandleFromEncodeIndex(index);
-        typeDefinitionSizes = hybridclr::metadata::MetadataModule::GetTypeDefinitionSizesFromEncodeIndex(index);
+        typeDefinition = (const Il2CppTypeDefinition *)hotc233::metadata::MetadataModule::GetAssemblyTypeHandleFromEncodeIndex(index);
+        typeDefinitionSizes = hotc233::metadata::MetadataModule::GetTypeDefinitionSizesFromEncodeIndex(index);
     }
     else
     {
@@ -1769,9 +1769,9 @@ const Il2CppType* il2cpp::vm::GlobalMetadata::GetIl2CppTypeFromIndex(TypeIndex i
 {
     if (index == kTypeIndexInvalid)
         return NULL;
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        return hybridclr::metadata::MetadataModule::GetIl2CppTypeFromEncodeIndex(index);
+        return hotc233::metadata::MetadataModule::GetIl2CppTypeFromEncodeIndex(index);
     }
     IL2CPP_ASSERT(index < s_Il2CppMetadataRegistration->typesCount && "Invalid type index ");
 
@@ -1849,9 +1849,9 @@ Il2CppClass* il2cpp::vm::GlobalMetadata::GetTypeInfoFromTypeIndex(TypeIndex inde
     if (index == kTypeIndexInvalid)
         return NULL;
 
-    if (hybridclr::metadata::IsInterpreterIndex(index))
+    if (hotc233::metadata::IsInterpreterIndex(index))
     {
-        Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(hybridclr::metadata::MetadataModule::GetIl2CppTypeFromEncodeIndex(index));
+        Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(hotc233::metadata::MetadataModule::GetIl2CppTypeFromEncodeIndex(index));
         ClassInlines::InitFromCodegen(klass);
         return klass;
     }
@@ -1872,9 +1872,9 @@ Il2CppClass* il2cpp::vm::GlobalMetadata::GetTypeInfoFromTypeIndex(TypeIndex inde
 const MethodInfo* il2cpp::vm::GlobalMetadata::GetMethodInfoFromMethodHandle(Il2CppMetadataMethodDefinitionHandle handle)
 {
     const Il2CppMethodDefinition* methodDefinition = reinterpret_cast<const Il2CppMethodDefinition*>(handle);
-    if (hybridclr::metadata::IsInterpreterIndex(methodDefinition->nameIndex))
+    if (hotc233::metadata::IsInterpreterIndex(methodDefinition->nameIndex))
     {
-        return hybridclr::metadata::MetadataModule::GetMethodInfoFromMethodDefinition(methodDefinition);
+        return hotc233::metadata::MetadataModule::GetMethodInfoFromMethodDefinition(methodDefinition);
     }
     const Il2CppMethodDefinition* methods = (const Il2CppMethodDefinition*)((const char*)s_GlobalMetadata + s_GlobalMetadataHeader->methodsOffset);
 

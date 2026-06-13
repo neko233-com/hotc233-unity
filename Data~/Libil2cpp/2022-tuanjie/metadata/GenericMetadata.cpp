@@ -28,8 +28,8 @@
 #include "Baselib.h"
 #include "Cpp/ReentrantLock.h"
 
-#include "hybridclr/metadata/MetadataUtil.h"
-#include "hybridclr/metadata/MetadataPool.h"
+#include "hotc233/metadata/MetadataUtil.h"
+#include "hotc233/metadata/MetadataPool.h"
 
 using namespace il2cpp::vm;
 using il2cpp::metadata::GenericMethod;
@@ -83,7 +83,7 @@ namespace metadata
         tempInflatedType.byref = type->byref;
         tempInflatedType.attrs = type->attrs;
 
-        const Il2CppType* inflatedType = (Il2CppType*)hybridclr::metadata::MetadataPool::GetPooledIl2CppType(tempInflatedType);
+        const Il2CppType* inflatedType = (Il2CppType*)hotc233::metadata::MetadataPool::GetPooledIl2CppType(tempInflatedType);
 
         ++il2cpp_runtime_stats.inflated_type_count;
 
@@ -112,8 +112,8 @@ namespace metadata
                     if (arrType->numlobounds == 0 && arrType->numsizes == 0)
                     {
                         Il2CppType tempType = *type;
-                        tempType.data.array = (Il2CppArrayType*)hybridclr::metadata::MetadataPool::GetPooledIl2CppArrayType(inflatedElementType, arrType->rank);
-                        return hybridclr::metadata::MetadataPool::GetPooledIl2CppType(tempType);
+                        tempType.data.array = (Il2CppArrayType*)hotc233::metadata::MetadataPool::GetPooledIl2CppArrayType(inflatedElementType, arrType->rank);
+                        return hotc233::metadata::MetadataPool::GetPooledIl2CppType(tempType);
                     }
                     else
                     {
@@ -140,7 +140,7 @@ namespace metadata
                 {
                     Il2CppType tempType = *type;
                     tempType.data.type = inflatedElementType;
-                    const Il2CppType* arrayType = hybridclr::metadata::MetadataPool::GetPooledIl2CppType(tempType);
+                    const Il2CppType* arrayType = hotc233::metadata::MetadataPool::GetPooledIl2CppType(tempType);
 
                     ++il2cpp_runtime_stats.inflated_type_count;
 
@@ -280,7 +280,7 @@ namespace metadata
     Il2CppRGCTXData* GenericMetadata::InflateRGCTXLocked(const Il2CppImage* image, uint32_t token, const Il2CppGenericContext* context, const FastAutoLock& lock)
     {
         // This method assumes that it has the g_MetadataLock
-        if (hybridclr::metadata::IsInterpreterImage(image))
+        if (hotc233::metadata::IsInterpreterImage(image))
         {
             return nullptr;
         }

@@ -54,20 +54,20 @@ namespace Hotc233.Editor.Il2CppDef
             int minorVer1 = int.Parse(match.Groups[2].Value);
             int minorVer2 = int.Parse(match.Groups[3].Value);
 
-            lines.Add($"#define HYBRIDCLR_UNITY_VERSION {majorVer}{minorVer1.ToString("D2")}{minorVer2.ToString("D2")}");
-            lines.Add($"#define HYBRIDCLR_UNITY_{majorVer} 1");
+            lines.Add($"#define HOTC233_UNITY_VERSION {majorVer}{minorVer1.ToString("D2")}{minorVer2.ToString("D2")}");
+            lines.Add($"#define HOTC233_UNITY_{majorVer} 1");
             for (int ver = 2019; ver <= 2023; ver++)
             {
                 if (majorVer >= ver)
                 {
-                    lines.Add($"#define HYBRIDCLR_UNITY_{ver}_OR_NEW 1");
+                    lines.Add($"#define HOTC233_UNITY_{ver}_OR_NEW 1");
                 }
             }
             for (int ver = 6000; ver <= 6100; ver++)
             {
                 if (majorVer >= ver)
                 {
-                    lines.Add($"#define HYBRIDCLR_UNITY_{ver}_OR_NEW 1");
+                    lines.Add($"#define HOTC233_UNITY_{ver}_OR_NEW 1");
                 }
             }
 
@@ -76,9 +76,9 @@ namespace Hotc233.Editor.Il2CppDef
             int tuanjieMajorVer = int.Parse(tuanjieMatch[0].Groups[1].Value);
             int tuanjieMinorVer1 = int.Parse(tuanjieMatch[0].Groups[2].Value);
             int tuanjieMinorVer2 = int.Parse(tuanjieMatch[0].Groups[3].Value);
-            lines.Add($"#define HYBRIDCLR_TUANJIE_VERSION {tuanjieMajorVer}{tuanjieMinorVer1.ToString("D2")}{tuanjieMinorVer2.ToString("D2")}");
+            lines.Add($"#define HOTC233_TUANJIE_VERSION {tuanjieMajorVer}{tuanjieMinorVer1.ToString("D2")}{tuanjieMinorVer2.ToString("D2")}");
 #elif TUANJIE_2022_3_OR_NEWER
-            lines.Add($"#define HYBRIDCLR_TUANJIE_VERSION 10000");
+            lines.Add($"#define HOTC233_TUANJIE_VERSION 10000");
 #endif
 
             frr.Replace("UNITY_VERSION", string.Join("\n", lines));

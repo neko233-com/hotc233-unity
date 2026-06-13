@@ -10,7 +10,7 @@ namespace Hotc233.Editor.Installer
     /// <summary>
     /// 用途: 管理 Hotc233 内置 libil2cpp 就绪流程与本地 libil2cpp 覆盖逻辑。
     /// 关键点: 当前包只面向 Unity 2022 + 团结引擎 1.8.0+；默认直接使用包内内置源码。
-    /// 注意事项: 底层运行时代码仍复用既有 native 目录结构；这里仅收口编辑器侧文案与安装入口。
+    /// 注意事项: 底层运行时代码使用 hotc233 命名；这里负责收口编辑器侧同步入口。
     /// </summary>
     public class InstallerController
     {
@@ -25,11 +25,11 @@ namespace Hotc233.Editor.Installer
         /// <summary>包内内置的 libil2cpp 源码目录。</summary>
         public string BundledLibil2cppDir => $"{SettingsUtil.ProjectDir}/{SettingsUtil.Hotc233DataPathInPackage}/Libil2cpp/2022-tuanjie";
 
-        private string RuntimeMarkerRelativePath => "libil2cpp/hybridclr";
+        private string RuntimeMarkerRelativePath => "libil2cpp/hotc233";
 
         private string LocalRuntimeMarkerDir => $"{SettingsUtil.LocalIl2CppDir}/{RuntimeMarkerRelativePath}";
 
-        private string BundledRuntimeMarkerDir => $"{BundledLibil2cppDir}/hybridclr";
+        private string BundledRuntimeMarkerDir => $"{BundledLibil2cppDir}/hotc233";
 
         public InstallerController()
         {
@@ -158,7 +158,7 @@ namespace Hotc233.Editor.Installer
             string workDir = SettingsUtil.Hotc233DataDir;
             Directory.CreateDirectory(workDir);
 
-            // 参考 HybridCLR 的本地工作目录思路，尽量保持增量同步，避免每次整目录重拷导致编辑器长时间无响应。
+            // 本地工作目录保持增量同步，避免每次整目录重拷导致编辑器长时间无响应。
             string localIl2CppDir = SettingsUtil.LocalIl2CppDir;
             Directory.CreateDirectory(localIl2CppDir);
 

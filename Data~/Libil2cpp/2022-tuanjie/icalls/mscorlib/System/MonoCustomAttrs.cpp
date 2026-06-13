@@ -14,7 +14,7 @@
 #include "vm/Exception.h"
 #include "vm/MetadataCache.h"
 
-#include "hybridclr/metadata/MetadataModule.h"
+#include "hotc233/metadata/MetadataModule.h"
 
 namespace il2cpp
 {

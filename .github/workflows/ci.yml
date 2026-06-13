@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  package-check:
+    name: Package checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate package metadata
+        shell: pwsh
+        run: |
+          $package = Get-Content package.json -Raw | ConvertFrom-Json
+          if ($package.name -ne "com.neko233.hotc233-unity") {
+            throw "Unexpected package name: $($package.name)"
+          }
+          if (-not ($package.version -match '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$')) {
+            throw "package.json version must be SemVer: $($package.version)"
+          }
+          foreach ($path in @("Runtime", "Editor", "Data~/Libil2cpp", "Data~/Templates", "Plugins", "README.md", "install-hotc233-unity.ps1", "install-hotc233-unity.sh")) {
+            if (-not (Test-Path $path)) {
+              throw "Required package path missing: $path"
+            }
+          }
+
+      - name: Guard internal Hotc233 native naming
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -E 'hybridclr|HybridCLR|HYBRIDCLR|HybridClr' -- Data~ Editor Runtime; then
+            echo "Internal runtime/editor code must use hotc233 naming. Competitor comparison text belongs in docs only." >&2
+            exit 1
+          fi
+
+      - name: Check installer scripts
+        shell: pwsh
+        run: |
+          $script = Get-Content install-hotc233-unity.ps1 -Raw
+          [scriptblock]::Create($script) | Out-Null
+          sh -n install-hotc233-unity.sh
+
+      - name: Git diff whitespace check
+        shell: bash
+        run: git diff --check

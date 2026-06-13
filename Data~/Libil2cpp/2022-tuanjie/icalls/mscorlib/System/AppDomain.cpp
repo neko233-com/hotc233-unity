@@ -31,9 +31,9 @@
 #include <string>
 #include <vector>
 
-// ==={{ hybridclr
-#include "hybridclr/metadata/Assembly.h"
-// ===}} hybridclr
+// ==={{ hotc233
+#include "hotc233/metadata/Assembly.h"
+// ===}} hotc233
 
 namespace il2cpp
 {
@@ -159,9 +159,9 @@ namespace System
         //il2cpp does not pack multiple assemblies with the same name, and even if that one is not the exact one that is asked for,
         //it's more useful to return it than not to. (like cases where you want to Deserialize a BinaryFormatter blob that was serialized
         //on 4.0)
-        // ==={{ hybridclr
+        // ==={{ hotc233
         const Il2CppAssembly* assembly = vm::Assembly::Load(info.assembly_name().name.c_str());
-        // ===}} hybridclr 
+        // ===}} hotc233
         if (assembly != NULL)
             return vm::Reflection::GetAssemblyObject(assembly);
 

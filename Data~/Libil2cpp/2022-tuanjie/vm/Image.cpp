@@ -21,7 +21,7 @@
 #include "Cpp/ReentrantLock.h"
 
 #include "os/Atomic.h"
-#include "hybridclr/metadata/Image.h"
+#include "hotc233/metadata/Image.h"
 
 struct NamespaceAndNamePairHash
 {

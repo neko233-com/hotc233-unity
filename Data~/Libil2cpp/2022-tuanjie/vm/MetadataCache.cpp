@@ -36,8 +36,8 @@
 #include "Baselib.h"
 #include "Cpp/ReentrantLock.h"
 
-#include "hybridclr/metadata/Assembly.h"
-#include "hybridclr/metadata/MetadataModule.h"
+#include "hotc233/metadata/Assembly.h"
+#include "hotc233/metadata/MetadataModule.h"
 
 typedef Il2CppReaderWriterLockedHashMap<Il2CppClass*, Il2CppClass*> PointerTypeMap;
 
@@ -794,9 +794,9 @@ static int CompareIl2CppTokenAdjustorThunkPair(const void* pkey, const void* pel
 
 Il2CppMethodPointer il2cpp::vm::MetadataCache::GetAdjustorThunk(const Il2CppImage* image, uint32_t token)
 {
-    if (hybridclr::metadata::IsInterpreterIndex(image->token))
+    if (hotc233::metadata::IsInterpreterIndex(image->token))
     {
-        return hybridclr::metadata::MetadataModule::GetAdjustorThunk(image, token);
+        return hotc233::metadata::MetadataModule::GetAdjustorThunk(image, token);
     }
     if (image->codeGenModule->adjustorThunkCount == 0)
         return NULL;
@@ -821,9 +821,9 @@ Il2CppMethodPointer il2cpp::vm::MetadataCache::GetMethodPointer(const Il2CppImag
     if (rid == 0)
         return NULL;
 
-    if (hybridclr::metadata::IsInterpreterImage(image))
+    if (hotc233::metadata::IsInterpreterImage(image))
     {
-        return hybridclr::metadata::MetadataModule::GetMethodPointer(image, token);
+        return hotc233::metadata::MetadataModule::GetMethodPointer(image, token);
     }
 
     IL2CPP_ASSERT(rid <= image->codeGenModule->methodPointerCount);
@@ -837,9 +837,9 @@ InvokerMethod il2cpp::vm::MetadataCache::GetMethodInvoker(const Il2CppImage* ima
     uint32_t table = GetTokenType(token);
     if (rid == 0)
         return Runtime::GetMissingMethodInvoker();
-    if (hybridclr::metadata::IsInterpreterImage(image))
+    if (hotc233::metadata::IsInterpreterImage(image))
     {
-        return hybridclr::metadata::MetadataModule::GetMethodInvoker(image, token);
+        return hotc233::metadata::MetadataModule::GetMethodInvoker(image, token);
     }
     int32_t index = image->codeGenModule->invokerIndices[rid - 1];
 
@@ -1037,7 +1037,7 @@ const Il2CppAssembly* il2cpp::vm::MetadataCache::GetAssemblyFromIndex(AssemblyIn
 
 const Il2CppAssembly* il2cpp::vm::MetadataCache::GetAssemblyByName(const char* nameToFind)
 {
-    const char* assemblyName = hybridclr::GetAssemblyNameFromPath(nameToFind);
+    const char* assemblyName = hotc233::GetAssemblyNameFromPath(nameToFind);
 
     il2cpp::utils::VmStringUtils::CaseInsensitiveComparer comparer;
 
@@ -1077,7 +1077,7 @@ void il2cpp::vm::MetadataCache::RegisterInterpreterAssembly(Il2CppAssembly* asse
 
 const Il2CppAssembly* il2cpp::vm::MetadataCache::LoadAssemblyFromBytes(const char* assemblyBytes, size_t length, const char* rawSymbolStoreBytes, size_t rawSymbolStoreLength)
 {
-    Il2CppAssembly* newAssembly = hybridclr::metadata::Assembly::LoadFromBytes(assemblyBytes, length, rawSymbolStoreBytes, rawSymbolStoreLength);
+    Il2CppAssembly* newAssembly = hotc233::metadata::Assembly::LoadFromBytes(assemblyBytes, length, rawSymbolStoreBytes, rawSymbolStoreLength);
     return newAssembly;
 }
 
