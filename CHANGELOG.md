@@ -19,6 +19,7 @@ All notable changes to hotc233-unity are tracked here.
 - Kept the package as a single Git-maintained repository intended for direct clone or submodule use.
 - Documented the public docs URL, ecosystem roadmap, and platform support verification policy.
 - Updated platform support docs to mark Linux and macOS IL2CPP as verified.
+- Stopped tracking Unity `.meta` files in the package repository so host projects can generate editor-specific GUIDs locally.
 
 ### Known Gaps
 

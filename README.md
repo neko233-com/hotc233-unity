@@ -106,6 +106,12 @@ Assets/neko233/hotc233-unity
 
 这个目录里的 `Data~` 是编辑器生成 MethodBridge、AOT 元数据和内置 libil2cpp runtime 的关键输入，不能丢。
 
+### 关于 `.meta`
+
+`hotc233-unity` 子仓库不提交 Unity `.meta` 文件。包本身是代码、Editor 工具、DLL 依赖和 `Data~` 生成输入，不包含 prefab、scene、ScriptableObject 这类必须跨项目保持固定 GUID 的序列化资产。`.meta` 交给宿主 Unity / Tuanjie 项目本地生成，可以避免两套编辑器生成不同 GUID 格式导致仓库反复变脏。
+
+接入项目如果需要在 `ProjectSettings/Hotc233Settings.asset` 中引用热更 asmdef 或包内设置脚本，应以本项目本地生成的 `.meta` GUID 为准，由 `hotc233/Settings...` 或自动化配置流程写入，不要把另一个项目生成的 `.meta` 当作包的一部分复制。
+
 最直接的安装方式：
 
 ```bash
@@ -445,6 +451,7 @@ hotc233-unity 当前生态重点：
 | 文档网站 | ✅ | GitHub Pages 自动发布，后续补常见错误和图文流程 |
 | 平台矩阵 | ✅ | Windows/Linux/macOS/Android/iOS/WebGL IL2CPP 已验证；Android/iOS 真机、WebGL 浏览器 smoke 继续补 |
 | 竞品实测 | ⚠️ | HybridCLR、ILRuntime、xLua 接入同 benchmark 后再填百分比 |
+| `.meta` 策略 | ✅ | 子仓库忽略 `.meta`，由宿主项目按 Unity/Tuanjie 本地生成 |
 
 ## 约束
 

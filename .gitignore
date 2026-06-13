@@ -6,6 +6,7 @@ Build/
 Builds/
 Logs/
 UserSettings/
+*.meta
 
 # IDE / OS files
 .vs/

@@ -13,6 +13,7 @@
 
 - 包内运行时目录：`Assets/neko233/hotc233-unity/Data~/Libil2cpp/2022-tuanjie`。
 - 本地工作目录：`Hotc233Data/LocalIl2CppData-{Application.platform}/il2cpp`。
+- 子仓库不提交 Unity `.meta` 文件；`.meta` 由宿主 Unity / Tuanjie 项目本地生成，避免国际版 Unity 与 Tuanjie GUID 格式差异导致仓库反复变脏。
 - `Generate/All`、构建前检查、EditorForBuild 自动化必须自动调用 `EnsureBuiltinRuntimeReady()`。
 - 不允许因为未手动打开窗口而失败；只有包内运行时缺失或 Unity/Tuanjie 版本不兼容时才失败。
 - `UNITY_IL2CPP_PATH` 只指向 hotc233 本地工作目录，不指向 HybridCLR 外部安装目录。
@@ -70,6 +71,7 @@
 
 ## 修改守则
 
+- 不要把宿主项目生成的 `.meta` 强行加入子仓库；如果必须新增序列化资产，需要先说明为什么它需要稳定 GUID。
 - 新增功能必须进入 `Hotc233FeatureCatalog` 和报告解析器。
 - 新增热更资源必须进入 `HotUpdateResourceCatalog`，并由 `Hotc233TestResourceBuilder` 自动创建。
 - 新增场景覆盖项必须更新 `Hotc233SceneTestHarness` 和 `Hotc233MainSceneBuilder`。
