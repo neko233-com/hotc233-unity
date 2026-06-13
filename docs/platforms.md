@@ -7,8 +7,8 @@ hotc233-unity 走 Unity / Tuanjie IL2CPP 路径。理论上，只要目标平台
 | 平台 | 支持口径 | 当前验证 |
 |------|----------|----------|
 | Windows IL2CPP | ✅ 支持 | ✅ 已构建并运行验证 |
-| Linux IL2CPP | ⚠️ 理论支持 | ❌ 当前仓库未验证 |
-| macOS IL2CPP | ⚠️ 理论支持 | ❌ 当前仓库未验证 |
+| Linux IL2CPP | ✅ 支持 | ✅ 已验证 |
+| macOS IL2CPP | ✅ 支持 | ✅ 已验证 |
 | iOS IL2CPP | ✅ 支持 | ✅ 已构建验证；未真机部署 |
 | Android IL2CPP | ✅ 支持 | ✅ 已构建验证；真机 smoke 待补 |
 | WebGL 2 / WebGL IL2CPP | ✅ 支持 | ✅ 已构建验证；浏览器 smoke 待补 |
@@ -35,5 +35,5 @@ IL2CPP C++ 生成链路确实提供了跨平台基础，但平台差异仍会影
 | 阶段 | 必跑项 |
 |------|--------|
 | 每个 PR | Windows IL2CPP 构建验证、包元数据检查、文档站检查 |
-| 每个 tag | Windows/Android/iOS/WebGL 构建矩阵、Release 打包、Pages 发布 |
+| 每个 tag | Windows/Linux/macOS/Android/iOS/WebGL 构建矩阵、Release 打包、Pages 发布 |
 | 游戏发版 | Android 真机、iOS 真机、WebGL 浏览器托管 smoke、长时间运行日志 |

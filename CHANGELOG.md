@@ -18,6 +18,7 @@ All notable changes to hotc233-unity are tracked here.
 - Migrated internal native runtime paths, generated C++ paths, macros, templates, and editor references from historical `hybridclr` naming to `hotc233` naming.
 - Kept the package as a single Git-maintained repository intended for direct clone or submodule use.
 - Documented the public docs URL, ecosystem roadmap, and platform support verification policy.
+- Updated platform support docs to mark Linux and macOS IL2CPP as verified.
 
 ### Known Gaps
 

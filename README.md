@@ -443,7 +443,7 @@ hotc233-unity 当前生态重点：
 | 一键安装 | ✅ | 增加更多失败诊断和代理/镜像说明 |
 | Release tag | ✅ | 每个版本自动打 zip、sha256、GitHub Release |
 | 文档网站 | ✅ | GitHub Pages 自动发布，后续补常见错误和图文流程 |
-| 平台矩阵 | ⚠️ | Linux/macOS runner、Android/iOS 真机、WebGL 浏览器 smoke |
+| 平台矩阵 | ✅ | Windows/Linux/macOS/Android/iOS/WebGL IL2CPP 已验证；Android/iOS 真机、WebGL 浏览器 smoke 继续补 |
 | 竞品实测 | ⚠️ | HybridCLR、ILRuntime、xLua 接入同 benchmark 后再填百分比 |
 
 ## 约束
