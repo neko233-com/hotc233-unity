@@ -10,6 +10,8 @@ namespace Hotc233
     public sealed class HotUpdateBinaryLoader
     {
         private readonly List<Assembly> assemblies = new List<Assembly>();
+        private readonly Dictionary<string, Type> typeCache = new Dictionary<string, Type>(StringComparer.Ordinal);
+        private readonly Dictionary<string, MethodInfo> staticMethodCache = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
 
         public IReadOnlyList<Assembly> Assemblies => assemblies;
 
@@ -60,6 +62,8 @@ namespace Hotc233
                 Hotc233RuntimeDiagnostics.Info("assembly.load.begin", Hotc233RuntimeDiagnostics.DescribeBinary(binary.Name, binary.Bytes));
                 var assembly = Assembly.Load(binary.Bytes);
                 assemblies.Add(assembly);
+                typeCache.Clear();
+                staticMethodCache.Clear();
                 Hotc233RuntimeDiagnostics.Info("assembly.load.ok", $"{assembly.GetName().Name} from {binary.Name}");
             }
 
@@ -79,16 +83,14 @@ namespace Hotc233
                 throw new ArgumentException("Method name is required.", nameof(methodName));
             }
 
-            var type = assemblies
-                .Select(assembly => assembly.GetType(typeName, false))
-                .FirstOrDefault(candidate => candidate != null);
+            var type = ResolveType(typeName);
             if (type == null)
             {
                 Hotc233RuntimeDiagnostics.Error("entry.type.missing", $"{typeName}; loaded={string.Join(",", assemblies.Select(assembly => assembly.GetName().Name))}");
                 throw new MissingMemberException($"Type not found in loaded hot update assemblies: {typeName}");
             }
 
-            var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var method = ResolveStaticMethod(type, methodName);
             if (method == null)
             {
                 Hotc233RuntimeDiagnostics.Error("entry.method.missing", $"{type.FullName}.{methodName}");
@@ -107,6 +109,41 @@ namespace Hotc233
                 Hotc233RuntimeDiagnostics.Error("entry.invoke.failed", Hotc233RuntimeDiagnostics.DescribeException(exception.InnerException ?? exception, $"{type.FullName}.{methodName}"));
                 throw;
             }
+        }
+
+        private Type ResolveType(string typeName)
+        {
+            if (typeCache.TryGetValue(typeName, out var cachedType))
+            {
+                return cachedType;
+            }
+
+            var type = assemblies
+                .Select(assembly => assembly.GetType(typeName, false))
+                .FirstOrDefault(candidate => candidate != null);
+            if (type != null)
+            {
+                typeCache[typeName] = type;
+            }
+
+            return type;
+        }
+
+        private MethodInfo ResolveStaticMethod(Type type, string methodName)
+        {
+            string cacheKey = type.FullName + "::" + methodName;
+            if (staticMethodCache.TryGetValue(cacheKey, out var cachedMethod))
+            {
+                return cachedMethod;
+            }
+
+            var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (method != null)
+            {
+                staticMethodCache[cacheKey] = method;
+            }
+
+            return method;
         }
     }
 
