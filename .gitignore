@@ -8,6 +8,9 @@ Logs/
 UserSettings/
 *.meta
 
+# Local third-party editor sources
+Editor/3rds/
+
 # IDE / OS files
 .vs/
 .idea/
