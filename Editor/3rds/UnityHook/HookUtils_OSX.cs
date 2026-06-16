@@ -49,10 +49,20 @@ namespace MonoHook
                 return;
             }
             
-            fixed(void * p = &src[0])
+            pthread_jit_write_protect_np(0);
+            try
             {
-                memcpy_jit(new IntPtr(pDst), new IntPtr(p), src.Length);
+                fixed(void * pSrc = &src[0])
+                {
+                    MemCpy(pDst, pSrc, src.Length);
+                }
             }
+            finally
+            {
+                pthread_jit_write_protect_np(1);
+            }
+
+            FlushICache(pDst, src.Length);
         }
 
         /// <summary>
@@ -60,7 +70,13 @@ namespace MonoHook
         /// </summary>
         public static void SetAddrFlagsToRWX(IntPtr ptr, int size) { }
 
-        public static void FlushICache(void* code, int size) { }
+        public static void FlushICache(void* code, int size)
+        {
+            if (code == null || size <= 0)
+                return;
+
+            sys_icache_invalidate(new IntPtr(code), (UIntPtr)size);
+        }
 
         public static KeyValuePair<long, long> GetPageAlignedAddr(long code, int size)
         {
@@ -108,8 +124,11 @@ namespace MonoHook
         [DllImport("pthread", SetLastError = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern int pthread_jit_write_protect_supported_np();
 
-        [DllImport("libMonoHookUtils_OSX", SetLastError = true, CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr memcpy_jit(IntPtr dst, IntPtr src, int len);
+        [DllImport("pthread", SetLastError = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void pthread_jit_write_protect_np(int enabled);
+
+        [DllImport("libSystem", SetLastError = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void sys_icache_invalidate(IntPtr start, UIntPtr len);
     }
 }
 

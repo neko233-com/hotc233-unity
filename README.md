@@ -55,16 +55,19 @@ loader.LoadHotUpdateAssemblies(hotUpdateBinaries);
 var result = loader.InvokeStatic(
     "UnityHotc.CodeHotUpdate.HotUpdateApp",
     "RunSelfTest");
-
-// 高频入口建议缓存成强类型委托，避免每次调用都走 MethodInfo.Invoke。
-var runSelfTest = loader.CreateStaticDelegate<Func<string>>(
-    "UnityHotc.CodeHotUpdate.HotUpdateApp",
-    "RunSelfTest");
-var fastResult = runSelfTest();
 ```
 
 `metadataBinaries` 和 `hotUpdateBinaries` 都是 `IEnumerable<NamedBinary>`。调用方负责从本地文件、远端 CDN、AssetBundle 或资源系统拿到 `byte[]`。
-`HotUpdateBinaryLoader` 会通过 `Hotc233RuntimeDiagnostics` 打印 session、平台、二进制大小、短 hash、程序集名和入口调用结果，真机失败时优先看这些日志。重复调用 `InvokeStatic` 时会复用已解析的 Type / MethodInfo；如果宿主需要高频调用同一个热更静态入口，优先用 `CreateStaticDelegate<TDelegate>` 缓存强类型委托。更高频的业务内循环仍建议放在热更程序集内部批处理，避免宿主和热更入口之间来回跨边界调用。
+`HotUpdateBinaryLoader` 会通过 `Hotc233RuntimeDiagnostics` 打印 session、平台、二进制大小、短 hash、程序集名和入口调用结果，真机失败时优先看这些日志。重复调用 `InvokeStatic` 时会复用已解析的 Type / MethodInfo。业务热更代码不需要为了 hotc233 写 bridge、强类型入口委托或特殊批处理；入口缓存、profile 选择和性能基准都属于宿主基础设施职责。
+
+可选 loader profile：
+
+```csharp
+var loader = new HotUpdateBinaryLoader()
+    .UsePerformanceProfile(HotUpdatePerformanceProfile.Stable);
+```
+
+`Stable` 是默认值，只启用保守的方法体缓存扩容，不默认修改解释器内联阈值，也不默认 PreJIT，优先保证稳定和 0 业务适配。`Compatibility` 可用于完全关闭 loader 性能默认值；`RuntimeOptions` / `Aggressive` 会启用更激进的解释器内联阈值，仅用于 profile 矩阵验证；`PreJit` / `Aggressive` 默认会跳过 PreJIT，只有设置 `HOTC233_UNSAFE_PREJIT=1` 才会真正执行。不要把 profile 当成业务代码写法要求。
 
 ## 工程接入
 
@@ -264,7 +267,7 @@ hotc233/Export/Export unitypackage to Build/Packages
 
 ### 接入一个新项目需要改多少
 
-通常不需要大规模改业务代码，但需要做这几件结构性工作：
+通常不需要为了性能改写业务代码，但需要做这几件热更接入边界工作：
 
 1. 把希望热更的业务代码移动到独立 asmdef。
 2. 清理主工程对热更业务类型的编译期直接引用。

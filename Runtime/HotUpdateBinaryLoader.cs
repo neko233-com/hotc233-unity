@@ -6,6 +6,15 @@ using UnityEngine.Scripting;
 
 namespace Hotc233
 {
+    public enum HotUpdatePerformanceProfile
+    {
+        Stable = 0,
+        RuntimeOptions = 1,
+        PreJit = 2,
+        Aggressive = 3,
+        Compatibility = 4,
+    }
+
     [Preserve]
     public sealed class HotUpdateBinaryLoader
     {
@@ -13,8 +22,74 @@ namespace Hotc233
         private readonly Dictionary<string, Type> typeCache = new Dictionary<string, Type>(StringComparer.Ordinal);
         private readonly Dictionary<string, MethodInfo> staticMethodCache = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, Delegate> staticDelegateCache = new Dictionary<string, Delegate>(StringComparer.Ordinal);
+        private bool performanceDefaultsApplied;
+        private const string UnsafePreJitEnvironmentVariable = "HOTC233_UNSAFE_PREJIT";
+
+        public HotUpdatePerformanceProfile PerformanceProfile { get; private set; } = HotUpdatePerformanceProfile.Stable;
 
         public IReadOnlyList<Assembly> Assemblies => assemblies;
+
+        public bool ApplyPerformanceDefaultsOnLoad { get; set; } = true;
+
+        public bool PreJitHotUpdateTypesOnLoad { get; set; } = false;
+
+        public bool AllowUnsafePreJitHotUpdateTypes { get; set; } =
+            string.Equals(Environment.GetEnvironmentVariable(UnsafePreJitEnvironmentVariable), "1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Environment.GetEnvironmentVariable(UnsafePreJitEnvironmentVariable), "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Environment.GetEnvironmentVariable(UnsafePreJitEnvironmentVariable), "yes", StringComparison.OrdinalIgnoreCase);
+
+        public int PreJitSucceededCount { get; private set; }
+
+        public int PreJitSkippedCount { get; private set; }
+
+        public int PreJitExceptionCount { get; private set; }
+
+        public int MinMethodBodyCacheSize { get; set; } = 65536;
+
+        public int MinMethodInlineDepth { get; set; } = 3;
+
+        public int MinInlineableMethodBodySize { get; set; } = 32;
+
+        public HotUpdateBinaryLoader UsePerformanceProfile(HotUpdatePerformanceProfile profile)
+        {
+            PerformanceProfile = profile;
+            ApplyPerformanceDefaultsOnLoad = false;
+            PreJitHotUpdateTypesOnLoad = false;
+
+            switch (profile)
+            {
+                case HotUpdatePerformanceProfile.Stable:
+                    ApplyPerformanceDefaultsOnLoad = true;
+                    MinMethodBodyCacheSize = 65536;
+                    MinMethodInlineDepth = 3;
+                    MinInlineableMethodBodySize = 32;
+                    break;
+                case HotUpdatePerformanceProfile.RuntimeOptions:
+                    ApplyPerformanceDefaultsOnLoad = true;
+                    MinMethodBodyCacheSize = 65536;
+                    MinMethodInlineDepth = 8;
+                    MinInlineableMethodBodySize = 96;
+                    break;
+                case HotUpdatePerformanceProfile.PreJit:
+                    ApplyPerformanceDefaultsOnLoad = true;
+                    MinMethodBodyCacheSize = 65536;
+                    MinMethodInlineDepth = 3;
+                    MinInlineableMethodBodySize = 32;
+                    PreJitHotUpdateTypesOnLoad = true;
+                    break;
+                case HotUpdatePerformanceProfile.Aggressive:
+                    ApplyPerformanceDefaultsOnLoad = true;
+                    MinMethodBodyCacheSize = 65536;
+                    MinMethodInlineDepth = 8;
+                    MinInlineableMethodBodySize = 96;
+                    PreJitHotUpdateTypesOnLoad = true;
+                    break;
+                case HotUpdatePerformanceProfile.Compatibility:
+                    break;
+            }
+
+            return this;
+        }
 
         public void LoadRuntimeMetadata(IEnumerable<NamedBinary> binaries, HomologousImageMode mode)
         {
@@ -69,8 +144,86 @@ namespace Hotc233
                 Hotc233RuntimeDiagnostics.Info("assembly.load.ok", $"{assembly.GetName().Name} from {binary.Name}");
             }
 
+            Hotc233RuntimeDiagnostics.Info(
+                "assembly.performance.profile",
+                $"profile={PerformanceProfile}; runtimeOptions={ApplyPerformanceDefaultsOnLoad}; preJitRequested={PreJitHotUpdateTypesOnLoad}; preJitEnabled={PreJitHotUpdateTypesOnLoad && AllowUnsafePreJitHotUpdateTypes}");
+            ApplyPerformanceDefaultsIfNeeded();
+            PreJitLoadedAssembliesIfNeeded();
             Hotc233RuntimeDiagnostics.Info("assembly.load.complete", $"count={assemblies.Count}; names={string.Join(",", assemblies.Select(assembly => assembly.GetName().Name))}");
             return assemblies;
+        }
+
+        public void ApplyPerformanceDefaultsIfNeeded()
+        {
+#if UNITY_EDITOR
+            return;
+#else
+            if (!ApplyPerformanceDefaultsOnLoad || performanceDefaultsApplied)
+            {
+                return;
+            }
+
+            SetRuntimeOptionAtLeast(RuntimeOptionId.MaxMethodBodyCacheSize, MinMethodBodyCacheSize);
+            SetRuntimeOptionAtLeast(RuntimeOptionId.MaxMethodInlineDepth, MinMethodInlineDepth);
+            SetRuntimeOptionAtLeast(RuntimeOptionId.MaxInlineableMethodBodySize, MinInlineableMethodBodySize);
+            performanceDefaultsApplied = true;
+#endif
+        }
+
+        public void PreJitLoadedAssembliesIfNeeded()
+        {
+#if UNITY_EDITOR
+            return;
+#else
+            if (!PreJitHotUpdateTypesOnLoad)
+            {
+                return;
+            }
+
+            if (!AllowUnsafePreJitHotUpdateTypes)
+            {
+                Hotc233RuntimeDiagnostics.Warning(
+                    "assembly.prejit.skipped",
+                    $"{PerformanceProfile} requested PreJIT, but it is disabled by default. Set {UnsafePreJitEnvironmentVariable}=1 only for experimental profile validation.");
+                return;
+            }
+
+            int succeeded = 0;
+            int skipped = 0;
+            int exceptions = 0;
+            foreach (var assembly in assemblies)
+            {
+                foreach (var type in GetLoadableTypes(assembly))
+                {
+                    if (type == null || type.IsGenericTypeDefinition)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (RuntimeApi.PreJitClass(type))
+                        {
+                            succeeded++;
+                        }
+                        else
+                        {
+                            skipped++;
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        exceptions++;
+                        Hotc233RuntimeDiagnostics.Warning("assembly.prejit.type.failed", $"{type.FullName}: {exception.GetType().Name}: {exception.Message}");
+                    }
+                }
+            }
+
+            PreJitSucceededCount = succeeded;
+            PreJitSkippedCount = skipped;
+            PreJitExceptionCount = exceptions;
+            Hotc233RuntimeDiagnostics.Info("assembly.prejit.complete", $"succeeded={succeeded}; skipped={skipped}; exceptions={exceptions}");
+#endif
         }
 
         public object InvokeStatic(string typeName, string methodName, params object[] args)
@@ -182,6 +335,28 @@ namespace Hotc233
             }
 
             return type;
+        }
+
+        private static void SetRuntimeOptionAtLeast(RuntimeOptionId optionId, int minValue)
+        {
+            int currentValue = RuntimeApi.GetRuntimeOption(optionId);
+            if (currentValue < minValue)
+            {
+                RuntimeApi.SetRuntimeOption(optionId, minValue);
+                Hotc233RuntimeDiagnostics.Info("runtime.option.set", $"{optionId}={minValue} (was {currentValue})");
+            }
+        }
+
+        private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
+        {
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException exception)
+            {
+                return exception.Types.Where(type => type != null);
+            }
         }
 
         private MethodInfo ResolveStaticMethod(Type type, string methodName)
