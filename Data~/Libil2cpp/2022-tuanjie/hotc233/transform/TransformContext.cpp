@@ -5350,6 +5350,46 @@ ir->ele = ele.locOffset;
 						ir->ele = ele.locOffset;
 						break;
 					}
+					case 20:
+					{
+						IRSetArrayElementVarVar_size_12* ir = pool.AllocIR<IRSetArrayElementVarVar_size_12>();
+						ir->type = HiOpcodeEnum::SetArrayElementVarVar_size_20;
+						ir->arr = arr.locOffset;
+						ir->index = index.locOffset;
+						ir->ele = ele.locOffset;
+						AddInst(ir);
+						break;
+					}
+					case 24:
+					{
+						IRSetArrayElementVarVar_size_12* ir = pool.AllocIR<IRSetArrayElementVarVar_size_12>();
+						ir->type = HiOpcodeEnum::SetArrayElementVarVar_size_24;
+						ir->arr = arr.locOffset;
+						ir->index = index.locOffset;
+						ir->ele = ele.locOffset;
+						AddInst(ir);
+						break;
+					}
+					case 28:
+					{
+						IRSetArrayElementVarVar_size_12* ir = pool.AllocIR<IRSetArrayElementVarVar_size_12>();
+						ir->type = HiOpcodeEnum::SetArrayElementVarVar_size_28;
+						ir->arr = arr.locOffset;
+						ir->index = index.locOffset;
+						ir->ele = ele.locOffset;
+						AddInst(ir);
+						break;
+					}
+					case 32:
+					{
+						IRSetArrayElementVarVar_size_12* ir = pool.AllocIR<IRSetArrayElementVarVar_size_12>();
+						ir->type = HiOpcodeEnum::SetArrayElementVarVar_size_32;
+						ir->arr = arr.locOffset;
+						ir->index = index.locOffset;
+						ir->ele = ele.locOffset;
+						AddInst(ir);
+						break;
+					}
 					default:
 					{
 						CreateAddIR(ir, SetArrayElementVarVar_n);

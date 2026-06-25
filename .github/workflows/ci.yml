@@ -41,8 +41,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -n -E 'hybridclr|HybridCLR|HYBRIDCLR|HybridClr' -- Data~ Editor Runtime; then
-            echo "Internal runtime/editor code must use hotc233 naming. Competitor comparison text belongs in docs only." >&2
+          if git grep -n -E 'hybridclr|HybridCLR|HYBRIDCLR|HybridClr' -- \
+            Data~ Editor Runtime \
+            ':(exclude)Runtime/RuntimeApi.cs' \
+            ':(exclude)Editor/Settings/HybridClrMenuAliases.cs' \
+            ':(exclude)Editor/Settings/HybridClrSettingsImporter.cs'; then
+            echo "Internal runtime/editor code must use hotc233 naming except the explicit HybridCLR compatibility facade/menu/importer." >&2
             exit 1
           fi
 

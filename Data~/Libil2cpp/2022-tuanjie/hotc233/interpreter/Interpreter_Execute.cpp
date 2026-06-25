@@ -3357,6 +3357,50 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::MathMinVarVarVar_i4:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __op1 = *(uint16_t*)(ip + 4);
+					uint16_t __op2 = *(uint16_t*)(ip + 6);
+					int32_t __v1 = (*(int32_t*)(localVarBase + __op1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __op2));
+					(*(int32_t*)(localVarBase + __ret)) = __v1 < __v2 ? __v1 : __v2;
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::MathMaxVarVarVar_i4:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __op1 = *(uint16_t*)(ip + 4);
+					uint16_t __op2 = *(uint16_t*)(ip + 6);
+					int32_t __v1 = (*(int32_t*)(localVarBase + __op1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __op2));
+					(*(int32_t*)(localVarBase + __ret)) = __v1 > __v2 ? __v1 : __v2;
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::MathMinVarVarVar_i8:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __op1 = *(uint16_t*)(ip + 4);
+					uint16_t __op2 = *(uint16_t*)(ip + 6);
+					int64_t __v1 = (*(int64_t*)(localVarBase + __op1));
+					int64_t __v2 = (*(int64_t*)(localVarBase + __op2));
+					(*(int64_t*)(localVarBase + __ret)) = __v1 < __v2 ? __v1 : __v2;
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::MathMaxVarVarVar_i8:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __op1 = *(uint16_t*)(ip + 4);
+					uint16_t __op2 = *(uint16_t*)(ip + 6);
+					int64_t __v1 = (*(int64_t*)(localVarBase + __op1));
+					int64_t __v2 = (*(int64_t*)(localVarBase + __op2));
+					(*(int64_t*)(localVarBase + __ret)) = __v1 > __v2 ? __v1 : __v2;
+				    ip += 8;
+				    continue;
+				}
 				case HiOpcodeEnum::BinOpVarVarVar_Add_f4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -11645,6 +11689,50 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
 				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
 				    Copy16(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 16), (void*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetArrayElementVarVar_size_20:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __index = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy20(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 20), (void*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetArrayElementVarVar_size_24:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __index = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy24(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 24), (void*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetArrayElementVarVar_size_28:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __index = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy28(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 28), (void*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetArrayElementVarVar_size_32:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __index = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy32(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 32), (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}

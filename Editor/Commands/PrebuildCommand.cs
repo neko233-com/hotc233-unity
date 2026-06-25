@@ -42,10 +42,7 @@ namespace Hotc233.Editor.Commands
             SaveDirtyOpenScenesWithoutPrompt();
 
             var installer = new Installer.InstallerController();
-            if (!installer.HasInstalledHotc233())
-            {
-                installer.EnsureBuiltinRuntimeReady();
-            }
+            installer.EnsureBuiltinRuntimeReady();
 
             if (!installer.HasInstalledHotc233())
             {
@@ -268,6 +265,10 @@ namespace Hotc233.Editor.Commands
             {
                 $"target={context.Target}",
                 $"development={context.DevelopmentBuild}",
+                $"unityVersion={Application.unityVersion}",
+#if TUANJIE_1_1_OR_NEWER
+                $"tuanjieVersion={Application.tuanjieVersion}",
+#endif
                 $"settings={ReadFileIfExists(Path.Combine(SettingsUtil.ProjectDir, "ProjectSettings", "Hotc233Settings.asset"))}",
                 $"assemblies={string.Join(";", SettingsUtil.HotUpdateAssemblyNamesIncludePreserved.OrderBy(name => name, StringComparer.Ordinal))}",
                 $"patchAot={string.Join(";", SettingsUtil.AOTAssemblyNames.OrderBy(name => name, StringComparer.Ordinal))}",
@@ -372,8 +373,10 @@ namespace Hotc233.Editor.Commands
 
         private static bool HasIl2CppDefOutputs(PipelineContext context)
         {
-            return File.Exists(Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "UnityVersion.h"))
-                && File.Exists(Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "AssemblyManifest.cpp"));
+            string unityVersionFile = Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "UnityVersion.h");
+            string assemblyManifestFile = Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "AssemblyManifest.cpp");
+            return FileContains(unityVersionFile, "#define HOTC233_UNITY_VERSION ")
+                && SettingsUtil.HotUpdateAssemblyNamesIncludePreserved.All(assemblyName => FileContains(assemblyManifestFile, $"\"{assemblyName}\""));
         }
 
         private static bool HasLinkOutput(PipelineContext context)
@@ -400,6 +403,11 @@ namespace Hotc233.Editor.Commands
         private static string ReadFileIfExists(string path)
         {
             return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+        }
+
+        private static bool FileContains(string path, string value)
+        {
+            return File.Exists(path) && File.ReadAllText(path).Contains(value);
         }
     }
 }

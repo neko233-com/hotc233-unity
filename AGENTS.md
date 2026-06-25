@@ -67,7 +67,21 @@
 
 - 可复用的 native 命名空间或目录结构不等于用户侧安装语义。
 - 底层源码、生成路径、宏和 Editor 内部目录必须使用 `hotc233` / `HOTC233` 命名；`hybridclr` 只允许出现在竞品对比或历史说明文档里。
-- 商业 DHE 等无法真实等价的能力必须在功能矩阵标注为模拟、兼容或待实现，不能宣传为已完整商业等价。
+- DHE 等非目标能力必须在功能矩阵标注为模拟、兼容或待实现，不能宣传为已完整等价；当前性能目标只对标 HybridCLR 专业版纯解释器。
+- 为满足无缝替代使用习惯，允许用户可见的 `HybridCLR/...` 菜单别名和 `HybridCLR.RuntimeApi` facade，但它们必须只转发到 hotc233 实现。
+- 不允许重新引入官方 `com.code-philosophy.hybridclr` 包依赖，也不允许依赖 HybridCLR Editor/Runtime asmdef 才能编译。
+- `hotc233/HybridCLR Compatibility/Import HybridCLR Settings` 必须通过序列化文件或弱反射读取旧配置，导入到 `Hotc233Settings` 后继续使用 hotc233 输出目录；只有显式 Mirror Output Paths 时才镜像旧输出目录。
+- 性能报告的 HybridCLR 专业版列只能标注为官方 8.11.0 文档目标区间，不能冒充本地 HybridCLR 包实测。
+- 专业版目标不得依赖 DHE，不得通过把大量热更逻辑放回首包 AOT 来规避解释器成本。
+
+## RuntimeFast 与 minigame 健康检查
+
+- `HotUpdateBinaryLoader` 默认 profile 必须是 `RuntimeFast`；`RuntimeOptions` 只作为兼容别名。
+- demo 与自动化必须提供分组性能菜单，并且每次对比都写出性能表。
+- 微信小游戏/minigame(WebGL2) 热更必须关闭 `weixinMiniGameUseSlimMetaFileFormat` 和全部 `m_SlimFeaturesWeixinMiniGame`。
+- 只读报告守门必须能通过 `go run ./hotc233ctl validate-reports -project <demo>`，不得要求 Unity editor 路径或触发 batchmode。
+- 修改解释器 opcode 时，必须同步 `Instruction.h`、`Instruction.cpp`、`Interpreter_Execute.cpp`、transform 选择逻辑和宿主 `hotc233ctl validate-reports` 的指令表守门；RuntimeFast 热路径至少覆盖 `System.Math.Min/Max` signed int/long intrinsic 和 20/24/28/32 字节无引用 struct array store。
+- 修改 loader、性能菜单、AssetLib233/minigame 对接、报告字段或配置导入器时，同步更新 README、宿主 demo 文档、AGENTS 和 CI 守门。
 
 ## 修改守则
 

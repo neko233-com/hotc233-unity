@@ -9,7 +9,8 @@ namespace Hotc233
     public enum HotUpdatePerformanceProfile
     {
         Stable = 0,
-        RuntimeOptions = 1,
+        RuntimeFast = 1,
+        RuntimeOptions = RuntimeFast,
         PreJit = 2,
         Aggressive = 3,
         Compatibility = 4,
@@ -25,7 +26,7 @@ namespace Hotc233
         private bool performanceDefaultsApplied;
         private const string UnsafePreJitEnvironmentVariable = "HOTC233_UNSAFE_PREJIT";
 
-        public HotUpdatePerformanceProfile PerformanceProfile { get; private set; } = HotUpdatePerformanceProfile.Stable;
+        public HotUpdatePerformanceProfile PerformanceProfile { get; private set; } = HotUpdatePerformanceProfile.RuntimeFast;
 
         public IReadOnlyList<Assembly> Assemblies => assemblies;
 
@@ -46,9 +47,9 @@ namespace Hotc233
 
         public int MinMethodBodyCacheSize { get; set; } = 65536;
 
-        public int MinMethodInlineDepth { get; set; } = 3;
+        public int MinMethodInlineDepth { get; set; } = 8;
 
-        public int MinInlineableMethodBodySize { get; set; } = 32;
+        public int MinInlineableMethodBodySize { get; set; } = 96;
 
         public HotUpdateBinaryLoader UsePerformanceProfile(HotUpdatePerformanceProfile profile)
         {
@@ -64,7 +65,7 @@ namespace Hotc233
                     MinMethodInlineDepth = 3;
                     MinInlineableMethodBodySize = 32;
                     break;
-                case HotUpdatePerformanceProfile.RuntimeOptions:
+                case HotUpdatePerformanceProfile.RuntimeFast:
                     ApplyPerformanceDefaultsOnLoad = true;
                     MinMethodBodyCacheSize = 65536;
                     MinMethodInlineDepth = 8;
@@ -146,7 +147,7 @@ namespace Hotc233
 
             Hotc233RuntimeDiagnostics.Info(
                 "assembly.performance.profile",
-                $"profile={PerformanceProfile}; runtimeOptions={ApplyPerformanceDefaultsOnLoad}; preJitRequested={PreJitHotUpdateTypesOnLoad}; preJitEnabled={PreJitHotUpdateTypesOnLoad && AllowUnsafePreJitHotUpdateTypes}");
+                $"profile={GetPerformanceProfileName(PerformanceProfile)}; runtimeOptions={ApplyPerformanceDefaultsOnLoad}; preJitRequested={PreJitHotUpdateTypesOnLoad}; preJitEnabled={PreJitHotUpdateTypesOnLoad && AllowUnsafePreJitHotUpdateTypes}");
             ApplyPerformanceDefaultsIfNeeded();
             PreJitLoadedAssembliesIfNeeded();
             Hotc233RuntimeDiagnostics.Info("assembly.load.complete", $"count={assemblies.Count}; names={string.Join(",", assemblies.Select(assembly => assembly.GetName().Name))}");
@@ -184,7 +185,7 @@ namespace Hotc233
             {
                 Hotc233RuntimeDiagnostics.Warning(
                     "assembly.prejit.skipped",
-                    $"{PerformanceProfile} requested PreJIT, but it is disabled by default. Set {UnsafePreJitEnvironmentVariable}=1 only for experimental profile validation.");
+                    $"{GetPerformanceProfileName(PerformanceProfile)} requested PreJIT, but it is disabled by default. Set {UnsafePreJitEnvironmentVariable}=1 only for experimental profile validation.");
                 return;
             }
 
@@ -357,6 +358,13 @@ namespace Hotc233
             {
                 return exception.Types.Where(type => type != null);
             }
+        }
+
+        private static string GetPerformanceProfileName(HotUpdatePerformanceProfile profile)
+        {
+            return (int)profile == (int)HotUpdatePerformanceProfile.RuntimeFast
+                ? "RuntimeFast"
+                : profile.ToString();
         }
 
         private MethodInfo ResolveStaticMethod(Type type, string methodName)

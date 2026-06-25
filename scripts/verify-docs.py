@@ -18,6 +18,9 @@ def main() -> None:
     expected_text = [
         "hotc233-unity",
         "Assets/neko233/hotc233-unity",
+        "HybridCLR",
+        "RuntimeFast",
+        "minigame",
         "ecosystem.md",
         "platforms.md",
     ]
@@ -38,6 +41,12 @@ def main() -> None:
 
     if "GitHub Pages" not in ecosystem:
         raise SystemExit("docs/ecosystem.md must mention GitHub Pages")
+    if "GitHub Release" not in ecosystem:
+        raise SystemExit("docs/ecosystem.md must mention GitHub Release")
+    if "专业版纯解释" not in html:
+        raise SystemExit("docs/index.html must mention the HybridCLR professional target")
+    if "DHE" not in html:
+        raise SystemExit("docs/index.html must explicitly state that DHE is not required")
     if "WebGL 2" not in platforms:
         raise SystemExit("docs/platforms.md must mention WebGL 2")
 

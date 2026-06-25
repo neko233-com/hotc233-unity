@@ -215,6 +215,8 @@
       <nav class="links" aria-label="Documentation">
         <a href="#install">安装</a>
         <a href="#workflow">工作流</a>
+        <a href="#hybridclr">HybridCLR 兼容</a>
+        <a href="#performance">性能目标</a>
         <a href="#platforms">平台</a>
         <a href="ecosystem.md">生态路线</a>
         <a href="platforms.md">平台口径</a>
@@ -226,7 +228,7 @@
   <main>
     <div class="wrap hero">
       <h1>一个 Git 仓库接入 Unity / Tuanjie C# 热更新。</h1>
-      <p class="lead">hotc233-unity 固定安装在 <code>Assets/neko233/hotc233-unity</code>，内置生成工具、运行时加载器、元数据补足流程、验证入口和发布自动化。</p>
+      <p class="lead">hotc233-unity 固定安装在 <code>Assets/neko233/hotc233-unity</code>，内置生成工具、运行时加载器、元数据补足流程、验证入口和发布自动化；保留 HybridCLR 使用习惯，但不需要执行 Installer。</p>
       <div class="commands" id="install">
         <pre><code>powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.ps1 | iex"</code></pre>
         <pre><code>curl -fsSL https://raw.githubusercontent.com/neko233-com/hotc233-unity/main/install-hotc233-unity.sh | sh</code></pre>
@@ -250,6 +252,55 @@
             <p>用 <code>hotc233/EditorForBuild/Run Full AB Verification</code> 或项目 CI 确认 DLL bytes 能从资源系统加载并执行。</p>
           </article>
         </div>
+      </div>
+    </section>
+
+    <section id="hybridclr">
+      <div class="wrap">
+        <h2>HybridCLR 使用习惯兼容</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>兼容菜单</h3>
+            <p><code>HybridCLR/Generate/All</code> 和 <code>HybridCLR/CompileDll/*</code> 会转发到 hotc233 的生成与编译流程。</p>
+          </article>
+          <article class="card">
+            <h3>兼容 API</h3>
+            <p>旧项目里的 <code>HybridCLR.RuntimeApi</code> 调用可由 hotc233 facade 转发到 <code>Hotc233.RuntimeApi</code>。</p>
+          </article>
+          <article class="card">
+            <h3>配置导入</h3>
+            <p><code>hotc233/HybridCLR Compatibility/Import HybridCLR Settings</code> 可读取旧配置并迁移热更 asmdef 与 AOT metadata。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="performance">
+      <div class="wrap">
+        <h2>专业版纯解释性能目标</h2>
+        <p class="note">目标对标 HybridCLR 8.11.0 专业版纯解释器，不依赖 DHE，也不通过把大量热更逻辑预置进首包 AOT 来换性能。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>要求</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>性能表</td>
+              <td>每次对比必须产出 <code>performance-comparison-report.md/json</code>，原生 IL2CPP ops/s 固定为 100%。</td>
+            </tr>
+            <tr>
+              <td>RuntimeFast</td>
+              <td>性能对比和 minigame 本地 IL2CPP 检查必须强制 <code>RuntimeFast</code>。</td>
+            </tr>
+            <tr>
+              <td>minigame / WebGL 2</td>
+              <td>健康检查会约束 <code>weixinMiniGameUseSlimMetaFileFormat</code> 和 slim/fbslim 功能全部关闭。</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -311,7 +362,7 @@
           </article>
           <article class="card">
             <h3>Release tag</h3>
-            <p>版本通过 <code>package.json</code>、<code>CHANGELOG.md</code>、Git tag 和 GitHub Release 管理。</p>
+            <p>版本通过 <code>package.json</code>、<code>CHANGELOG.md</code>、Git tag 和 GitHub Release 管理；tag 会生成 zip 与 sha256。</p>
           </article>
           <article class="card">
             <h3>同 benchmark 对比</h3>

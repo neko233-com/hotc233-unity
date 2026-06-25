@@ -921,6 +921,14 @@ namespace interpreter
 		GetEnumHashCode,
 		AssemblyGetExecutingAssembly,
 		MethodBaseGetCurrentMethod,
+		MathMinVarVarVar_i4,
+		MathMaxVarVarVar_i4,
+		MathMinVarVarVar_i8,
+		MathMaxVarVarVar_i8,
+		SetArrayElementVarVar_size_20,
+		SetArrayElementVarVar_size_24,
+		SetArrayElementVarVar_size_28,
+		SetArrayElementVarVar_size_32,
 
 		//!!!}}OPCODE
 	};

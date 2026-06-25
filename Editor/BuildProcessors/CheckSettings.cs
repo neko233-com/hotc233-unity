@@ -64,19 +64,11 @@ namespace Hotc233.Editor.BuildProcessors
             }
 
             var installer = new Installer.InstallerController();
-            if (!installer.HasInstalledHotc233())
-            {
-                installer.EnsureBuiltinRuntimeReady();
-            }
+            installer.EnsureBuiltinRuntimeReady();
 
             if (!installer.HasInstalledHotc233())
             {
                 throw new BuildFailedException("Hotc233 builtin runtime is not ready. Use 'hotc233/Builtin Runtime...' or run Generate/All.");
-            }
-
-            if (installer.PackageVersion != installer.InstalledLibil2cppVersion)
-            {
-                installer.EnsureBuiltinRuntimeReady();
             }
 
             Hotc233Settings gs = SettingsUtil.Hotc233Settings;

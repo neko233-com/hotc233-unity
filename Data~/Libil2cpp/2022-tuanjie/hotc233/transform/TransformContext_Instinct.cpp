@@ -520,6 +520,58 @@ namespace transform
 		}
 	}
 
+	static bool TryAddSystemMathMinMax(TransformContext& ctx, const MethodInfo* method, bool isMin)
+	{
+		if (method->parameters_count != 2 || ctx.GetEvalStackTop() < 2)
+		{
+			return false;
+		}
+
+		const Il2CppType* param0 = GET_METHOD_PARAMETER_TYPE(method->parameters[0]);
+		const Il2CppType* param1 = GET_METHOD_PARAMETER_TYPE(method->parameters[1]);
+		const Il2CppType* returnType = method->return_type;
+		if (param0->byref || param1->byref || returnType->byref || param0->type != param1->type || param0->type != returnType->type)
+		{
+			return false;
+		}
+
+		HiOpcodeEnum opcode = HiOpcodeEnum::None;
+		EvalStackReduceDataType reduceType = EvalStackReduceDataType::Other;
+		switch (returnType->type)
+		{
+		case IL2CPP_TYPE_I4:
+			opcode = isMin ? HiOpcodeEnum::MathMinVarVarVar_i4 : HiOpcodeEnum::MathMaxVarVarVar_i4;
+			reduceType = EvalStackReduceDataType::I4;
+			break;
+		case IL2CPP_TYPE_I8:
+			opcode = isMin ? HiOpcodeEnum::MathMinVarVarVar_i8 : HiOpcodeEnum::MathMaxVarVarVar_i8;
+			reduceType = EvalStackReduceDataType::I8;
+			break;
+		default:
+			return false;
+		}
+
+		IRBinOpVarVarVar_Add_i4* ir = ctx.GetPool().AllocIR<IRBinOpVarVarVar_Add_i4>();
+		ir->type = opcode;
+		ir->ret = ctx.GetEvalStackOffset_2();
+		ir->op1 = ctx.GetEvalStackOffset_2();
+		ir->op2 = ctx.GetEvalStackOffset_1();
+		ctx.AddInst(ir);
+		ctx.PopStackN(2);
+		ctx.PushStackByReduceType(reduceType);
+		return true;
+	}
+
+	static bool IH_Math_Min(TransformContext& ctx, const MethodInfo* method)
+	{
+		return TryAddSystemMathMinMax(ctx, method, true);
+	}
+
+	static bool IH_Math_Max(TransformContext& ctx, const MethodInfo* method)
+	{
+		return TryAddSystemMathMinMax(ctx, method, false);
+	}
+
 
 	struct InstinctHandlerInfo
 	{
@@ -538,6 +590,8 @@ namespace transform
 		{"System", "Nullable`1", "get_Value", IH_Nullable_get_Value},
 		{"System", "Array", "GetGenericValueImpl", IH_Array_GetGenericValueImpl},
 		{"System", "Array", "SetGenericValueImpl", IH_Array_SetGenericValueImpl},
+		{"System", "Math", "Min", IH_Math_Min},
+		{"System", "Math", "Max", IH_Math_Max},
 		{"System.Threading", "Interlocked", "CompareExchange", IH_Interlocked_CompareExchange},
 		{"System.Threading", "Interlocked", "Exchange", IH_Interlocked_Exchange},
 		{"System.Runtime.CompilerServices", "JitHelpers", "UnsafeEnumCast", IH_JitHelpers_UnsafeEnumCast},

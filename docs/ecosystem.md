@@ -39,8 +39,9 @@ hotc233-unity 的生态目标是：接入路径简单、版本来源单一、验
 
 - 全平台已真机验证。
 - 全面性能超过原生 IL2CPP。
-- 已覆盖 HybridCLR 商业版 DHE 能力。
-- ILRuntime、HybridCLR、xLua 的同表百分比，除非已经接入同 benchmark。
+- HybridCLR DHE 等价能力；当前只保留兼容探针，不作为目标能力宣传。
+- 已达到 HybridCLR 专业版纯解释器性能上限，除非最新 `performance-comparison-report.md` 的游戏业务行已经达标。
+- ILRuntime、xLua 的同表百分比，除非已经接入同 benchmark。
 
 ## Release 节奏
 

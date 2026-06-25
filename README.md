@@ -64,10 +64,36 @@ var result = loader.InvokeStatic(
 
 ```csharp
 var loader = new HotUpdateBinaryLoader()
-    .UsePerformanceProfile(HotUpdatePerformanceProfile.Stable);
+    .UsePerformanceProfile(HotUpdatePerformanceProfile.RuntimeFast);
 ```
 
-`Stable` 是默认值，只启用保守的方法体缓存扩容，不默认修改解释器内联阈值，也不默认 PreJIT，优先保证稳定和 0 业务适配。`Compatibility` 可用于完全关闭 loader 性能默认值；`RuntimeOptions` / `Aggressive` 会启用更激进的解释器内联阈值，仅用于 profile 矩阵验证；`PreJit` / `Aggressive` 默认会跳过 PreJIT，只有设置 `HOTC233_UNSAFE_PREJIT=1` 才会真正执行。不要把 profile 当成业务代码写法要求。
+`RuntimeFast` 是默认值，会应用运行时方法体缓存和解释器内联阈值等性能选项，用于对齐 HybridCLR 习惯下的默认高性能热更路径。`RuntimeOptions` 仍保留为兼容别名；`Compatibility` 可用于完全关闭 loader 性能默认值；`Stable` 保留为更保守的 profile；`PreJit` / `Aggressive` 默认会跳过 PreJIT，只有设置 `HOTC233_UNSAFE_PREJIT=1` 才会真正执行。不要把 profile 当成业务代码写法要求。
+
+RuntimeFast 运行时包含面向业务热循环的解释器快路径：`System.Math.Min/Max(int,int)`、`System.Math.Min/Max(long,long)` 直接降为 hotc233 IR，不再走 native call-common；20/24/28/32 字节无引用结构体数组写回使用固定大小 copy，覆盖常见战斗、背包等 struct hot loop。
+
+如果迁移项目里已有 `HybridCLR.RuntimeApi` 调用，可以直接保留调用代码。hotc233 默认提供 `HybridCLR.RuntimeApi` facade，把常见元数据加载、PreJIT 和 runtime option 调用转发到 `Hotc233.RuntimeApi`。
+
+不要在同一工程同时安装官方 `com.code-philosophy.hybridclr` 包；两个包都会定义 `HybridCLR` API。需要对标 HybridCLR 8.11.0 时，使用本仓库性能表里的官方专业版纯解释目标区间。
+
+### 接管已有 HybridCLR 配置
+
+如果项目已经配置过官方 HybridCLR，可直接导入已有热更 asmdef、热更程序集名、AOT metadata 和泛型扫描迭代设置：
+
+```text
+hotc233/HybridCLR Compatibility/Import HybridCLR Settings
+```
+
+该菜单默认保留 hotc233 自己的输出目录（`Hotc233Data/`、`Hotc233Generate/`），只接管“哪些程序集热更、哪些 AOT 元数据补充”的核心配置。需要完全镜像 HybridCLR 输出路径时，可运行：
+
+```text
+hotc233/HybridCLR Compatibility/Import HybridCLR Settings (Mirror Output Paths)
+```
+
+CI 可调用：
+
+```powershell
+go run ./hotc233ctl import-hybridclr-settings -project D:\Code\neko233-Projects\unity-hotc233-demo
+```
 
 ## 工程接入
 
@@ -347,7 +373,7 @@ hotc233/EditorForBuild/Run Full AB Verification
 
 ## 性能对比采集
 
-需要 hotc233 / 原生 Mono / 原生 IL2CPP 三方性能对比时，运行：
+需要 hotc233 / HybridCLR 专业版纯解释目标 / 原生 Mono / 原生 IL2CPP 性能对比时，运行：
 
 ```text
 hotc233/EditorForBuild/Run Performance Comparison Baselines
@@ -355,9 +381,11 @@ hotc233/EditorForBuild/Run Performance Comparison Baselines
 
 该入口会在 `StandaloneWindows64` 下构建并运行三种 Player：
 
-1. hotc233：IL2CPP Player 中加载热更 DLL 后执行 `PerformanceProbe.Run()`。
+1. hotc233：IL2CPP Player 中加载热更 DLL 后执行 `PerformanceProbe.Run()`，loader profile 必须为 `RuntimeFast`。
 2. 原生 Mono：主工程原生编译后执行 `NativePerformanceProbe.Run()`。
 3. 原生 IL2CPP：主工程原生编译后执行 `NativePerformanceProbe.Run()`。
+
+HybridCLR 专业版列不是本地官方包实测，而是按 HybridCLR 官方性能页换算的目标区间：专业/商业版纯解释器约为原生 AOT 的 `7.8% ~ 76.9%`。该目标不依赖 DHE，也不允许通过把大量热更逻辑预置进首包 AOT 来换性能。
 
 输出：
 
@@ -367,9 +395,11 @@ Assets/EditorForBuild/Generated/native-performance-mono.json
 Assets/EditorForBuild/Generated/native-performance-il2cpp.json
 Assets/EditorForBuild/Generated/performance-comparison-report.md
 Assets/EditorForBuild/Generated/performance-comparison-report.json
+Assets/EditorForBuild/Generated/performance-minigame-local-il2cpp.md
+Assets/EditorForBuild/Generated/minigame-runtimefast-health.md
 ```
 
-`performance-comparison-report.md` 按 HybridCLR 风格显示比例：原生 IL2CPP ops/s 固定为 **100%**，hotc233 与原生 Mono 都用 `自身 ops/s / 原生 IL2CPP ops/s * 100%` 量化。不要用 Editor 安全模式的 `performance-report.json` 冒充这个对比表。
+`performance-comparison-report.md` 按 HybridCLR 风格显示比例：原生 IL2CPP ops/s 固定为 **100%**，hotc233 与原生 Mono 都用 `自身 ops/s / 原生 IL2CPP ops/s * 100%` 量化；HybridCLR 专业版列显示官方目标区间。不要用 Editor 安全模式的 `performance-report.json` 冒充这个对比表。
 
 ## Go 自动化
 
@@ -379,6 +409,7 @@ Assets/EditorForBuild/Generated/performance-comparison-report.json
 cd D:\Code\neko233-Projects\unity-hotc233-demo\tools
 go test ./hotc233ctl/... ./server_hotupdate/...
 go run ./hotc233ctl all -project D:\Code\neko233-Projects\unity-hotc233-demo -target StandaloneWindows64 -version dev
+go run ./hotc233ctl validate-reports -project D:\Code\neko233-Projects\unity-hotc233-demo
 ```
 
 命令：
@@ -388,6 +419,11 @@ go run ./hotc233ctl all -project D:\Code\neko233-Projects\unity-hotc233-demo -ta
 - `test`: 启动 CDN 后跑 PlayMode 测试。
 - `player`: 构建/复用 Windows Player，真机形态加载 AB 内 `.dll.bytes` 并写报告。
 - `device`: 调用外部真机探针；未配置时写 `not_run`。
+- `health`: 检查 RuntimeFast、官方 HybridCLR 包禁用、微信小游戏 slim/fbslim 关闭。
+- `apply-health`: 一键设置 RuntimeFast + minigame 热更安全选项。
+- `minigame`: 生成 AssetLib233 + minigame(WebGL2) 本地 IL2CPP 性能对比表。
+- `validate-reports`: 不启动 Unity，只读校验 RuntimeFast 性能表、minigame 健康报告、manifest/lock 和 slim 设置。
+- `import-hybridclr-settings`: 从旧 `ProjectSettings/HybridCLRSettings.asset` 导入配置。
 - `all`: 先 `build`，再 `player`，最后 `device`。
 
 编辑器路径查找顺序：
