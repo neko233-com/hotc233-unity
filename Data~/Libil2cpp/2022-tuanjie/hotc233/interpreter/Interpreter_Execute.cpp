@@ -2139,6 +2139,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::RegI32Copy:
 				case HiOpcodeEnum::LdlocVarVar:
 				HOTC233_EXEC_LdlocVarVar:
 				{
@@ -3371,6 +3372,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::RegI32Ldc:
 				case HiOpcodeEnum::LdcVarConst_4:
 				HOTC233_EXEC_LdcVarConst_4:
 				{
@@ -4716,6 +4718,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 
 #pragma region ARITH
 		//!!!{{ARITH
+				case HiOpcodeEnum::RegI32Add:
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4:
 				HOTC233_EXEC_BinOpVarVarVar_Add_i4:
 				{
@@ -4999,6 +5002,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					}
 				    continue;
 				}
+				case HiOpcodeEnum::RegI32Sub:
 				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -5176,6 +5180,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 16;
 				    continue;
 				}
+				case HiOpcodeEnum::RegI32Mul:
 				case HiOpcodeEnum::BinOpVarVarVar_Mul_i4:
 				HOTC233_EXEC_BinOpVarVarVar_Mul_i4:
 				{
@@ -5363,6 +5368,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::RegI32Xor:
 				case HiOpcodeEnum::BinOpVarVarVar_Xor_i4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -5839,6 +5845,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::RegI32Shr:
 				case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shr_i4_i4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -9818,6 +9825,23 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::CallCommonNativeStatic_i4_0Cached:
+				{
+					uint32_t __method = *(uint32_t*)(ip + 4);
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 8);
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    uint64_t& __cachedThunk = imi->resolveDatas[__thunkCache];
+				    if (__cachedThunk == 0)
+				    {
+				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    	__cachedThunk = (uint64_t)_resolvedMethod->methodPointerCallByInterp;
+				    }
+				    typedef int32_t(*_NativeMethod_)(MethodInfo*);
+				    *(int32_t*)(void*)(localVarBase + __ret) = ((_NativeMethod_)__cachedThunk)(_resolvedMethod);
+				    ip += 12;
+				    continue;
+				}
 				case HiOpcodeEnum::CallCommonNativeStatic_i8_0:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 4);
@@ -9865,6 +9889,60 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 					}
 				    ip += 12;
+				    continue;
+				}
+				case HiOpcodeEnum::RunStaticI4CallTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
+					uint32_t __method = *(uint32_t*)(ip + 8);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 12);
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    uint64_t& __cachedThunk = imi->resolveDatas[__thunkCache];
+				    if (__cachedThunk == 0)
+				    {
+				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    	__cachedThunk = (uint64_t)_resolvedMethod->methodPointerCallByInterp;
+				    }
+				    typedef int32_t(*_NativeMethod_)(MethodInfo*);
+					_NativeMethod_ _method = (_NativeMethod_)__cachedThunk;
+					for (uint16_t __step = 0; __step < __stepCount; __step++)
+					{
+						uint64_t __word = __trace[__step];
+						uint16_t __ret = (uint16_t)__word;
+						uint16_t __copyDst = (uint16_t)(__word >> 16);
+						uint16_t __copySrc = (uint16_t)(__word >> 32);
+						*(int32_t*)(void*)(localVarBase + __ret) = _method(_resolvedMethod);
+						if (__copyDst != 0xffff)
+						{
+							(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+						}
+					}
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::RunRegI32NumericTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
+					for (uint16_t __step = 0; __step < __stepCount; __step++)
+					{
+						uint64_t __word = __trace[__step];
+						uint16_t __ret = (uint16_t)__word;
+						uint16_t __op1 = (uint16_t)(__word >> 16);
+						uint16_t __op2 = (uint16_t)(__word >> 32);
+						uint8_t __kind = (uint8_t)(__word >> 48);
+						if (__kind == 3)
+						{
+							*(int32_t*)(localVarBase + __ret) = (int32_t)((uint32_t)__op1 | ((uint32_t)__op2 << 16));
+							continue;
+						}
+						int32_t __v1 = *(int32_t*)(localVarBase + __op1);
+						int32_t __v2 = *(int32_t*)(localVarBase + __op2);
+						int32_t __result = __kind == 0 ? (__v1 + __v2) : (__kind == 1 ? (__v1 - __v2) : (__v1 * __v2));
+						*(int32_t*)(localVarBase + __ret) = __result;
+					}
+				    ip += 8;
 				    continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeStatic_f8_0:

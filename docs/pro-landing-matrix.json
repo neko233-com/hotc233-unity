@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "updatedAtUtc": "2026-06-26T14:30:00Z",
+  "target": "HybridCLR Pro pure interpreter + published business capabilities",
+  "performanceTargetPercentOfNativeIl2Cpp": {
+    "floor": 7.751937984496124,
+    "upperTier": 76.92307692307692
+  },
+  "memoryTarget": {
+    "instructionOptimizationOverheadKB": 700,
+    "interpreterThreadOverheadKB": 1200,
+    "metadataSavingMinPercent": 10,
+    "metadataSavingMaxPercent": 25,
+    "hotUpdateCodeShrinkRatio": 5.2
+  },
+  "architecturePhases": [
+    {
+      "id": "typed-register-ir",
+      "title": "Typed register IR",
+      "priority": "P1",
+      "blocks": ["hybridclr-binop-add", "hybridclr-binop-complex", "hybridclr-vector-op1", "hybridclr-vector-op2", "hybridclr-quaternion-op"]
+    },
+    {
+      "id": "typed-abi-callsite",
+      "title": "Typed ABI callsite cache",
+      "priority": "P1",
+      "blocks": ["hybridclr-call-aot-static-method", "hybridclr-call-aot-instance-param-int", "hybridclr-call-aot-instance-param-vector3", "hybridclr-call-aot-instance-return-vector3"]
+    },
+    {
+      "id": "typed-array-memory",
+      "title": "Typed array memory IR",
+      "priority": "P1",
+      "blocks": ["hybridclr-array-op"]
+    },
+    {
+      "id": "metadata-token-cache",
+      "title": "Transform-time metadata token cache",
+      "priority": "P2",
+      "blocks": ["hybridclr-typeof"]
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "full-generic-sharing",
+      "title": "完全泛型共享",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/fullgenericsharing",
+      "phase": "P0",
+      "status": "partial",
+      "hotc233Paths": [
+        "Editor/Settings/Hotc233Settings.cs:enableFullGenericSharing",
+        "Data~/Libil2cpp/2022-tuanjie/metadata/GenericSharing.*",
+        "Data~/Libil2cpp/2022-tuanjie/metadata/GenericMethod.cpp"
+      ],
+      "probes": ["CommercialCapabilityProbe.full-generic-sharing", "Hotc233CommercialCapabilityVerifier"],
+      "acceptance": "值类型/引用类型泛型、嵌套泛型、接口泛型、泛型虚调用、MakeGenericType 在 WebGL 直接 dll 探针全绿；enableFullGenericSharing 默认开启。"
+    },
+    {
+      "id": "metadata-optimization",
+      "title": "元数据优化",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/metadataoptimization",
+      "phase": "P0",
+      "status": "partial",
+      "hotc233Paths": [
+        "Editor/Settings/Hotc233Settings.cs:enableMetadataOptimization",
+        "Runtime/Hotc233LoadPolicy.cs",
+        "Runtime/HotUpdateBinaryLoader.cs"
+      ],
+      "probes": ["CommercialCapabilityProbe.metadata-optimization", "Hotc233CommercialCapabilityVerifier.metadataOptimization"],
+      "acceptance": "同机报告 metadata bytes、peak heap、load time；相对未优化基线节省 10%-25%。"
+    },
+    {
+      "id": "standard-interpreter-optimization",
+      "title": "标准解释优化",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/basicoptimization",
+      "phase": "P1",
+      "status": "in-progress",
+      "hotc233Paths": [
+        "Data~/Libil2cpp/2022-tuanjie/hotc233/transform/TransformContext.cpp",
+        "Data~/Libil2cpp/2022-tuanjie/hotc233/interpreter/Interpreter_Execute.cpp",
+        "Runtime/HotUpdateBinaryLoader.cs:RuntimeFast"
+      ],
+      "probes": ["performance-webgl-hotc-vs-hybridclr-base.json", "Hotc233CommercialCapabilityVerifier.standardInterpreterOptimization"],
+      "acceptance": "全部 HybridCLR 官方 base 行 hotc233PercentOfTarget >= 100（Pro 架构目标）；禁止依赖 DHE 或首包 AOT 预置热更逻辑。"
+    },
+    {
+      "id": "offline-instruction-optimization",
+      "title": "离线指令优化",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/basicoptimization",
+      "phase": "P3",
+      "status": "partial",
+      "hotc233Paths": [
+        "Data~/Libil2cpp/2022-tuanjie/hotc233/transform/TransformContext.cpp",
+        "Data~/Libil2cpp/2022-tuanjie/hotc233/interpreter/Instruction.h"
+      ],
+      "probes": ["webgl-hotc233-opcode-profile.json", "Hotc233CommercialCapabilityVerifier.offlineInstructionOptimization"],
+      "acceptance": "fusion/lowering 必须来自 typed IR 后端；禁止通用 linear trace。"
+    },
+    {
+      "id": "hotfix",
+      "title": "Hotfix 动态热修复",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/hotfix",
+      "phase": "P0",
+      "status": "partial",
+      "hotc233Paths": ["Runtime/HotUpdateBinaryLoader.cs:ReplaceHotUpdateAssembly"],
+      "probes": ["Hotc233CommercialCapabilityVerifier.hotfix"],
+      "acceptance": "ReplaceHotUpdateAssembly 后单程序集实例、缓存清空、业务探针可继续运行。"
+    },
+    {
+      "id": "hot-reload",
+      "title": "热重载工作流",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/hotfix",
+      "phase": "P0",
+      "status": "partial",
+      "hotc233Paths": ["Runtime/HotUpdateBinaryLoader.cs:ReloadHotUpdateAssemblies"],
+      "probes": ["Hotc233CommercialCapabilityVerifier.hotReload"],
+      "acceptance": "ReloadHotUpdateAssemblies 批量替换成功且缓存清空。"
+    },
+    {
+      "id": "code-protection",
+      "title": "代码加密 / 加固",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/codeprotection",
+      "phase": "P0",
+      "status": "partial",
+      "hotc233Paths": ["Runtime/Hotc233LoadPolicy.cs:CreateXorProtected"],
+      "probes": ["Hotc233CommercialCapabilityVerifier.codeProtection"],
+      "acceptance": "XOR 示例 + hash 校验 + 错误 hash 拒绝；生产级 AES/provider 后续接入。"
+    },
+    {
+      "id": "access-control",
+      "title": "访问控制策略",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/accesscontrol",
+      "phase": "P0",
+      "status": "partial",
+      "hotc233Paths": ["Runtime/Hotc233LoadPolicy.cs:AllowOnly"],
+      "probes": ["Hotc233CommercialCapabilityVerifier.accessControl"],
+      "acceptance": "AllowOnly 白名单通过，非白名单拒绝。"
+    },
+    {
+      "id": "assembly-load-optimization",
+      "title": "Assembly.Load 加载优化",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/assemblyload",
+      "phase": "P0",
+      "status": "partial",
+      "hotc233Paths": ["Runtime/HotUpdateBinaryLoader.cs:type/method/delegate cache"],
+      "probes": ["Hotc233CommercialCapabilityVerifier.assemblyLoadOptimization"],
+      "acceptance": "Type/StaticMethod/Delegate 缓存命中且 self-test 通过。"
+    },
+    {
+      "id": "interpreter-crash-log",
+      "title": "解释器栈崩溃日志",
+      "hybridClrDoc": "https://www.hybridclr.cn/docs/business/interpreterstacktrace",
+      "phase": "P0",
+      "status": "landed",
+      "hotc233Paths": [
+        "Runtime/Hotc233_HybridclrAdapt.cs:GetInterpreterStackTraceJson",
+        "Data~/Libil2cpp/2022-tuanjie/hotc233/interpreter/MachineState.cpp"
+      ],
+      "probes": ["CommercialCapabilityProbe.crash-log"],
+      "acceptance": "GetInterpreterStackTraceJson 返回 frameTracking=true 且含 method/ilOffset。"
+    }
+  ]
+}

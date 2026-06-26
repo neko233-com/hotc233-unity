@@ -412,6 +412,25 @@ hotc233/EditorForBuild/Run Full AB Verification
 }
 ```
 
+## 巅峰性能（Tuanjie WebGL）
+
+竞品目标只有 **HybridCLR Pro 纯解释上限**（~76.9% native IL2CPP）。总纲与迭代闭环：
+
+```text
+docs/performance-peak-plan.md
+docs/webgl-performance.md
+docs/hybridclr-pro-landing-roadmap.md
+docs/pro-wrong-answer-notebook.md
+```
+
+Tuanjie WebGL 验收（每批次架构改动后）：
+
+```powershell
+go run ./tools/hotc233ctl validate-reports -project .
+go run ./tools/hotc233ctl pro-gate -project .
+$env:HOTC233_ALLOW_PRO_TARGET_GAP='1'; go run ./tools/hotc233ctl webgl -project . -loader-profile RuntimeFast
+```
+
 ## 性能对比采集
 
 需要 hotc233 / HybridCLR 专业版纯解释目标 / 原生 Mono / 原生 IL2CPP 性能对比时，运行：

@@ -1026,6 +1026,16 @@ namespace interpreter
 		LdtokenTypeObjectVar,
 		RunI4AddCopyTrace,
 		RunStaticF4CallTrace,
+		RegI32Copy,
+		RegI32Ldc,
+		RegI32Add,
+		RegI32Sub,
+		RegI32Mul,
+		RegI32Xor,
+		RegI32Shr,
+		RunStaticI4CallTrace,
+		CallCommonNativeStatic_i4_0Cached,
+		RunRegI32NumericTrace,
 
 		//!!!}}OPCODE
 	};
@@ -12149,6 +12159,78 @@ namespace interpreter
 		uint16_t stepCount;
 		uint32_t traceData;
 		uint32_t method;
+	};
+
+	struct IRRegI32Copy : IRCommon
+	{
+		uint16_t dst;
+		uint16_t src;
+		uint8_t __pad6;
+		uint8_t __pad7;
+	};
+
+	struct IRRegI32Ldc : IRCommon
+	{
+		uint16_t dst;
+		uint32_t src;
+	};
+
+	struct IRRegI32Add : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+	struct IRRegI32Sub : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+	struct IRRegI32Mul : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+	struct IRRegI32Xor : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+	struct IRRegI32Shr : IRCommon
+	{
+		uint16_t ret;
+		uint16_t value;
+		uint16_t shiftAmount;
+	};
+
+	struct IRRunStaticI4CallTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint32_t traceData;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+
+	struct IRCallCommonNativeStatic_i4_0Cached : IRCommon
+	{
+		uint16_t ret;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+
+	struct IRRunRegI32NumericTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint32_t traceData;
 	};
 
 	//!!!}}INST

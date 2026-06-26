@@ -1493,7 +1493,8 @@ namespace transform
 		actualParamCount(0), ip2bb(nullptr), curbb(nullptr), args(nullptr), locals(nullptr), evalStack(nullptr),
 		evalStackTop(0), evalStackBaseOffset(0), curStackSize(0), maxStackSize(0),
 		nextFlowIdx(0), ipBase(nullptr), ip(nullptr), ipOffset(0), ir2offsetMap(nullptr),
-		prefixFlags(0), shareMethod(nullptr), totalIRSize(0), totalArgSize(0), totalArgLocalSize(0), initLocals(false)
+		prefixFlags(0), shareMethod(nullptr), totalIRSize(0), totalArgSize(0), totalArgLocalSize(0), initLocals(false),
+		typedRegisterEligibleI32Instructions(0), typedRegisterLongestI32Sequence(0), typedRegisterI32SequenceCount(0)
 	{
 
 	}
@@ -5220,7 +5221,196 @@ namespace transform
 				readIdx++;
 			}
 			insts.swap(staticF4CallTraceOutput);
+			std::vector<IRCommon*> staticI4CallTraceOutput;
+			staticI4CallTraceOutput.reserve(insts.size());
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (ir->type == HiOpcodeEnum::CallCommonNativeStatic_i4_0
+					|| ir->type == HiOpcodeEnum::CallCommonNativeStatic_i4_0Cached)
+				{
+					IRCallCommonNativeStatic_i4_0* firstCall = (IRCallCommonNativeStatic_i4_0*)ir;
+					size_t scanIdx = readIdx;
+					size_t callCount = 0;
+					while (scanIdx < insts.size())
+					{
+						IRCommon* callIr = insts[scanIdx];
+						if (callIr->type != HiOpcodeEnum::CallCommonNativeStatic_i4_0
+							&& callIr->type != HiOpcodeEnum::CallCommonNativeStatic_i4_0Cached)
+						{
+							break;
+						}
+						IRCallCommonNativeStatic_i4_0* call = (IRCallCommonNativeStatic_i4_0*)callIr;
+						if (call->method != firstCall->method || callCount >= 0xffff)
+						{
+							break;
+						}
+						callCount++;
+						scanIdx++;
+						if (scanIdx < insts.size()
+							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+					}
+					if (callCount >= 3)
+					{
+						int32_t traceDataIndex = 0;
+						uint64_t* traceData = nullptr;
+						AllocResolvedData(resolveDatas, (int32_t)callCount, traceDataIndex, traceData);
+						size_t writeStep = 0;
+						scanIdx = readIdx;
+						while (writeStep < callCount)
+						{
+							IRCallCommonNativeStatic_i4_0* call = (IRCallCommonNativeStatic_i4_0*)insts[scanIdx++];
+							uint16_t copyDst = 0xffff;
+							uint16_t copySrc = 0;
+							if (scanIdx < insts.size()
+								&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+								&& !IsNoOpTransformInstruction(insts[scanIdx]))
+							{
+								IRLdlocVarVar* copy = (IRLdlocVarVar*)insts[scanIdx++];
+								copyDst = copy->dst;
+								copySrc = copy->src;
+							}
+							traceData[writeStep++] =
+								((uint64_t)call->ret) |
+								((uint64_t)copyDst << 16) |
+								((uint64_t)copySrc << 32);
+						}
+						int32_t thunkCacheIndex = 0;
+						uint64_t* thunkCacheBuf = nullptr;
+						AllocResolvedData(resolveDatas, 1, thunkCacheIndex, thunkCacheBuf);
+						CreateIR(trace, RunStaticI4CallTrace);
+						trace->stepCount = (uint16_t)callCount;
+						trace->traceData = (uint32_t)traceDataIndex;
+						trace->method = firstCall->method;
+						trace->thunkCache = (uint32_t)thunkCacheIndex;
+						staticI4CallTraceOutput.push_back(trace);
+						readIdx = scanIdx;
+						continue;
+					}
+				}
+				staticI4CallTraceOutput.push_back(ir);
+				readIdx++;
+			}
+			insts.swap(staticI4CallTraceOutput);
+			RecordTypedRegisterCoverage(insts);
+			LowerTypedRegisterI32(insts);
+			FoldRegI32NumericTrace(insts);
 		}
+	}
+
+	uint32_t TransformContext::AllocResolveCacheSlot()
+	{
+		int32_t cacheIndex = 0;
+		uint64_t* cacheBuf = nullptr;
+		AllocResolvedData(resolveDatas, 1, cacheIndex, cacheBuf);
+		return (uint32_t)cacheIndex;
+	}
+
+	void TransformContext::FoldRegI32NumericTrace(std::vector<IRCommon*>& insts)
+	{
+		const size_t kMinRunLength = 4;
+		std::vector<IRCommon*> folded;
+		folded.reserve(insts.size());
+		for (size_t readIdx = 0; readIdx < insts.size();)
+		{
+			IRCommon* ir = insts[readIdx];
+			HiOpcodeEnum type = ir->type;
+			if (type != HiOpcodeEnum::RegI32Add
+				&& type != HiOpcodeEnum::RegI32Sub
+				&& type != HiOpcodeEnum::RegI32Mul
+				&& type != HiOpcodeEnum::RegI32Ldc)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+
+			size_t scanIdx = readIdx;
+			size_t runLength = 0;
+			while (scanIdx < insts.size())
+			{
+				HiOpcodeEnum scanType = insts[scanIdx]->type;
+				if (scanType != HiOpcodeEnum::RegI32Add
+					&& scanType != HiOpcodeEnum::RegI32Sub
+					&& scanType != HiOpcodeEnum::RegI32Mul
+					&& scanType != HiOpcodeEnum::RegI32Ldc)
+				{
+					break;
+				}
+				runLength++;
+				scanIdx++;
+			}
+			if (runLength < kMinRunLength)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+
+			int32_t traceDataIndex = 0;
+			uint64_t* traceData = nullptr;
+			AllocResolvedData(resolveDatas, (int32_t)runLength, traceDataIndex, traceData);
+			for (size_t step = 0; step < runLength; step++)
+			{
+				IRCommon* stepIr = insts[readIdx + step];
+				uint16_t ret = 0;
+				uint16_t op1 = 0;
+				uint16_t op2 = 0;
+				uint64_t kind = 0;
+				switch (stepIr->type)
+				{
+				case HiOpcodeEnum::RegI32Ldc:
+				{
+					IRRegI32Ldc* ldc = (IRRegI32Ldc*)stepIr;
+					ret = ldc->dst;
+					op1 = (uint16_t)ldc->src;
+					op2 = (uint16_t)(ldc->src >> 16);
+					kind = 3;
+					break;
+				}
+				case HiOpcodeEnum::RegI32Add:
+				{
+					IRRegI32Add* add = (IRRegI32Add*)stepIr;
+					ret = add->ret;
+					op1 = add->op1;
+					op2 = add->op2;
+					kind = 0;
+					break;
+				}
+				case HiOpcodeEnum::RegI32Sub:
+				{
+					IRRegI32Sub* sub = (IRRegI32Sub*)stepIr;
+					ret = sub->ret;
+					op1 = sub->op1;
+					op2 = sub->op2;
+					kind = 1;
+					break;
+				}
+				case HiOpcodeEnum::RegI32Mul:
+				{
+					IRRegI32Mul* mul = (IRRegI32Mul*)stepIr;
+					ret = mul->ret;
+					op1 = mul->op1;
+					op2 = mul->op2;
+					kind = 2;
+					break;
+				}
+				default:
+					break;
+				}
+				traceData[step] = ((uint64_t)ret) | ((uint64_t)op1 << 16) | ((uint64_t)op2 << 32) | (kind << 48);
+			}
+			CreateIR(trace, RunRegI32NumericTrace);
+			trace->stepCount = (uint16_t)runLength;
+			trace->traceData = (uint32_t)traceDataIndex;
+			folded.push_back(trace);
+			readIdx = scanIdx;
+		}
+		insts.swap(folded);
 	}
 
 	void TransformContext::AddInst_ldarg(int32_t argIdx)

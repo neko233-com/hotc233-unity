@@ -224,8 +224,17 @@ namespace Hotc233
             }
 
             return FileContains(Path.Combine(hotcRoot, "transform", "TransformContext.cpp"), "OptimizeBasicBlocks()")
+                && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext.cpp"), "LowerTypedRegisterI32")
+                && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext_TypedRegister.cpp"), "EmitRegI32Add")
+                && FileContains(Path.Combine(hotcRoot, "transform", "Hotc233TypedRegisterIR.h"), "Hotc233TypedRegisterCoverage")
                 && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext_CallCommon.cpp"), "TryAddCallCommonStaticInstruments")
-                && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "CallCommonNativeStatic_i4_i4_2")
+                && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "RegI32Add")
+                && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "RunStaticI4CallTrace")
+                && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext.cpp"), "RunStaticI4CallTrace")
+                && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "RunRegI32NumericTrace")
+                && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext.cpp"), "FoldRegI32NumericTrace")
+                && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "CallCommonNativeStatic_i4_0Cached")
+                && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext_CallCommon.cpp"), "CallCommonNativeStatic_i4_0Cached")
                 && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "LdtokenTypeObjectVar");
         }
 

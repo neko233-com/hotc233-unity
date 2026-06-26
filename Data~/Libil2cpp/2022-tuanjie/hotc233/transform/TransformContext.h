@@ -162,6 +162,18 @@ namespace transform
 		int32_t totalArgLocalSize;
 		bool initLocals;
 
+		uint32_t typedRegisterEligibleI32Instructions;
+		uint32_t typedRegisterLongestI32Sequence;
+		uint32_t typedRegisterI32SequenceCount;
+
+		void RecordTypedRegisterCoverage(std::vector<interpreter::IRCommon*>& insts);
+
+		void LowerTypedRegisterI32(std::vector<interpreter::IRCommon*>& insts);
+
+		void FoldRegI32NumericTrace(std::vector<interpreter::IRCommon*>& insts);
+
+		uint32_t AllocResolveCacheSlot();
+
 	public:
 
 		TransformContext(hotc233::metadata::Image* image, const MethodInfo* methodInfo, metadata::MethodBody& body, TemporaryMemoryArena& pool, il2cpp::utils::dynamic_array<uint64_t>& resolveDatas);
