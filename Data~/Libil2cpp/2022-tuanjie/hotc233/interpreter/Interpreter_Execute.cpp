@@ -7022,6 +7022,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::CallDelegateInvoke_void:
+				HOTC233_EXEC_CallDelegateInvoke_void:
 				{
 					uint32_t __managed2NativeStaticMethod = *(uint32_t*)(ip + 4);
 					uint32_t __managed2NativeInstanceMethod = *(uint32_t*)(ip + 8);
