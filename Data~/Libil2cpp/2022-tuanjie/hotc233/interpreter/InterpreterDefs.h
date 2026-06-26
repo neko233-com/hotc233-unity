@@ -124,6 +124,7 @@ namespace hotc233
 			Hotc233FastPath_OrI8 = 24,
 			Hotc233FastPath_XorI8 = 25,
 			Hotc233FastPath_CopyConstMulRetI4 = 30,
+			Hotc233FastPath_ClosureMulConstAddFieldI4 = 31,
 		};
 
 		struct InterpMethodInfo

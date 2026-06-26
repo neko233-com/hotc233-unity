@@ -380,7 +380,7 @@ namespace interpreter
 		16,
 		16,
 		24,
-		16,
+		20,
 		24,
 		24,
 		16,
@@ -1038,6 +1038,10 @@ namespace interpreter
 		96,
 		16,
 		32,
+		12,
+		8,
+		8,
+		12,
 
         //!!!}}INST_SIZE
     };

@@ -23,7 +23,7 @@ namespace Hotc233
                 && message.Contains("ReflectionComprehensiveProbe passed")
                 && message.Contains("UnityAssetProbe passed")
                 && message.Contains("LinqAggregateProbe passed")
-                && message.Contains("DheSimulationProbe passed")
+                && message.Contains("CommercialCapabilityProbe passed")
                 && message.Contains("TimelineCustomTrackProbe passed")
                 && message.Contains("SceneManagementProbe passed")
                 && message.Contains("PlatformDeviceProbe passed")
@@ -106,10 +106,10 @@ namespace Hotc233
                 throw new InvalidOperationException("LINQ aggregate probe failed: " + message);
             }
 
-            var dhe = ParseDheSimulation(message);
-            if (!dhe.passed || !dhe.AllPassed())
+            var commercial = ParseCommercialCapability(message);
+            if (!commercial.passed || !commercial.HotUpdateSurfacePassed())
             {
-                throw new InvalidOperationException("DHE simulation probe failed: " + message);
+                throw new InvalidOperationException("Commercial capability probe failed: " + message);
             }
 
             var timeline = ParseTimelineCustomTrack(message);
@@ -207,16 +207,21 @@ namespace Hotc233
             };
         }
 
-        public static DheSimulationFlags ParseDheSimulation(string message)
+        public static CommercialCapabilityFlags ParseCommercialCapability(string message)
         {
-            return new DheSimulationFlags
+            return new CommercialCapabilityFlags
             {
-                passed = message.Contains("DheSimulationProbe passed"),
-                metadata = message.Contains("dhe-metadata"),
-                genericPatch = message.Contains("dhe-generic-patch"),
-                aotAccess = message.Contains("dhe-aot-access"),
-                crossAsm = message.Contains("dhe-cross-asm"),
-                runtimeSubst = message.Contains("dhe-runtime-subst"),
+                passed = message.Contains("CommercialCapabilityProbe passed"),
+                fullGenericSharing = message.Contains("full-generic-sharing"),
+                crashLog = message.Contains("crash-log"),
+                metadataOptimization = message.Contains("metadata-optimization"),
+                hotfix = message.Contains("hotfix"),
+                hotReload = message.Contains("hot-reload"),
+                codeProtection = message.Contains("code-protection"),
+                accessControl = message.Contains("access-control"),
+                assemblyLoadOptimization = message.Contains("assembly-load-optimization"),
+                standardInterpreterOptimization = message.Contains("standard-interpreter-optimization"),
+                offlineInstructionOptimization = message.Contains("offline-instruction-optimization"),
             };
         }
 
@@ -412,18 +417,35 @@ namespace Hotc233
         }
 
         [Serializable]
-        public sealed class DheSimulationFlags
+        public sealed class CommercialCapabilityFlags
         {
             public bool passed;
-            public bool metadata;
-            public bool genericPatch;
-            public bool aotAccess;
-            public bool crossAsm;
-            public bool runtimeSubst;
+            public bool fullGenericSharing;
+            public bool metadataOptimization;
+            public bool standardInterpreterOptimization;
+            public bool hotfix;
+            public bool hotReload;
+            public bool codeProtection;
+            public bool accessControl;
+            public bool assemblyLoadOptimization;
+            public bool crashLog;
+            public bool offlineInstructionOptimization;
 
-            public bool AllPassed()
+            public bool HotUpdateSurfacePassed()
             {
-                return metadata && genericPatch && aotAccess && crossAsm && runtimeSubst;
+                return fullGenericSharing && crashLog;
+            }
+
+            public bool PreInterpreterPassed()
+            {
+                return fullGenericSharing
+                    && metadataOptimization
+                    && hotfix
+                    && hotReload
+                    && codeProtection
+                    && accessControl
+                    && assemblyLoadOptimization
+                    && crashLog;
             }
         }
 

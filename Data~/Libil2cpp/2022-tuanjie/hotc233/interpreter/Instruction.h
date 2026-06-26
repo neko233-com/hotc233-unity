@@ -1022,6 +1022,10 @@ namespace interpreter
 		Hotc233FieldAddPair_SetArrayElement_size_28,
 		LdlocVarVar_LdlocVarVar_LdlocVarVarSize,
 		LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize,
+		GetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4,
+		LdtokenTypeObjectVar,
+		RunI4AddCopyTrace,
+		RunStaticF4CallTrace,
 
 		//!!!}}OPCODE
 	};
@@ -4057,10 +4061,7 @@ namespace interpreter
 		uint8_t __pad6;
 		uint8_t __pad7;
 		uint32_t methodInfo;
-		uint8_t __pad12;
-		uint8_t __pad13;
-		uint8_t __pad14;
-		uint8_t __pad15;
+		uint32_t interpMethodCache;
 	};
 
 	struct IRCallVirtual_void : IRCommon
@@ -4205,6 +4206,7 @@ namespace interpreter
 		uint32_t managed2NativeStaticMethod;
 		uint32_t managed2NativeInstanceMethod;
 		uint32_t argIdxs;
+		uint32_t interpDelegateCache;
 	};
 
 
@@ -4216,10 +4218,7 @@ namespace interpreter
 		uint32_t managed2NativeStaticMethod;
 		uint32_t managed2NativeInstanceMethod;
 		uint32_t argIdxs;
-		uint8_t __pad20;
-		uint8_t __pad21;
-		uint8_t __pad22;
-		uint8_t __pad23;
+		uint32_t interpDelegateCache;
 	};
 
 
@@ -4232,10 +4231,7 @@ namespace interpreter
 		uint32_t managed2NativeStaticMethod;
 		uint32_t managed2NativeInstanceMethod;
 		uint32_t argIdxs;
-		uint8_t __pad20;
-		uint8_t __pad21;
-		uint8_t __pad22;
-		uint8_t __pad23;
+		uint32_t interpDelegateCache;
 	};
 
 
@@ -12123,6 +12119,36 @@ namespace interpreter
 		uint16_t minRet;
 		uint16_t minOp1;
 		uint16_t minOp2;
+	};
+
+	struct IRGetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4 : IRCommon
+	{
+		uint16_t loadArraySrc;
+		uint16_t loadIndexSrc;
+		uint16_t addValueSrc;
+		uint16_t storeArraySrc;
+		uint16_t storeIndexSrc;
+	};
+
+	struct IRLdtokenTypeObjectVar : IRCommon
+	{
+		uint16_t ret;
+		uint32_t typeObject;
+	};
+
+	struct IRRunI4AddCopyTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint8_t __pad4;
+		uint8_t __pad5;
+		uint32_t traceData;
+	};
+
+	struct IRRunStaticF4CallTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint32_t traceData;
+		uint32_t method;
 	};
 
 	//!!!}}INST

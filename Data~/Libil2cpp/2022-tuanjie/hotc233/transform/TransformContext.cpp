@@ -2502,6 +2502,33 @@ namespace transform
 							continue;
 						}
 					}
+					if (readIdx + 3 < insts.size()
+						&& ir->type == HiOpcodeEnum::GetArrayElementVarVar_i4
+						&& next->type == HiOpcodeEnum::LdlocVarVar
+						&& insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4
+						&& insts[readIdx + 3]->type == HiOpcodeEnum::SetArrayElementVarVar_i4
+						&& !IsNoOpTransformInstruction(next))
+					{
+						IRGetArrayElementVarVar_i4* load = (IRGetArrayElementVarVar_i4*)ir;
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)next;
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)insts[readIdx + 2];
+						IRSetArrayElementVarVar_i4* store = (IRSetArrayElementVarVar_i4*)insts[readIdx + 3];
+						bool sameValueFlow = store->ele == add->ret;
+						bool loadPlusCopy = add->op1 == load->dst && add->op2 == copy->dst;
+						bool copyPlusLoad = add->op1 == copy->dst && add->op2 == load->dst;
+						if (sameValueFlow && (loadPlusCopy || copyPlusLoad))
+						{
+							CreateIR(fused, GetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4);
+							fused->loadArraySrc = load->arr;
+							fused->loadIndexSrc = load->index;
+							fused->addValueSrc = copy->src;
+							fused->storeArraySrc = store->arr;
+							fused->storeIndexSrc = store->index;
+							insts[writeIdx++] = fused;
+							readIdx += 3;
+							continue;
+						}
+					}
 					if (readIdx + 4 < insts.size() && ir->type == HiOpcodeEnum::SetArrayElementVarVar_size_28 && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 3]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && insts[readIdx + 4]->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(insts[readIdx + 4]))
 					{
 						IRSetArrayElementVarVar_size_12* store = (IRSetArrayElementVarVar_size_12*)ir;
@@ -5078,6 +5105,121 @@ namespace transform
 				insts[writeIdx++] = ir;
 			}
 			insts.resize(writeIdx);
+			std::vector<IRCommon*> traceOutput;
+			traceOutput.reserve(insts.size());
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
+				{
+					size_t runLength = 1;
+					while (readIdx + runLength < insts.size()
+						&& runLength < 0xffff
+						&& insts[readIdx + runLength]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
+					{
+						runLength++;
+					}
+					if (runLength >= 4)
+					{
+						int32_t traceDataIndex = 0;
+						uint64_t* traceData = nullptr;
+						AllocResolvedData(resolveDatas, (int32_t)runLength * 3, traceDataIndex, traceData);
+						for (size_t step = 0; step < runLength; step++)
+						{
+							IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar* addCopies = (IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar*)insts[readIdx + step];
+							traceData[step * 3] =
+								((uint64_t)addCopies->addRet) |
+								((uint64_t)addCopies->addOp1 << 16) |
+								((uint64_t)addCopies->addOp2 << 32) |
+								((uint64_t)addCopies->copyDst1 << 48);
+							traceData[step * 3 + 1] =
+								((uint64_t)addCopies->copySrc1) |
+								((uint64_t)addCopies->copyDst2 << 16) |
+								((uint64_t)addCopies->copySrc2 << 32) |
+								((uint64_t)addCopies->copyDst3 << 48);
+							traceData[step * 3 + 2] = addCopies->copySrc3;
+						}
+						CreateIR(trace, RunI4AddCopyTrace);
+						trace->stepCount = (uint16_t)runLength;
+						trace->traceData = (uint32_t)traceDataIndex;
+						traceOutput.push_back(trace);
+						readIdx += runLength;
+						continue;
+					}
+				}
+				traceOutput.push_back(ir);
+				readIdx++;
+			}
+			insts.swap(traceOutput);
+			std::vector<IRCommon*> staticF4CallTraceOutput;
+			staticF4CallTraceOutput.reserve(insts.size());
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (ir->type == HiOpcodeEnum::CallCommonNativeStatic_f4_0)
+				{
+					IRCallCommonNativeStatic_f4_0* firstCall = (IRCallCommonNativeStatic_f4_0*)ir;
+					size_t scanIdx = readIdx;
+					size_t callCount = 0;
+					while (scanIdx < insts.size())
+					{
+						IRCommon* callIr = insts[scanIdx];
+						if (callIr->type != HiOpcodeEnum::CallCommonNativeStatic_f4_0)
+						{
+							break;
+						}
+						IRCallCommonNativeStatic_f4_0* call = (IRCallCommonNativeStatic_f4_0*)callIr;
+						if (call->method != firstCall->method || callCount >= 0xffff)
+						{
+							break;
+						}
+						callCount++;
+						scanIdx++;
+						if (scanIdx < insts.size()
+							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+					}
+					if (callCount >= 3)
+					{
+						int32_t traceDataIndex = 0;
+						uint64_t* traceData = nullptr;
+						AllocResolvedData(resolveDatas, (int32_t)callCount, traceDataIndex, traceData);
+						size_t writeStep = 0;
+						scanIdx = readIdx;
+						while (writeStep < callCount)
+						{
+							IRCallCommonNativeStatic_f4_0* call = (IRCallCommonNativeStatic_f4_0*)insts[scanIdx++];
+							uint16_t copyDst = 0xffff;
+							uint16_t copySrc = 0;
+							if (scanIdx < insts.size()
+								&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+								&& !IsNoOpTransformInstruction(insts[scanIdx]))
+							{
+								IRLdlocVarVar* copy = (IRLdlocVarVar*)insts[scanIdx++];
+								copyDst = copy->dst;
+								copySrc = copy->src;
+							}
+							traceData[writeStep++] =
+								((uint64_t)call->ret) |
+								((uint64_t)copyDst << 16) |
+								((uint64_t)copySrc << 32);
+						}
+						CreateIR(trace, RunStaticF4CallTrace);
+						trace->stepCount = (uint16_t)callCount;
+						trace->traceData = (uint32_t)traceDataIndex;
+						trace->method = firstCall->method;
+						staticF4CallTraceOutput.push_back(trace);
+						readIdx = scanIdx;
+						continue;
+					}
+				}
+				staticF4CallTraceOutput.push_back(ir);
+				readIdx++;
+			}
+			insts.swap(staticF4CallTraceOutput);
 		}
 	}
 
@@ -6604,6 +6746,33 @@ else \
 				int32_t resolvedTotalArgNum = shareMethod->parameters_count + resolvedIsInstanceMethod;
 				int32_t needDataSlotNum = (resolvedTotalArgNum + 3) / 4;
 				int32_t callArgEvalStackIdxBase = evalStackTop - resolvedTotalArgNum;
+				if (!resolvedIsInstanceMethod
+					&& shareMethod->parameters_count == 1
+					&& std::strcmp(shareMethod->name, "GetTypeFromHandle") == 0
+					&& shareMethod->klass
+					&& std::strcmp(shareMethod->klass->namespaze, "System") == 0
+					&& std::strcmp(shareMethod->klass->name, "Type") == 0)
+				{
+					IRCommon* last = GetLastInstrument();
+					if (last && last->type == HiOpcodeEnum::LdtokenVar)
+					{
+						IRLdtokenVar* ldtoken = (IRLdtokenVar*)last;
+						uint16_t argOffset = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase);
+						if (ldtoken->runtimeHandle == argOffset)
+						{
+							const Il2CppType* typeHandle = (const Il2CppType*)resolveDatas[ldtoken->token];
+							Il2CppObject* typeObject = (Il2CppObject*)il2cpp::vm::Reflection::GetTypeObject(typeHandle);
+							IRLdtokenTypeObjectVar* typeLoad = (IRLdtokenTypeObjectVar*)last;
+							typeLoad->type = HiOpcodeEnum::LdtokenTypeObjectVar;
+							typeLoad->ret = ldtoken->runtimeHandle;
+							typeLoad->typeObject = GetOrAddResolveDataIndex(typeObject);
+							PopStackN(resolvedTotalArgNum);
+							PushStackByType(shareMethod->return_type);
+							IL2CPP_ASSERT(GetEvalStackTopOffset() == typeLoad->ret);
+							continue;
+						}
+					}
+				}
 				uint32_t methodDataIndex = GetOrAddResolveDataIndex(shareMethod);
 
 				if (hotc233::metadata::IsInterpreterImplement(shareMethod))
@@ -6696,10 +6865,15 @@ else \
 							}
 							else
 							{
+								int32_t interpMethodCacheDataIdx = 0;
+								uint64_t* interpMethodCache = nullptr;
+								AllocResolvedData(resolveDatas, 1, interpMethodCacheDataIdx, interpMethodCache);
+								interpMethodCache[0] = 0;
 								CreateAddIR(ir, CallInterpStatic_ret);
 								ir->methodInfo = methodDataIndex;
 								ir->argBase = argBaseOffset;
 								ir->ret = argBaseOffset;
+								ir->interpMethodCache = interpMethodCacheDataIdx;
 							}
 						}
 					}
@@ -6859,15 +7033,26 @@ else \
 						uint32_t staticManaged2NativeMethodDataIdx = GetOrAddResolveDataIndex((void*)staticManaged2NativeMethod);
 						if (retIdx < 0)
 						{
+							int32_t interpDelegateCacheDataIdx = 0;
+							uint64_t* interpDelegateCache = nullptr;
+							AllocResolvedData(resolveDatas, 2, interpDelegateCacheDataIdx, interpDelegateCache);
+							interpDelegateCache[0] = 0;
+							interpDelegateCache[1] = 0;
 							CreateAddIR(ir, CallDelegateInvoke_void);
 							ir->managed2NativeStaticMethod = staticManaged2NativeMethodDataIdx;
 							ir->managed2NativeInstanceMethod = managed2NativeMethodDataIdx;
 							ir->argIdxs = argIdxDataIndex;
 							ir->invokeParamCount = shareMethod->parameters_count;
+							ir->interpDelegateCache = interpDelegateCacheDataIdx;
 						}
 						else
 						{
 							interpreter::TypeDesc retDesc = GetTypeArgDesc(returnType);
+							int32_t interpDelegateCacheDataIdx = 0;
+							uint64_t* interpDelegateCache = nullptr;
+							AllocResolvedData(resolveDatas, 2, interpDelegateCacheDataIdx, interpDelegateCache);
+							interpDelegateCache[0] = 0;
+							interpDelegateCache[1] = 0;
 							if (IsNeedExpandLocationType(retDesc.type))
 							{
 								CreateAddIR(ir, CallDelegateInvoke_ret_expand);
@@ -6877,6 +7062,7 @@ else \
 								ir->ret = retIdx;
 								ir->invokeParamCount = shareMethod->parameters_count;
 								ir->retLocationType = (uint8_t)retDesc.type;
+								ir->interpDelegateCache = interpDelegateCacheDataIdx;
 							}
 							else
 							{
@@ -6887,6 +7073,7 @@ else \
 								ir->ret = retIdx;
 								ir->retTypeStackObjectSize = retDesc.stackObjectSize;
 								ir->invokeParamCount = shareMethod->parameters_count;
+								ir->interpDelegateCache = interpDelegateCacheDataIdx;
 							}
 						}
 						continue;
@@ -9613,7 +9800,57 @@ ir->ele = ele.locOffset;
 		uint32_t argStackObjectSize,
 		uint32_t localStackSize)
 	{
-		if (!codes || hasExceptionClauses || initLocals || argStackObjectSize != localStackSize)
+		if (!codes || hasExceptionClauses || initLocals)
+		{
+			return Hotc233FastPath_Unsupported;
+		}
+
+		if (codeLength == 56)
+		{
+			auto isClosureMulConstAddFieldI4 = [argStackObjectSize](const byte* mulIp, const byte* copyIp, const byte* fieldIp, const byte* addIp, const byte* retIp) -> bool
+			{
+				if (*(HiOpcodeEnum*)mulIp != HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4 ||
+					*(HiOpcodeEnum*)copyIp != HiOpcodeEnum::LdlocVarVar ||
+					*(HiOpcodeEnum*)fieldIp != HiOpcodeEnum::LdfldVarVar_i4 ||
+					*(HiOpcodeEnum*)addIp != HiOpcodeEnum::BinOpVarVarVar_Add_i4 ||
+					*(HiOpcodeEnum*)retIp != HiOpcodeEnum::RetVar_ret_4)
+				{
+					return false;
+				}
+				uint16_t copyDst = *(uint16_t*)(mulIp + 2);
+				uint16_t copySrc = *(uint16_t*)(mulIp + 4);
+				uint16_t constDst = *(uint16_t*)(mulIp + 6);
+				uint16_t mulRet = *(uint16_t*)(mulIp + 12);
+				uint16_t mulOp1 = *(uint16_t*)(mulIp + 14);
+				uint16_t mulOp2 = *(uint16_t*)(mulIp + 16);
+				uint16_t objectCopyDst = *(uint16_t*)(copyIp + 2);
+				uint16_t objectCopySrc = *(uint16_t*)(copyIp + 4);
+				uint16_t fieldDst = *(uint16_t*)(fieldIp + 2);
+				uint16_t fieldObj = *(uint16_t*)(fieldIp + 4);
+				uint16_t addRet = *(uint16_t*)(addIp + 2);
+				uint16_t addOp1 = *(uint16_t*)(addIp + 4);
+				uint16_t addOp2 = *(uint16_t*)(addIp + 6);
+				uint16_t retSrc = *(uint16_t*)(retIp + 2);
+				auto isMulInput = [copyDst, constDst, argStackObjectSize](uint16_t offset) -> bool
+				{
+					return offset == copyDst || offset == constDst || offset < argStackObjectSize;
+				};
+				return retSrc == addRet
+					&& copySrc < argStackObjectSize
+					&& isMulInput(mulOp1)
+					&& isMulInput(mulOp2)
+					&& objectCopySrc < argStackObjectSize
+					&& (fieldObj == objectCopyDst || fieldObj < argStackObjectSize)
+					&& ((addOp1 == mulRet && addOp2 == fieldDst) || (addOp1 == fieldDst && addOp2 == mulRet));
+			};
+			if (isClosureMulConstAddFieldI4(codes, codes + 24, codes + 32, codes + 40, codes + 48) ||
+				isClosureMulConstAddFieldI4(codes + 16, codes, codes + 8, codes + 40, codes + 48))
+			{
+				return Hotc233FastPath_ClosureMulConstAddFieldI4;
+			}
+		}
+
+		if (argStackObjectSize != localStackSize)
 		{
 			return Hotc233FastPath_Unsupported;
 		}

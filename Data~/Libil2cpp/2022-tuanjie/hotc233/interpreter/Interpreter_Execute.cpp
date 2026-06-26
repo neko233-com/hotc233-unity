@@ -539,6 +539,84 @@ namespace interpreter
 		return (uint64_t)a >> b;
 	}
 
+	IL2CPP_FORCE_INLINE bool TryResolveI4FastPathValue(uint16_t src, uint16_t copyDst, uint16_t copySrc, uint16_t constDst, int32_t constant, StackObject* localVarBase, int32_t* value)
+	{
+		if (src == copyDst)
+		{
+			*value = *(int32_t*)(localVarBase + copySrc);
+			return true;
+		}
+		if (src == constDst)
+		{
+			*value = constant;
+			return true;
+		}
+		*value = *(int32_t*)(localVarBase + src);
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteClosureMulConstAddFieldI4(
+		const byte* mulIp,
+		const byte* copyIp,
+		const byte* fieldIp,
+		const byte* addIp,
+		const byte* retIp,
+		StackObject* localVarBase,
+		void* ret)
+	{
+		if (*(HiOpcodeEnum*)mulIp != HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4 ||
+			*(HiOpcodeEnum*)copyIp != HiOpcodeEnum::LdlocVarVar ||
+			*(HiOpcodeEnum*)fieldIp != HiOpcodeEnum::LdfldVarVar_i4 ||
+			*(HiOpcodeEnum*)addIp != HiOpcodeEnum::BinOpVarVarVar_Add_i4 ||
+			*(HiOpcodeEnum*)retIp != HiOpcodeEnum::RetVar_ret_4)
+		{
+			return false;
+		}
+
+		uint16_t copyDst = *(uint16_t*)(mulIp + 2);
+		uint16_t copySrc = *(uint16_t*)(mulIp + 4);
+		uint16_t constDst = *(uint16_t*)(mulIp + 6);
+		int32_t constant = *(int32_t*)(mulIp + 8);
+		uint16_t mulRet = *(uint16_t*)(mulIp + 12);
+		uint16_t mulOp1 = *(uint16_t*)(mulIp + 14);
+		uint16_t mulOp2 = *(uint16_t*)(mulIp + 16);
+		uint16_t objectCopyDst = *(uint16_t*)(copyIp + 2);
+		uint16_t objectCopySrc = *(uint16_t*)(copyIp + 4);
+		uint16_t fieldDst = *(uint16_t*)(fieldIp + 2);
+		uint16_t fieldObj = *(uint16_t*)(fieldIp + 4);
+		uint16_t fieldOffset = *(uint16_t*)(fieldIp + 6);
+		uint16_t addRet = *(uint16_t*)(addIp + 2);
+		uint16_t addOp1 = *(uint16_t*)(addIp + 4);
+		uint16_t addOp2 = *(uint16_t*)(addIp + 6);
+		uint16_t retSrc = *(uint16_t*)(retIp + 2);
+		if (retSrc != addRet)
+		{
+			return false;
+		}
+
+		int32_t mulValue1;
+		int32_t mulValue2;
+		if (!TryResolveI4FastPathValue(mulOp1, copyDst, copySrc, constDst, constant, localVarBase, &mulValue1) ||
+			!TryResolveI4FastPathValue(mulOp2, copyDst, copySrc, constDst, constant, localVarBase, &mulValue2))
+		{
+			return false;
+		}
+		int32_t mulValue = mulValue1 * mulValue2;
+
+		uint16_t objectSrc = fieldObj == objectCopyDst ? objectCopySrc : fieldObj;
+		Il2CppObject* fieldObject = *(Il2CppObject**)(localVarBase + objectSrc);
+		if (!fieldObject)
+		{
+			il2cpp::vm::Exception::RaiseNullReferenceException();
+		}
+		int32_t fieldValue = *(int32_t*)((uint8_t*)fieldObject + fieldOffset);
+
+		int32_t addValue1 = addOp1 == mulRet ? mulValue : (addOp1 == fieldDst ? fieldValue : *(int32_t*)(localVarBase + addOp1));
+		int32_t addValue2 = addOp2 == mulRet ? mulValue : (addOp2 == fieldDst ? fieldValue : *(int32_t*)(localVarBase + addOp2));
+		*(int32_t*)ret = addValue1 + addValue2;
+		return true;
+	}
+
 	IL2CPP_FORCE_INLINE bool TryExecuteHotc233FastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
 	{
 		if (!imi)
@@ -679,6 +757,20 @@ namespace interpreter
 			int32_t v2 = op2 == copyDst ? *(int32_t*)(localVarBase + copySrc) : (op2 == constDst ? constant : *(int32_t*)(localVarBase + op2));
 			*(int32_t*)ret = v1 * v2;
 			return true;
+		}
+		case Hotc233FastPath_ClosureMulConstAddFieldI4:
+		{
+			if (imi->codeLength == 56 &&
+				TryExecuteClosureMulConstAddFieldI4(codes, codes + 24, codes + 32, codes + 40, codes + 48, localVarBase, ret))
+			{
+				return true;
+			}
+			if (imi->codeLength == 56 &&
+				TryExecuteClosureMulConstAddFieldI4(codes + 16, codes, codes + 8, codes + 40, codes + 48, localVarBase, ret))
+			{
+				return true;
+			}
+			return false;
 		}
 		default:
 			return false;
@@ -1546,6 +1638,34 @@ inline StackObject* TryPrepareClosedInstanceInterpDelegate(uint16_t invokeParamC
 	return argBasePtr;
 }
 
+IL2CPP_FORCE_INLINE bool TryExecuteCachedSingleInterpDelegateFastPath(uint64_t* cache, Il2CppMulticastDelegate* del, uint16_t invokeParamCount, StackObject* argBasePtr, void* ret)
+{
+	if ((Il2CppMulticastDelegate*)cache[0] != del)
+	{
+		return false;
+	}
+	InterpMethodInfo* methodImi = (InterpMethodInfo*)cache[1];
+	if (!methodImi || methodImi->hotc233FastPathKind <= Hotc233FastPath_Unsupported)
+	{
+		return false;
+	}
+	const MethodInfo* method = del->delegate.method;
+	Il2CppObject* target = del->delegate.target;
+	StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(invokeParamCount, method, target, argBasePtr);
+	if (!fastArgBase)
+	{
+		return false;
+	}
+	if (TryExecuteHotc233FastPath(methodImi, fastArgBase, ret))
+	{
+		return true;
+	}
+	argBasePtr->obj = (Il2CppObject*)del;
+	cache[0] = 0;
+	cache[1] = 0;
+	return false;
+}
+
 inline void InvokeSingleDelegate(uint16_t invokeParamCount, const MethodInfo * method, Il2CppObject * obj, Managed2NativeCallMethod staticM2NMethod, Managed2NativeCallMethod instanceM2NMethod, uint16_t * argIdxs, StackObject * localVarBase, void* ret)
 {
 	if (!InitAndGetInterpreterDirectlyCallMethodPointer(method))
@@ -2249,7 +2369,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
 					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
 				    Copy24((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(arr, _index, 24));
-				    ip += 16;
+				    ip += 20;
 				    continue;
 				}
 				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24_LdlocVarVarSize:
@@ -4710,6 +4830,32 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					ip += 24;
 				    continue;
 				}
+				case HiOpcodeEnum::RunI4AddCopyTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
+					for (uint16_t __step = 0; __step < __stepCount; __step++)
+					{
+						uint64_t __word0 = __trace[__step * 3];
+						uint64_t __word1 = __trace[__step * 3 + 1];
+						uint64_t __word2 = __trace[__step * 3 + 2];
+						uint16_t __addRet = (uint16_t)__word0;
+						uint16_t __addOp1 = (uint16_t)(__word0 >> 16);
+						uint16_t __addOp2 = (uint16_t)(__word0 >> 32);
+						uint16_t __copyDst1 = (uint16_t)(__word0 >> 48);
+						uint16_t __copySrc1 = (uint16_t)__word1;
+						uint16_t __copyDst2 = (uint16_t)(__word1 >> 16);
+						uint16_t __copySrc2 = (uint16_t)(__word1 >> 32);
+						uint16_t __copyDst3 = (uint16_t)(__word1 >> 48);
+						uint16_t __copySrc3 = (uint16_t)__word2;
+						(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+						(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+						(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+						(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+					}
+					ip += 8;
+				    continue;
+				}
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize:
 				{
 					uint16_t __addRet = *(uint16_t*)(ip + 2);
@@ -7132,7 +7278,13 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					MethodInfo* __methodInfo = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
 					uint16_t __argBase = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
-					InterpMethodInfo* __calleeImi = __methodInfo->interpData ? (InterpMethodInfo*)__methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(__methodInfo);
+					uint32_t __interpMethodCache = *(uint32_t*)(ip + 12);
+					InterpMethodInfo* __calleeImi = (InterpMethodInfo*)imi->resolveDatas[__interpMethodCache];
+					if (!__calleeImi)
+					{
+						__calleeImi = __methodInfo->interpData ? (InterpMethodInfo*)__methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(__methodInfo);
+						imi->resolveDatas[__interpMethodCache] = (uint64_t)__calleeImi;
+					}
 					RuntimeInitClassCCtorWithoutInitClass(__methodInfo);
 					void* __retPtr = (void*)(localVarBase + __ret);
 					StackObject* __argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
@@ -7501,6 +7653,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __managed2NativeStaticMethod = *(uint32_t*)(ip + 4);
 					uint32_t __managed2NativeInstanceMethod = *(uint32_t*)(ip + 8);
 					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
+					uint32_t __interpDelegateCache = *(uint32_t*)(ip + 16);
 					uint16_t __invokeParamCount = *(uint16_t*)(ip + 2);
 				    frame->ip = ip + 2;
 					void* _ret = nullptr;
@@ -7508,15 +7661,30 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					StackObject* _argBasePtr = localVarBase + _resolvedArgIdxs[0];
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
 					CHECK_NOT_NULL_THROW(_del);
+					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
 					if (_del->delegates == nullptr)
 					{
+						if (TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						{
+							ip += 20;
+							continue;
+						}
 						const MethodInfo* method = _del->delegate.method;
 						Il2CppObject* target = _del->delegate.target;
 						if (hotc233::metadata::IsInterpreterImplement(method))
 						{
 							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
 							{
-								CALL_INTERP_RET((ip + 16), method, fastArgBase, _ret);
+								InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+								RuntimeInitClassCCtorWithoutInitClass(method);
+								if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
+								{
+									_interpDelegateCache[0] = (uint64_t)_del;
+									_interpDelegateCache[1] = (uint64_t)methodImi;
+									ip += 20;
+									continue;
+								}
+								CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, fastArgBase, _ret);
 								continue;
 							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
@@ -7551,7 +7719,16 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								RaiseExecutionEngineException("CallInterpDelegate");
 							}
 							}
-							CALL_INTERP_RET((ip + 16), method, _argBasePtr, _ret);
+							InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+							RuntimeInitClassCCtorWithoutInitClass(method);
+							if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
+							{
+								_interpDelegateCache[0] = (uint64_t)_del;
+								_interpDelegateCache[1] = (uint64_t)methodImi;
+								ip += 20;
+								continue;
+							}
+							CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, _argBasePtr, _ret);
 							continue;
 						}
 						else
@@ -7584,6 +7761,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __managed2NativeStaticMethod = *(uint32_t*)(ip + 8);
 					uint32_t __managed2NativeInstanceMethod = *(uint32_t*)(ip + 12);
 					uint32_t __argIdxs = *(uint32_t*)(ip + 16);
+					uint32_t __interpDelegateCache = *(uint32_t*)(ip + 20);
 					uint16_t __ret = *(uint16_t*)(ip + 2);
 					uint16_t __invokeParamCount = *(uint16_t*)(ip + 4);
 					uint16_t __retTypeStackObjectSize = *(uint16_t*)(ip + 6);
@@ -7595,8 +7773,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					StackObject* _argBasePtr = localVarBase + _resolvedArgIdxs[0];
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
 					CHECK_NOT_NULL_THROW(_del);
+					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
 					if (_del->delegates == nullptr)
 					{
+						if (TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						{
+							ip += 24;
+							continue;
+						}
 						const MethodInfo* method = _del->delegate.method;
 						Il2CppObject* target = _del->delegate.target;
 						if (hotc233::metadata::IsInterpreterImplement(method))
@@ -7607,6 +7791,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								RuntimeInitClassCCtorWithoutInitClass(method);
 								if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
 								{
+									_interpDelegateCache[0] = (uint64_t)_del;
+									_interpDelegateCache[1] = (uint64_t)methodImi;
 									ip += 24;
 									continue;
 								}
@@ -7649,6 +7835,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							RuntimeInitClassCCtorWithoutInitClass(method);
 							if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
 							{
+								_interpDelegateCache[0] = (uint64_t)_del;
+								_interpDelegateCache[1] = (uint64_t)methodImi;
 								ip += 24;
 								continue;
 							}
@@ -7686,6 +7874,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __managed2NativeStaticMethod = *(uint32_t*)(ip + 8);
 					uint32_t __managed2NativeInstanceMethod = *(uint32_t*)(ip + 12);
 					uint32_t __argIdxs = *(uint32_t*)(ip + 16);
+					uint32_t __interpDelegateCache = *(uint32_t*)(ip + 20);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
 					uint16_t __invokeParamCount = *(uint16_t*)(ip + 6);
 					uint8_t __retLocationType = *(uint8_t*)(ip + 2);
@@ -7696,8 +7885,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					StackObject* _argBasePtr = localVarBase + _resolvedArgIdxs[0];
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
 					CHECK_NOT_NULL_THROW(_del);
+					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
 					if (_del->delegates == nullptr)
 					{
+						if (TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						{
+							ip += 24;
+							continue;
+						}
 						const MethodInfo* method = _del->delegate.method;
 						Il2CppObject* target = _del->delegate.target;
 						if (hotc233::metadata::IsInterpreterImplement(method))
@@ -7708,6 +7903,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								RuntimeInitClassCCtorWithoutInitClass(method);
 								if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
 								{
+									_interpDelegateCache[0] = (uint64_t)_del;
+									_interpDelegateCache[1] = (uint64_t)methodImi;
 									ip += 24;
 									continue;
 								}
@@ -7750,6 +7947,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							RuntimeInitClassCCtorWithoutInitClass(method);
 							if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
 							{
+								_interpDelegateCache[0] = (uint64_t)_del;
+								_interpDelegateCache[1] = (uint64_t)methodImi;
 								ip += 24;
 								continue;
 							}
@@ -9643,6 +9842,31 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::RunStaticF4CallTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
+					uint32_t __method = *(uint32_t*)(ip + 8);
+				    frame->ip = ip + 2;
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    typedef float(*_NativeMethod_)(MethodInfo*);
+					_NativeMethod_ _method = (_NativeMethod_)_resolvedMethod->methodPointerCallByInterp;
+					for (uint16_t __step = 0; __step < __stepCount; __step++)
+					{
+						uint64_t __word = __trace[__step];
+						uint16_t __ret = (uint16_t)__word;
+						uint16_t __copyDst = (uint16_t)(__word >> 16);
+						uint16_t __copySrc = (uint16_t)(__word >> 32);
+						*(float*)(void*)(localVarBase + __ret) = _method(_resolvedMethod);
+						if (__copyDst != 0xffff)
+						{
+							(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+						}
+					}
+				    ip += 12;
+				    continue;
+				}
 				case HiOpcodeEnum::CallCommonNativeStatic_f8_0:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 4);
@@ -11106,6 +11330,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::LdtokenTypeObjectVar:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					Il2CppObject* __typeObject = ((Il2CppObject*)imi->resolveDatas[*(uint32_t*)(ip + 4)]);
+				    (*(Il2CppObject**)(localVarBase + __ret)) = __typeObject;
+				    ip += 8;
+				    continue;
+				}
 				case HiOpcodeEnum::MakeRefVarVar:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
@@ -12000,7 +12232,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __offset = *(uint16_t*)(ip + 10);
 					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
 					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
-				    ip += 16;
+				    ip += 20;
 				    continue;
 				}
 				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4:
@@ -14380,6 +14612,22 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					int32_t _index = (*(int32_t*)(localVarBase + __index));
 				    (*(int32_t*)(localVarBase + __dst)) = GetArrayElementFast<int8_t>(arr, _index);
 				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4:
+				{
+					uint16_t __loadArr = *(uint16_t*)(ip + 2);
+					uint16_t __loadIndex = *(uint16_t*)(ip + 4);
+					uint16_t __addValue = *(uint16_t*)(ip + 6);
+					uint16_t __storeArr = *(uint16_t*)(ip + 8);
+					uint16_t __storeIndex = *(uint16_t*)(ip + 10);
+				    Il2CppArray* loadArr = (*(Il2CppArray**)(localVarBase + __loadArr));
+					int32_t loadIndex = (*(int32_t*)(localVarBase + __loadIndex));
+					int32_t value = *(int32_t*)GetCheckedArrayElementAddress(loadArr, loadIndex, 4);
+				    Il2CppArray* storeArr = (*(Il2CppArray**)(localVarBase + __storeArr));
+					int32_t storeIndex = (*(int32_t*)(localVarBase + __storeIndex));
+					SetArrayElementFast<int32_t>(storeArr, storeIndex, value + (*(int32_t*)(localVarBase + __addValue)));
+				    ip += 12;
 				    continue;
 				}
 				case HiOpcodeEnum::GetArrayElementVarVar_u1:

@@ -335,7 +335,7 @@
 
       <section id="business">
         <h2>商业能力总览</h2>
-        <p class="note">本页参考 HybridCLR 商业版的信息架构，但 hotc233 明确排除 DHE：不承诺 DHE 等价，不通过把大量热更逻辑预置进首包 AOT 换性能。除 DHE 外的能力已提供 hotc233 对应入口或 Unity 2022+ 支持路径；生产等价仍以 WebGL/headless 报告和专项矩阵为准。</p>
+        <p class="note">本页参考 HybridCLR 商业版的信息架构，但当前竞品目标只有 HybridCLR Pro 纯解释能力。hotc233 不通过把大量热更逻辑预置进首包 AOT 换性能；生产等价以 WebGL/headless 报告和专项矩阵为准。</p>
         <table>
           <thead><tr><th>能力</th><th>hotc233 对应支持</th><th>入口</th></tr></thead>
           <tbody>
@@ -348,7 +348,6 @@
             <tr><td>解释器栈崩溃日志</td><td><span class="ok">支持</span>，session、环境、最近事件和异常链。</td><td><code>Hotc233RuntimeDiagnostics</code></td></tr>
             <tr><td>访问控制策略</td><td><span class="ok">支持入口</span>，白名单、自定义回调、hash 校验。</td><td><code>AllowOnly</code>, <code>AccessValidator</code></td></tr>
             <tr><td>热重载版工作流</td><td><span class="ok">支持入口</span>，清缓存并重载程序集。</td><td><code>ReloadHotUpdateAssemblies</code></td></tr>
-            <tr><td>DHE</td><td><span class="warn">排除</span>，按当前路线不实现 DHE 语义等价。</td><td>无</td></tr>
           </tbody>
         </table>
       </section>
@@ -377,7 +376,7 @@ loader.LoadRuntimeMetadata(metadataBytes, HomologousImageMode.SuperSet);</code><
       <section id="interpreter">
         <h2>标准解释优化与离线指令优化</h2>
         <p>性能测试必须使用 RuntimeFast。当前 PC/WebGL IL2CPP 报告包含机制成本、游戏业务热循环、低 GC 帧循环和内存稳定哨兵；`headless` 与 `validate-reports` 会强制读取原始 JSON，要求 `game-low-gc-frame` 与 `game-memory-stability` 都保持 `gc0=0,gc1=0,gc2=0`，并要求 retained heap delta 不超过 64KB。</p>
-        <p>专业版能力完成度、社区版粗推区间和逐项差距见 <a href="hybridclr-gap-analysis.md">HybridCLR 差距说明</a>。</p>
+        <p>HybridCLR Pro 纯解释目标、同机参考表和逐项差距见 <a href="hybridclr-gap-analysis.md">HybridCLR 差距说明</a>。</p>
         <pre><code>go run ./tools/hotc233ctl headless -project . -loader-profile RuntimeFast
 go run ./tools/hotc233ctl perf -project . -loader-profile RuntimeFast
 go run ./tools/hotc233ctl webgl -project . -loader-profile RuntimeFast</code></pre>
@@ -439,7 +438,7 @@ hotc233/HybridCLR Compatibility/Import HybridCLR Settings</code></pre>
           <tbody>
             <tr><td><code>hotc233ctl webgl</code></td><td>WebGL/minigame 本地 IL2CPP 直接 dll 性能采集，并与上一轮优化对比。</td><td><code>performance-webgl-local-il2cpp.md/html/json</code></td></tr>
             <tr><td><code>hotc233ctl headless</code></td><td>不启动 Unity，验证 WebGL 报告结构、RuntimeFast/minigame 守门、GC/内存门禁。</td><td><code>headless-performance-gate.md/html/json</code></td></tr>
-            <tr><td><a href="webgl-performance.md"><code>docs/webgl-performance.md</code></a></td><td>中文说明：直接 dll 验证口径、HybridCLR 社区/Pro 对比和停止优化规则。</td><td>文档入口</td></tr>
+            <tr><td><a href="webgl-performance.md"><code>docs/webgl-performance.md</code></a></td><td>中文说明：直接 dll 验证口径、HybridCLR Pro 目标和停止优化规则。</td><td>文档入口</td></tr>
           </tbody>
         </table>
       </section>
@@ -450,7 +449,7 @@ hotc233/HybridCLR Compatibility/Import HybridCLR Settings</code></pre>
       </section>
 
       <footer>
-        <p>hotc233-unity docs. Unity 2022+ is the minimum supported line. DHE is intentionally out of scope.</p>
+        <p>hotc233-unity docs. Unity 2022+ is the minimum supported line. Target: HybridCLR Pro pure interpreter ceiling.</p>
       </footer>
     </main>
   </div>

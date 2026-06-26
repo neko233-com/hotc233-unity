@@ -25,7 +25,7 @@ https://neko233-com.github.io/hotc233-unity/
 
 ## Unity 2022+ 商业能力兼容
 
-hotc233-unity 只维护 Unity / Tuanjie 2022+ 作为最低支持线，不为 2021 及更早版本保留 legacy 分支。对标 HybridCLR 专业版时，DHE 明确不在当前范围内；其余商业版常见能力都提供 hotc233 对应入口：
+hotc233-unity 只维护 Unity / Tuanjie 2022+ 作为最低支持线，不为 2021 及更早版本保留 legacy 分支。当前竞品目标只有 HybridCLR Pro 纯解释能力；商业版常见解释器相关能力都提供 hotc233 对应入口：
 
 | 能力 | hotc233-unity 支持入口 |
 |------|------------------------|
@@ -426,7 +426,7 @@ hotc233/EditorForBuild/Run Performance Comparison Baselines
 2. 原生 Mono：主工程原生编译后执行 `NativePerformanceProbe.Run()`。
 3. 原生 IL2CPP：主工程原生编译后执行 `NativePerformanceProbe.Run()`。
 
-HybridCLR 专业版列不是本地官方包实测，而是按 HybridCLR 官方性能页换算的目标区间：专业/商业版纯解释器约为原生 AOT 的 `7.8% ~ 76.9%`。该目标不依赖 DHE，也不允许通过把大量热更逻辑预置进首包 AOT 来换性能。
+HybridCLR 专业版列不是本地官方包实测，而是按 HybridCLR 官方性能页换算的目标区间：专业/商业版纯解释器约为原生 AOT 的 `7.8% ~ 76.9%`。该目标不允许通过把大量热更逻辑预置进首包 AOT 来换性能。
 
 性能套件必须覆盖机制成本、游戏业务热循环和 WebGL/minigame 内存风险。当前固定包含 `game-low-gc-frame` 与 `game-memory-stability`：前者要求热循环 `gc0=0,gc1=0,gc2=0`，后者在预分配战斗、配置和序列化缓冲区上记录 `heapBefore`、`heapAfterFullCollect` 和 `retainedDelta`。`validate-reports` 与 `headless` 会读取 PC hotc233、PC 原生 IL2CPP、WebGL hotc233、WebGL 原生 IL2CPP 的原始 JSON，强制 `retainedDelta <= 65536` bytes。
 

@@ -30,6 +30,12 @@ namespace Hotc233
 
         public IReadOnlyList<Assembly> Assemblies => assemblies;
 
+        public int TypeCacheCount => typeCache.Count;
+
+        public int StaticMethodCacheCount => staticMethodCache.Count;
+
+        public int StaticDelegateCacheCount => staticDelegateCache.Count;
+
         public bool ApplyPerformanceDefaultsOnLoad { get; set; } = true;
 
         public bool PreJitHotUpdateTypesOnLoad { get; set; } = false;

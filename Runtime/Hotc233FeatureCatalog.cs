@@ -143,17 +143,6 @@ namespace Hotc233
             Def("linq-sequenceequal", "LINQ SequenceEqual", FeatureCategory.CSharpLanguage, "linq-sequenceequal", true),
             Def("linq-todictionary", "LINQ ToDictionary", FeatureCategory.CSharpLanguage, "linq-todictionary", true),
             Def("linq-tolookup", "LINQ ToLookup", FeatureCategory.CSharpLanguage, "linq-tolookup", true),
-            // DHE simulation (previously unsupported)
-            Def("dhe-metadata", "DHE 兼容探针：元数据补充", FeatureCategory.CommercialCompatibility, "dhe-metadata", true,
-                "兼容探针，不代表覆盖商业版 DHE"),
-            Def("dhe-generic-patch", "DHE 兼容探针：泛型实例化", FeatureCategory.CommercialCompatibility, "dhe-generic-patch", true,
-                "兼容探针，不代表覆盖商业版 DHE"),
-            Def("dhe-aot-access", "DHE 兼容探针：AOT 类型访问", FeatureCategory.CommercialCompatibility, "dhe-aot-access", true,
-                "兼容探针，不代表覆盖商业版 DHE"),
-            Def("dhe-cross-asm", "DHE 兼容探针：跨程序集泛型解析", FeatureCategory.CommercialCompatibility, "dhe-cross-asm", true,
-                "兼容探针，不代表覆盖商业版 DHE"),
-            Def("dhe-runtime-subst", "DHE 兼容探针：运行时类型替换", FeatureCategory.CommercialCompatibility, "dhe-runtime-subst", true,
-                "兼容探针，不代表覆盖商业版 DHE"),
             // Timeline custom track E2E (previously unsupported)
             Def("tl-graph-create", "PlayableGraph 创建", FeatureCategory.UnityRuntime, "tl-graph-create", true),
             Def("tl-custom-behaviour", "自定义 PlayableBehaviour", FeatureCategory.UnityRuntime, "tl-custom-behaviour", true),

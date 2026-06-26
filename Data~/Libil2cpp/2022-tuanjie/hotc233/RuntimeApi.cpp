@@ -40,6 +40,13 @@ namespace hotc233
 			uint64_t count;
 		};
 
+		struct OpcodeSequenceRow
+		{
+			uint32_t offset;
+			uint32_t opcode;
+			uint16_t instructionSize;
+		};
+
 		void AppendJsonEscaped(std::ostringstream& os, const char* value)
 		{
 			if (!value)
@@ -197,6 +204,7 @@ namespace hotc233
 		}
 
 		uint64_t counts[kOpcodeProfileCapacity] = {};
+		std::vector<OpcodeSequenceRow> sequence;
 		uint64_t instructionCount = 0;
 		uint32_t offset = 0;
 		bool malformed = false;
@@ -217,6 +225,10 @@ namespace hotc233
 			}
 
 			counts[opcode]++;
+			if (sequence.size() < 128)
+			{
+				sequence.push_back({ offset, opcode, size });
+			}
 			instructionCount++;
 			offset += size;
 		}
@@ -262,6 +274,7 @@ namespace hotc233
 		os << "\"";
 		os << ",\"codeLength\":" << imi->codeLength;
 		os << ",\"instructionCount\":" << instructionCount;
+		os << ",\"fastPathKind\":" << imi->hotc233FastPathKind;
 		os << ",\"malformed\":" << (malformed ? "true" : "false");
 		os << ",\"rows\":[";
 		int32_t rowCount = std::min((int32_t)rows.size(), maxRows);
@@ -274,6 +287,19 @@ namespace hotc233
 			}
 			os << "{\"opcode\":" << row.opcode
 				<< ",\"count\":" << row.count
+				<< ",\"instructionSize\":" << row.instructionSize
+				<< "}";
+		}
+		os << "],\"sequence\":[";
+		for (size_t i = 0; i < sequence.size(); ++i)
+		{
+			const OpcodeSequenceRow& row = sequence[i];
+			if (i > 0)
+			{
+				os << ",";
+			}
+			os << "{\"offset\":" << row.offset
+				<< ",\"opcode\":" << row.opcode
 				<< ",\"instructionSize\":" << row.instructionSize
 				<< "}";
 		}
