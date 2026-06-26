@@ -85,6 +85,11 @@ namespace HybridCLR
         {
             return Hotc233.RuntimeApi.GetRuntimeOption((Hotc233.RuntimeOptionId)(int)optionId);
         }
+
+        public static string GetInterpreterStackTraceJson(int maxFrames = 64)
+        {
+            return Hotc233.RuntimeApi.GetInterpreterStackTraceJson(maxFrames);
+        }
     }
 
     [Preserve]
@@ -133,6 +138,11 @@ namespace HybridCLR
         public static int GetRuntimeOption(RuntimeOptionId optionId)
         {
             return Hotc233_HybridclrAdapt.GetRuntimeOption(optionId);
+        }
+
+        public static string GetInterpreterStackTraceJson(int maxFrames = 64)
+        {
+            return Hotc233_HybridclrAdapt.GetInterpreterStackTraceJson(maxFrames);
         }
     }
 }

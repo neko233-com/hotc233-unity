@@ -281,6 +281,7 @@
       <a href="#verify">验证</a>
       <a href="ecosystem.md">生态路线</a>
       <a href="platforms.md">平台口径</a>
+      <a href="runtime-rewrite-plan.md">重构计划</a>
       <a href="https://github.com/neko233-com/hotc233-unity">GitHub</a>
     </nav>
   </header>
@@ -301,6 +302,7 @@
       <a href="#workflow">接入流程</a>
       <a href="#verify">性能验证</a>
       <a href="#compat">HybridCLR 兼容</a>
+      <a href="runtime-rewrite-plan.md">Runtime 重构</a>
     </aside>
 
     <main>
@@ -333,13 +335,13 @@
 
       <section id="business">
         <h2>商业能力总览</h2>
-        <p class="note">本页参考 HybridCLR 商业版的信息架构，但 hotc233 明确排除 DHE：不承诺 DHE 等价，不通过把大量热更逻辑预置进首包 AOT 换性能。除 DHE 外的能力都提供 hotc233 对应实现入口或 Unity 2022+ 约束下的支持路径。</p>
+        <p class="note">本页参考 HybridCLR 商业版的信息架构，但 hotc233 明确排除 DHE：不承诺 DHE 等价，不通过把大量热更逻辑预置进首包 AOT 换性能。除 DHE 外的能力已提供 hotc233 对应入口或 Unity 2022+ 支持路径；生产等价仍以 WebGL/headless 报告和专项矩阵为准。</p>
         <table>
           <thead><tr><th>能力</th><th>hotc233 对应支持</th><th>入口</th></tr></thead>
           <tbody>
-            <tr><td>完全泛型共享</td><td><span class="ok">支持路径</span>，Unity 2022+ il2cpp 泛型元数据和 hotc233 GenericSharing/GenericMetadata 路径。</td><td><code>enableFullGenericSharing</code></td></tr>
-            <tr><td>元数据优化</td><td><span class="ok">支持</span>，AOT metadata 裁剪、完整性校验、minigame 安全配置。</td><td><code>LoadRuntimeMetadata</code>, <code>Hotc233LoadPolicy</code></td></tr>
-            <tr><td>标准解释优化</td><td><span class="ok">支持</span>，RuntimeFast、解释器快路径、离线 IR 合成。</td><td><code>HotUpdatePerformanceProfile.RuntimeFast</code></td></tr>
+            <tr><td>完全泛型共享</td><td><span class="warn">路径已存在</span>，Unity 2022+ il2cpp 泛型元数据和 hotc233 GenericSharing/GenericMetadata 路线；仍需 Pro 等价矩阵验收。</td><td><code>enableFullGenericSharing</code></td></tr>
+            <tr><td>元数据优化</td><td><span class="warn">部分落地</span>，AOT metadata 裁剪、完整性校验、minigame 安全配置；仍需 10%-25% 内存节省实测表。</td><td><code>LoadRuntimeMetadata</code>, <code>Hotc233LoadPolicy</code></td></tr>
+            <tr><td>标准解释优化</td><td><span class="warn">RuntimeFast 已落地</span>，但官方基准仍落后 HybridCLR 8.11.0 本地 WebGL 实测 1.14x-1.98x。</td><td><code>HotUpdatePerformanceProfile.RuntimeFast</code></td></tr>
             <tr><td>Hotfix 动态热修复</td><td><span class="ok">支持入口</span>，按程序集名替换 loader 解析优先级。</td><td><code>ReplaceHotUpdateAssembly</code></td></tr>
             <tr><td>代码加固/加密</td><td><span class="ok">支持入口</span>，解密钩子、XOR 示例、SHA256 完整性校验。</td><td><code>Hotc233LoadPolicy</code></td></tr>
             <tr><td>Assembly.Load 优化</td><td><span class="ok">支持</span>，本地 payload manifest、缓存、StreamingAssets 原始 bytes。</td><td><code>LoadHotUpdateAssemblies</code></td></tr>
@@ -353,7 +355,7 @@
 
       <section id="generic">
         <h2>完全泛型共享</h2>
-        <p>hotc233-unity 最低支持 Unity 2022+，因此泛型共享只维护 2022+ il2cpp 路线。包内包含 `metadata/GenericSharing.*`、`GenericMetadata.*`、泛型哈希/比较与 Editor AOT 引用分析器，用于覆盖热更泛型方法、泛型类型、嵌套泛型和跨程序集泛型解析。</p>
+        <p>hotc233-unity 最低支持 Unity 2022+，因此泛型共享只维护 2022+ il2cpp 路线。包内包含 `metadata/GenericSharing.*`、`GenericMetadata.*`、泛型哈希/比较与 Editor AOT 引用分析器；当前属于支持路径，不宣称已达到 HybridCLR Pro 完全泛型共享的生产等价。</p>
         <pre><code>Project Settings / Hotc233 Settings
 enableFullGenericSharing = true
 maxGenericReferenceIteration = 10

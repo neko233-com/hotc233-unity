@@ -1019,6 +1019,9 @@ namespace interpreter
 		LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar,
 		BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4,
 		LdlocVarVar_LdcVarConst_4_BinOpMul_i4_RetVar_ret_4,
+		Hotc233FieldAddPair_SetArrayElement_size_28,
+		LdlocVarVar_LdlocVarVar_LdlocVarVarSize,
+		LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize,
 
 		//!!!}}OPCODE
 	};
@@ -4059,7 +4062,6 @@ namespace interpreter
 		uint8_t __pad14;
 		uint8_t __pad15;
 	};
-
 
 	struct IRCallVirtual_void : IRCommon
 	{
@@ -11822,6 +11824,93 @@ namespace interpreter
 		uint16_t tailSizedCopyDst;
 		uint16_t tailSizedCopySrc;
 		uint16_t tailSizedCopySize;
+	};
+
+	struct IRHotc233FieldAddPair_SetArrayElement_size_28 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t fieldDst0;
+		uint16_t obj0;
+		uint16_t offset0;
+		uint16_t fieldDst1;
+		uint16_t obj1;
+		uint16_t offset1;
+		uint16_t addRet1;
+		uint16_t addOp11;
+		uint16_t addOp21;
+		uint16_t fieldDst2;
+		uint16_t obj2;
+		uint16_t offset2;
+		uint16_t addRet2;
+		uint16_t addOp12;
+		uint16_t addOp22;
+		uint16_t midFieldDst1;
+		uint16_t midObj1;
+		uint16_t midOffset1;
+		uint16_t midAddRet1;
+		uint16_t midAddOp11;
+		uint16_t midAddOp21;
+		uint16_t midFieldDst2;
+		uint16_t midObj2;
+		uint16_t midOffset2;
+		uint16_t midAddRet2;
+		uint16_t midAddOp12;
+		uint16_t midAddOp22;
+		uint16_t tailAddRet;
+		uint16_t tailAddOp1;
+		uint16_t tailAddOp2;
+		uint16_t tailCopyDst1;
+		uint16_t tailCopySrc1;
+		uint16_t tailCopyDst2;
+		uint16_t tailCopySrc2;
+		uint16_t tailCopyDst3;
+		uint16_t tailCopySrc3;
+		uint16_t tailSizedCopyDst;
+		uint16_t tailSizedCopySrc;
+		uint16_t tailSizedCopySize;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint16_t elementSrc;
+		uint8_t __pad90;
+		uint8_t __pad91;
+		uint8_t __pad92;
+		uint8_t __pad93;
+		uint8_t __pad94;
+		uint8_t __pad95;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_LdlocVarVarSize : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t sizedCopyDst;
+		uint16_t sizedCopySrc;
+		uint16_t sizedCopySize;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t copyDst3;
+		uint16_t copySrc3;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint16_t sizedCopyDst;
+		uint16_t sizedCopySrc;
+		uint16_t sizedCopySize;
+		uint8_t __pad26;
+		uint8_t __pad27;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
 	};
 
 	struct IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4 : IRCommon

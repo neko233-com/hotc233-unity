@@ -77,6 +77,16 @@ namespace Hotc233
         public static extern string GetOpcodeProfilerSnapshot(int maxRows);
 #endif
 
+#if UNITY_EDITOR
+        public static string GetInterpreterStackTraceJson(int maxFrames)
+        {
+            return "{\"success\":true,\"frameTracking\":false,\"reason\":\"editor-stub\",\"frames\":[]}";
+        }
+#else
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern string GetInterpreterStackTraceJson(int maxFrames);
+#endif
+
         public static int GetInterpreterThreadObjectStackSize()
         {
             return GetRuntimeOption(RuntimeOptionId.InterpreterThreadObjectStackSize);

@@ -21,5 +21,6 @@ namespace hotc233
 		static void ResetOpcodeProfiler();
 		static void SetOpcodeProfilerEnabled(int32_t enabled);
 		static Il2CppString* GetOpcodeProfilerSnapshot(int32_t maxRows);
+		static Il2CppString* GetInterpreterStackTraceJson(int32_t maxFrames);
 	};
 }

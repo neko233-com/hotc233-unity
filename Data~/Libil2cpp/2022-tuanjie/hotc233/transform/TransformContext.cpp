@@ -1712,6 +1712,745 @@ namespace transform
 		}
 	}
 
+	static bool IsDirectI4BinOp(HiOpcodeEnum type)
+	{
+		switch (type)
+		{
+		case HiOpcodeEnum::BinOpVarVarVar_Add_i4:
+		case HiOpcodeEnum::BinOpVarVarVar_Sub_i4:
+		case HiOpcodeEnum::BinOpVarVarVar_Mul_i4:
+		case HiOpcodeEnum::BinOpVarVarVar_Div_i4:
+		case HiOpcodeEnum::BinOpVarVarVar_Rem_i4:
+		case HiOpcodeEnum::BinOpVarVarVar_And_i4:
+		case HiOpcodeEnum::BinOpVarVarVar_Or_i4:
+		case HiOpcodeEnum::BinOpVarVarVar_Xor_i4:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static bool IsDirectShiftOp(HiOpcodeEnum type)
+	{
+		switch (type)
+		{
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shl_i4_i4:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shr_i4_i4:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_ShrUn_i4_i4:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shl_i4_i8:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shr_i4_i8:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_ShrUn_i4_i8:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shl_i8_i4:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shr_i8_i4:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_ShrUn_i8_i4:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shl_i8_i8:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_Shr_i8_i8:
+		case HiOpcodeEnum::BitShiftBinOpVarVarVar_ShrUn_i8_i8:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static bool TryFoldTwoCopiesIntoBinaryConsumer(IRCommon* first, IRCommon* second, IRCommon* consumer)
+	{
+		if (first->type != HiOpcodeEnum::LdlocVarVar || second->type != HiOpcodeEnum::LdlocVarVar)
+		{
+			return false;
+		}
+		IRLdlocVarVar* copy1 = (IRLdlocVarVar*)first;
+		IRLdlocVarVar* copy2 = (IRLdlocVarVar*)second;
+		if (copy1->dst == copy1->src || copy2->dst == copy2->src || copy1->dst == copy2->dst)
+		{
+			return false;
+		}
+		// Original order copies source2 after source1. If source2 reads the first
+		// temporary, removing both copies would read the pre-copy value instead.
+		if (copy2->src == copy1->dst)
+		{
+			return false;
+		}
+		if (IsDirectI4BinOp(consumer->type))
+		{
+			IRBinOpVarVarVar_Add_i4* op = (IRBinOpVarVarVar_Add_i4*)consumer;
+			if (op->ret == copy1->dst && op->op1 == copy1->dst && op->op2 == copy2->dst)
+			{
+				op->op1 = copy1->src;
+				op->op2 = copy2->src;
+				return true;
+			}
+			return false;
+		}
+		if (IsDirectShiftOp(consumer->type))
+		{
+			IRBitShiftBinOpVarVarVar_Shl_i4_i4* op = (IRBitShiftBinOpVarVarVar_Shl_i4_i4*)consumer;
+			if (op->ret == copy1->dst && op->value == copy1->dst && op->shiftAmount == copy2->dst)
+			{
+				op->value = copy1->src;
+				op->shiftAmount = copy2->src;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	static bool IsOpcodeInRange(HiOpcodeEnum type, HiOpcodeEnum first, HiOpcodeEnum last)
+	{
+		uint16_t value = (uint16_t)type;
+		return value >= (uint16_t)first && value <= (uint16_t)last;
+	}
+
+	static bool IsCopyPropBinaryOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::BinOpVarVarVar_Add_i4, HiOpcodeEnum::BinOpVarVarVar_Rem_f8)
+			|| IsOpcodeInRange(type, HiOpcodeEnum::BinOpOverflowVarVarVar_Add_i4, HiOpcodeEnum::BinOpOverflowVarVarVar_Mul_u8)
+			|| type == HiOpcodeEnum::MathMinVarVarVar_i4
+			|| type == HiOpcodeEnum::MathMaxVarVarVar_i4
+			|| type == HiOpcodeEnum::MathMinVarVarVar_i8
+			|| type == HiOpcodeEnum::MathMaxVarVarVar_i8;
+	}
+
+	static bool IsCopyPropShiftOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::BitShiftBinOpVarVarVar_Shl_i4_i4, HiOpcodeEnum::BitShiftBinOpVarVarVar_ShrUn_i8_i8);
+	}
+
+	static bool IsCopyPropCompareOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::CompOpVarVarVar_Ceq_i4, HiOpcodeEnum::CompOpVarVarVar_CltUn_f8);
+	}
+
+	static bool IsCopyPropUnaryOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::UnaryOpVarVar_Neg_i4, HiOpcodeEnum::UnaryOpVarVar_Neg_f8);
+	}
+
+	static bool IsCopyPropLdindOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::LdindVarVar_i1, HiOpcodeEnum::LdindVarVar_f8);
+	}
+
+	static bool IsCopyPropStindOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::StindVarVar_i1, HiOpcodeEnum::StindVarVar_ref);
+	}
+
+	static bool IsCopyPropFieldLoadOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::LdfldVarVar_i1, HiOpcodeEnum::LdfldVarVar_n_4)
+			|| IsOpcodeInRange(type, HiOpcodeEnum::LdfldValueTypeVarVar_i1, HiOpcodeEnum::LdfldValueTypeVarVar_n_4);
+	}
+
+	static bool IsCopyPropArrayLoadOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::GetArrayElementVarVar_i1, HiOpcodeEnum::GetArrayElementVarVar_n);
+	}
+
+	static bool IsCopyPropArrayStoreOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::SetArrayElementVarVar_i1, HiOpcodeEnum::SetArrayElementVarVar_WriteBarrier_n);
+	}
+
+	static bool IsCopyPropInstanceFieldStoreOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::StfldVarVar_i1, HiOpcodeEnum::StfldVarVar_WriteBarrier_n_4);
+	}
+
+	static bool IsCopyPropStaticFieldStoreOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::StsfldVarVar_i1, HiOpcodeEnum::StsfldVarVar_WriteBarrier_n_4);
+	}
+
+	static bool IsCopyPropThreadStaticFieldStoreOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::StthreadlocalVarVar_i1, HiOpcodeEnum::StthreadlocalVarVar_WriteBarrier_n_4);
+	}
+
+	static bool IsCopyPropBranchOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::BranchTrueVar_i4, HiOpcodeEnum::BranchSwitch)
+			|| type == HiOpcodeEnum::LeaveEx
+			|| type == HiOpcodeEnum::LeaveEx_Directly;
+	}
+
+	static bool IsCopyPropCallOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::CallNativeInstance_void, HiOpcodeEnum::CallDelegateEndInvoke_ret)
+			|| IsOpcodeInRange(type, HiOpcodeEnum::CallCommonNativeInstance_v_0, HiOpcodeEnum::CallCommonNativeStatic_f8_f8_4);
+	}
+
+	static bool IsCopyPropRetOp(HiOpcodeEnum type)
+	{
+		return IsOpcodeInRange(type, HiOpcodeEnum::RetVar_ret_1, HiOpcodeEnum::RetVar_ret_n);
+	}
+
+	static bool IsCopyPropStoreBarrierOp(HiOpcodeEnum type)
+	{
+		return IsCopyPropStindOp(type)
+			|| IsCopyPropArrayStoreOp(type)
+			|| IsCopyPropInstanceFieldStoreOp(type)
+			|| IsCopyPropStaticFieldStoreOp(type)
+			|| IsCopyPropThreadStaticFieldStoreOp(type)
+			|| type == HiOpcodeEnum::MemoryBarrier
+			|| type == HiOpcodeEnum::CpblkVarVar
+			|| type == HiOpcodeEnum::InitblkVarVarVar;
+	}
+
+	static bool IsOioCopyPropagationUnsupportedOp(HiOpcodeEnum type)
+	{
+		return IsCopyPropCallOp(type)
+			|| type == HiOpcodeEnum::LdstrVar
+			|| type == HiOpcodeEnum::NewString
+			|| type == HiOpcodeEnum::NewString_2
+			|| type == HiOpcodeEnum::NewString_3
+			|| type == HiOpcodeEnum::NewDelegate
+			|| IsOpcodeInRange(type, HiOpcodeEnum::NewClassVar, HiOpcodeEnum::AdjustValueTypeRefVar)
+			|| IsOpcodeInRange(type, HiOpcodeEnum::BoxVarVar, HiOpcodeEnum::UnBoxAnyVarVar)
+			|| type == HiOpcodeEnum::CastclassVar
+			|| type == HiOpcodeEnum::IsInstVar
+			|| type == HiOpcodeEnum::LdtokenVar;
+	}
+
+	struct OioCopyAlias
+	{
+		int32_t src;
+		IRLdlocVarVar* copy;
+	};
+
+	static bool IsValidCopyPropSlot(const std::vector<OioCopyAlias>& aliases, int32_t slot)
+	{
+		return slot >= 0 && (size_t)slot < aliases.size();
+	}
+
+	static int32_t ResolveCopyPropSlot(const std::vector<OioCopyAlias>& aliases, int32_t slot)
+	{
+		int32_t cur = slot;
+		for (int32_t depth = 0; depth < 16 && IsValidCopyPropSlot(aliases, cur) && aliases[cur].src >= 0; depth++)
+		{
+			cur = aliases[cur].src;
+		}
+		return cur;
+	}
+
+	static void ClearCopyAlias(std::vector<OioCopyAlias>& aliases, int32_t slot)
+	{
+		if (IsValidCopyPropSlot(aliases, slot))
+		{
+			aliases[slot].src = -1;
+			aliases[slot].copy = nullptr;
+		}
+	}
+
+	static void CountCopyPropRead(std::vector<int32_t>& reads, uint16_t slot)
+	{
+		if ((size_t)slot < reads.size())
+		{
+			reads[slot]++;
+		}
+	}
+
+	static void ConsumeCopyPropRead(std::vector<int32_t>& reads, uint16_t slot)
+	{
+		if ((size_t)slot < reads.size() && reads[slot] > 0)
+		{
+			reads[slot]--;
+		}
+	}
+
+	static void MaterializeCopyAlias(std::vector<IRCommon*>& output, std::vector<OioCopyAlias>& aliases, int32_t slot, bool requireFutureRead, const std::vector<int32_t>& remainingReads)
+	{
+		if (!IsValidCopyPropSlot(aliases, slot) || aliases[slot].src < 0)
+		{
+			return;
+		}
+		if (requireFutureRead && ((size_t)slot >= remainingReads.size() || remainingReads[slot] <= 0))
+		{
+			ClearCopyAlias(aliases, slot);
+			return;
+		}
+		IRLdlocVarVar* copy = aliases[slot].copy;
+		copy->src = (uint16_t)ResolveCopyPropSlot(aliases, aliases[slot].src);
+		output.push_back(copy);
+		ClearCopyAlias(aliases, slot);
+	}
+
+	static void MaterializeAliasesReadingSlot(std::vector<IRCommon*>& output, std::vector<OioCopyAlias>& aliases, int32_t writtenSlot, const std::vector<int32_t>& remainingReads)
+	{
+		for (size_t slot = 0; slot < aliases.size(); slot++)
+		{
+			if (aliases[slot].src >= 0 && ResolveCopyPropSlot(aliases, aliases[slot].src) == writtenSlot)
+			{
+				MaterializeCopyAlias(output, aliases, (int32_t)slot, true, remainingReads);
+			}
+		}
+	}
+
+	static void MaterializeAllCopyAliases(std::vector<IRCommon*>& output, std::vector<OioCopyAlias>& aliases, bool requireFutureRead, const std::vector<int32_t>& remainingReads)
+	{
+		for (size_t slot = 0; slot < aliases.size(); slot++)
+		{
+			MaterializeCopyAlias(output, aliases, (int32_t)slot, requireFutureRead, remainingReads);
+		}
+	}
+
+	static void RewriteCopyPropRead(std::vector<OioCopyAlias>& aliases, std::vector<int32_t>& remainingReads, uint16_t& slot)
+	{
+		uint16_t original = slot;
+		ConsumeCopyPropRead(remainingReads, original);
+		if (IsValidCopyPropSlot(aliases, original) && aliases[original].src >= 0)
+		{
+			slot = (uint16_t)ResolveCopyPropSlot(aliases, aliases[original].src);
+			if ((size_t)original < remainingReads.size() && remainingReads[original] <= 0)
+			{
+				ClearCopyAlias(aliases, original);
+			}
+		}
+	}
+
+	static void MaterializeAddressRead(std::vector<IRCommon*>& output, std::vector<OioCopyAlias>& aliases, std::vector<int32_t>& remainingReads, uint16_t slot)
+	{
+		ConsumeCopyPropRead(remainingReads, slot);
+		MaterializeCopyAlias(output, aliases, slot, false, remainingReads);
+	}
+
+	static void DefineCopyPropSlot(std::vector<IRCommon*>& output, std::vector<OioCopyAlias>& aliases, const std::vector<int32_t>& remainingReads, uint16_t slot)
+	{
+		MaterializeAliasesReadingSlot(output, aliases, slot, remainingReads);
+		ClearCopyAlias(aliases, slot);
+	}
+
+	template<typename TRead>
+	static void ForEachCopyPropRead(IRCommon* ir, TRead read)
+	{
+		if (IsCopyPropBinaryOp(ir->type))
+		{
+			IRBinOpVarVarVar_Add_i4* op = (IRBinOpVarVarVar_Add_i4*)ir;
+			read(op->op1);
+			read(op->op2);
+			return;
+		}
+		if (IsCopyPropShiftOp(ir->type))
+		{
+			IRBitShiftBinOpVarVarVar_Shl_i4_i4* op = (IRBitShiftBinOpVarVarVar_Shl_i4_i4*)ir;
+			read(op->value);
+			read(op->shiftAmount);
+			return;
+		}
+		if (IsCopyPropCompareOp(ir->type))
+		{
+			IRCompOpVarVarVar_Ceq_i4* op = (IRCompOpVarVarVar_Ceq_i4*)ir;
+			read(op->c1);
+			read(op->c2);
+			return;
+		}
+		if (IsCopyPropUnaryOp(ir->type))
+		{
+			IRUnaryOpVarVar_Neg_i4* op = (IRUnaryOpVarVar_Neg_i4*)ir;
+			read(op->src);
+			return;
+		}
+		switch (ir->type)
+		{
+		case HiOpcodeEnum::LdlocVarVar:
+		case HiOpcodeEnum::LdlocExpandVarVar_i1:
+		case HiOpcodeEnum::LdlocExpandVarVar_u1:
+		case HiOpcodeEnum::LdlocExpandVarVar_i2:
+		case HiOpcodeEnum::LdlocExpandVarVar_u2:
+		case HiOpcodeEnum::LdlocVarAddress:
+		{
+			IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+			read(copy->src);
+			return;
+		}
+		case HiOpcodeEnum::LdlocVarVarSize:
+		{
+			IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)ir;
+			read(copy->src);
+			return;
+		}
+		case HiOpcodeEnum::CheckFiniteVar_f4:
+		case HiOpcodeEnum::CheckFiniteVar_f8:
+		{
+			IRCheckFiniteVar_f4* check = (IRCheckFiniteVar_f4*)ir;
+			read(check->src);
+			return;
+		}
+		case HiOpcodeEnum::BranchTrueVar_i4:
+		case HiOpcodeEnum::BranchTrueVar_i8:
+		case HiOpcodeEnum::BranchFalseVar_i4:
+		case HiOpcodeEnum::BranchFalseVar_i8:
+		{
+			IRBranchTrueVar_i4* branch = (IRBranchTrueVar_i4*)ir;
+			read(branch->op);
+			return;
+		}
+		default:
+			break;
+		}
+		if (IsOpcodeInRange(ir->type, HiOpcodeEnum::BranchVarVar_Ceq_i4, HiOpcodeEnum::BranchVarVar_CleUn_f8))
+		{
+			IRBranchVarVar_Ceq_i4* branch = (IRBranchVarVar_Ceq_i4*)ir;
+			read(branch->op1);
+			read(branch->op2);
+			return;
+		}
+		if (IsCopyPropLdindOp(ir->type))
+		{
+			IRLdindVarVar_i1* ind = (IRLdindVarVar_i1*)ir;
+			read(ind->src);
+			return;
+		}
+		if (IsCopyPropStindOp(ir->type))
+		{
+			IRStindVarVar_i1* store = (IRStindVarVar_i1*)ir;
+			read(store->dst);
+			read(store->src);
+			return;
+		}
+		if (IsCopyPropFieldLoadOp(ir->type))
+		{
+			IRLdfldVarVar_i1* field = (IRLdfldVarVar_i1*)ir;
+			read(field->obj);
+			return;
+		}
+		if (IsCopyPropArrayLoadOp(ir->type))
+		{
+			IRGetArrayElementVarVar_i1* element = (IRGetArrayElementVarVar_i1*)ir;
+			read(element->arr);
+			read(element->index);
+			return;
+		}
+		if (IsCopyPropArrayStoreOp(ir->type))
+		{
+			IRSetArrayElementVarVar_i1* element = (IRSetArrayElementVarVar_i1*)ir;
+			read(element->arr);
+			read(element->index);
+			read(element->ele);
+			return;
+		}
+		if (IsCopyPropInstanceFieldStoreOp(ir->type))
+		{
+			IRStfldVarVar_i1* field = (IRStfldVarVar_i1*)ir;
+			read(field->obj);
+			read(field->data);
+			return;
+		}
+		if (IsCopyPropStaticFieldStoreOp(ir->type))
+		{
+			IRStsfldVarVar_i1* field = (IRStsfldVarVar_i1*)ir;
+			read(field->data);
+			return;
+		}
+		if (IsCopyPropThreadStaticFieldStoreOp(ir->type))
+		{
+			IRStthreadlocalVarVar_i1* field = (IRStthreadlocalVarVar_i1*)ir;
+			read(field->data);
+			return;
+		}
+		if (IsCopyPropRetOp(ir->type))
+		{
+			IRRetVar_ret_1* ret = (IRRetVar_ret_1*)ir;
+			read(ret->ret);
+			return;
+		}
+	}
+
+	template<typename TDef>
+	static void ForEachCopyPropDef(IRCommon* ir, TDef define)
+	{
+		if (IsCopyPropBinaryOp(ir->type))
+		{
+			IRBinOpVarVarVar_Add_i4* op = (IRBinOpVarVarVar_Add_i4*)ir;
+			define(op->ret);
+			return;
+		}
+		if (IsCopyPropShiftOp(ir->type))
+		{
+			IRBitShiftBinOpVarVarVar_Shl_i4_i4* op = (IRBitShiftBinOpVarVarVar_Shl_i4_i4*)ir;
+			define(op->ret);
+			return;
+		}
+		if (IsCopyPropCompareOp(ir->type))
+		{
+			IRCompOpVarVarVar_Ceq_i4* op = (IRCompOpVarVarVar_Ceq_i4*)ir;
+			define(op->ret);
+			return;
+		}
+		if (IsCopyPropUnaryOp(ir->type))
+		{
+			IRUnaryOpVarVar_Neg_i4* op = (IRUnaryOpVarVar_Neg_i4*)ir;
+			define(op->dst);
+			return;
+		}
+		switch (ir->type)
+		{
+		case HiOpcodeEnum::LdcVarConst_1:
+		{
+			IRLdcVarConst_1* constant = (IRLdcVarConst_1*)ir;
+			define(constant->dst);
+			return;
+		}
+		case HiOpcodeEnum::LdcVarConst_2:
+		case HiOpcodeEnum::LdcVarConst_4:
+		case HiOpcodeEnum::LdcVarConst_8:
+		case HiOpcodeEnum::LdnullVar:
+		{
+			IRLdcVarConst_2* constant = (IRLdcVarConst_2*)ir;
+			define(constant->dst);
+			return;
+		}
+		case HiOpcodeEnum::LdlocVarVar:
+		case HiOpcodeEnum::LdlocExpandVarVar_i1:
+		case HiOpcodeEnum::LdlocExpandVarVar_u1:
+		case HiOpcodeEnum::LdlocExpandVarVar_i2:
+		case HiOpcodeEnum::LdlocExpandVarVar_u2:
+		case HiOpcodeEnum::LdlocVarAddress:
+		{
+			IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+			define(copy->dst);
+			return;
+		}
+		case HiOpcodeEnum::LdlocVarVarSize:
+		{
+			IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)ir;
+			define(copy->dst);
+			return;
+		}
+		default:
+			break;
+		}
+		if (IsCopyPropLdindOp(ir->type))
+		{
+			IRLdindVarVar_i1* ind = (IRLdindVarVar_i1*)ir;
+			define(ind->dst);
+			return;
+		}
+		if (IsCopyPropFieldLoadOp(ir->type))
+		{
+			IRLdfldVarVar_i1* field = (IRLdfldVarVar_i1*)ir;
+			define(field->dst);
+			return;
+		}
+		if (IsCopyPropArrayLoadOp(ir->type))
+		{
+			IRGetArrayElementVarVar_i1* element = (IRGetArrayElementVarVar_i1*)ir;
+			define(element->dst);
+			return;
+		}
+	}
+
+	static bool TryRewriteCopyPropReads(IRCommon* ir, std::vector<IRCommon*>& output, std::vector<OioCopyAlias>& aliases, std::vector<int32_t>& remainingReads)
+	{
+		if (IsCopyPropBinaryOp(ir->type))
+		{
+			IRBinOpVarVarVar_Add_i4* op = (IRBinOpVarVarVar_Add_i4*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, op->op1);
+			RewriteCopyPropRead(aliases, remainingReads, op->op2);
+			return true;
+		}
+		if (IsCopyPropShiftOp(ir->type))
+		{
+			IRBitShiftBinOpVarVarVar_Shl_i4_i4* op = (IRBitShiftBinOpVarVarVar_Shl_i4_i4*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, op->value);
+			RewriteCopyPropRead(aliases, remainingReads, op->shiftAmount);
+			return true;
+		}
+		if (IsCopyPropCompareOp(ir->type))
+		{
+			IRCompOpVarVarVar_Ceq_i4* op = (IRCompOpVarVarVar_Ceq_i4*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, op->c1);
+			RewriteCopyPropRead(aliases, remainingReads, op->c2);
+			return true;
+		}
+		if (IsCopyPropUnaryOp(ir->type))
+		{
+			IRUnaryOpVarVar_Neg_i4* op = (IRUnaryOpVarVar_Neg_i4*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, op->src);
+			return true;
+		}
+		switch (ir->type)
+		{
+		case HiOpcodeEnum::LdcVarConst_1:
+		case HiOpcodeEnum::LdcVarConst_2:
+		case HiOpcodeEnum::LdcVarConst_4:
+		case HiOpcodeEnum::LdcVarConst_8:
+		case HiOpcodeEnum::LdnullVar:
+			return true;
+		case HiOpcodeEnum::LdlocVarVar:
+		case HiOpcodeEnum::LdlocExpandVarVar_i1:
+		case HiOpcodeEnum::LdlocExpandVarVar_u1:
+		case HiOpcodeEnum::LdlocExpandVarVar_i2:
+		case HiOpcodeEnum::LdlocExpandVarVar_u2:
+		{
+			IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, copy->src);
+			return true;
+		}
+		case HiOpcodeEnum::LdlocVarVarSize:
+		{
+			IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, copy->src);
+			return true;
+		}
+		case HiOpcodeEnum::LdlocVarAddress:
+		{
+			IRLdlocVarAddress* address = (IRLdlocVarAddress*)ir;
+			MaterializeAddressRead(output, aliases, remainingReads, address->src);
+			return true;
+		}
+		case HiOpcodeEnum::CheckFiniteVar_f4:
+		case HiOpcodeEnum::CheckFiniteVar_f8:
+		{
+			IRCheckFiniteVar_f4* check = (IRCheckFiniteVar_f4*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, check->src);
+			return true;
+		}
+		case HiOpcodeEnum::BranchTrueVar_i4:
+		case HiOpcodeEnum::BranchTrueVar_i8:
+		case HiOpcodeEnum::BranchFalseVar_i4:
+		case HiOpcodeEnum::BranchFalseVar_i8:
+		{
+			IRBranchTrueVar_i4* branch = (IRBranchTrueVar_i4*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, branch->op);
+			return true;
+		}
+		default:
+			break;
+		}
+		if (IsOpcodeInRange(ir->type, HiOpcodeEnum::BranchVarVar_Ceq_i4, HiOpcodeEnum::BranchVarVar_CleUn_f8))
+		{
+			IRBranchVarVar_Ceq_i4* branch = (IRBranchVarVar_Ceq_i4*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, branch->op1);
+			RewriteCopyPropRead(aliases, remainingReads, branch->op2);
+			return true;
+		}
+		if (IsCopyPropLdindOp(ir->type))
+		{
+			IRLdindVarVar_i1* ind = (IRLdindVarVar_i1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, ind->src);
+			return true;
+		}
+		if (IsCopyPropStindOp(ir->type))
+		{
+			IRStindVarVar_i1* store = (IRStindVarVar_i1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, store->dst);
+			RewriteCopyPropRead(aliases, remainingReads, store->src);
+			return true;
+		}
+		if (IsCopyPropFieldLoadOp(ir->type))
+		{
+			IRLdfldVarVar_i1* field = (IRLdfldVarVar_i1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, field->obj);
+			return true;
+		}
+		if (IsCopyPropArrayLoadOp(ir->type))
+		{
+			IRGetArrayElementVarVar_i1* element = (IRGetArrayElementVarVar_i1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, element->arr);
+			RewriteCopyPropRead(aliases, remainingReads, element->index);
+			return true;
+		}
+		if (IsCopyPropArrayStoreOp(ir->type))
+		{
+			IRSetArrayElementVarVar_i1* element = (IRSetArrayElementVarVar_i1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, element->arr);
+			RewriteCopyPropRead(aliases, remainingReads, element->index);
+			RewriteCopyPropRead(aliases, remainingReads, element->ele);
+			return true;
+		}
+		if (IsCopyPropInstanceFieldStoreOp(ir->type))
+		{
+			IRStfldVarVar_i1* field = (IRStfldVarVar_i1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, field->obj);
+			RewriteCopyPropRead(aliases, remainingReads, field->data);
+			return true;
+		}
+		if (IsCopyPropStaticFieldStoreOp(ir->type))
+		{
+			IRStsfldVarVar_i1* field = (IRStsfldVarVar_i1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, field->data);
+			return true;
+		}
+		if (IsCopyPropThreadStaticFieldStoreOp(ir->type))
+		{
+			IRStthreadlocalVarVar_i1* field = (IRStthreadlocalVarVar_i1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, field->data);
+			return true;
+		}
+		if (IsCopyPropRetOp(ir->type))
+		{
+			IRRetVar_ret_1* ret = (IRRetVar_ret_1*)ir;
+			RewriteCopyPropRead(aliases, remainingReads, ret->ret);
+			return true;
+		}
+		return false;
+	}
+
+	static void ApplyOioCopyPropagation(std::vector<IRCommon*>& insts, int32_t evalStackBaseOffset, int32_t maxStackSize)
+	{
+		if (insts.empty() || maxStackSize <= 0)
+		{
+			return;
+		}
+		for (IRCommon* ir : insts)
+		{
+			if (IsOioCopyPropagationUnsupportedOp(ir->type))
+			{
+				return;
+			}
+		}
+		std::vector<int32_t> remainingReads((size_t)maxStackSize + 1, 0);
+		for (IRCommon* ir : insts)
+		{
+			ForEachCopyPropRead(ir, [&](uint16_t slot) { CountCopyPropRead(remainingReads, slot); });
+		}
+
+		std::vector<OioCopyAlias> aliases((size_t)maxStackSize + 1);
+		for (OioCopyAlias& alias : aliases)
+		{
+			alias.src = -1;
+			alias.copy = nullptr;
+		}
+
+		std::vector<IRCommon*> output;
+		output.reserve(insts.size());
+		for (IRCommon* ir : insts)
+		{
+			if (ir->type == HiOpcodeEnum::LdlocVarVar)
+			{
+				IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+				RewriteCopyPropRead(aliases, remainingReads, copy->src);
+				DefineCopyPropSlot(output, aliases, remainingReads, copy->dst);
+				if (copy->dst >= evalStackBaseOffset && IsValidCopyPropSlot(aliases, copy->dst) && copy->dst != copy->src)
+				{
+					aliases[copy->dst].src = copy->src;
+					aliases[copy->dst].copy = copy;
+					continue;
+				}
+				output.push_back(ir);
+				continue;
+			}
+
+			bool rewritten = TryRewriteCopyPropReads(ir, output, aliases, remainingReads);
+			if (!rewritten || IsCopyPropCallOp(ir->type) || ir->type == HiOpcodeEnum::ThrowEx || ir->type == HiOpcodeEnum::RethrowEx)
+			{
+				MaterializeAllCopyAliases(output, aliases, false, remainingReads);
+			}
+			if (IsCopyPropBranchOp(ir->type))
+			{
+				MaterializeAllCopyAliases(output, aliases, false, remainingReads);
+			}
+			if (IsCopyPropStoreBarrierOp(ir->type))
+			{
+				MaterializeAllCopyAliases(output, aliases, true, remainingReads);
+			}
+			ForEachCopyPropDef(ir, [&](uint16_t slot) { DefineCopyPropSlot(output, aliases, remainingReads, slot); });
+			output.push_back(ir);
+		}
+		MaterializeAllCopyAliases(output, aliases, false, remainingReads);
+		insts.swap(output);
+	}
+
 	void TransformContext::AddInst(IRCommon* ir)
 	{
 		IL2CPP_ASSERT(ir->type != HiOpcodeEnum::None);
@@ -1738,6 +2477,11 @@ namespace transform
 				if (IsNoOpTransformInstruction(ir))
 				{
 					continue;
+				}
+				if (readIdx + 2 < insts.size() && TryFoldTwoCopiesIntoBinaryConsumer(ir, insts[readIdx + 1], insts[readIdx + 2]))
+				{
+					readIdx += 2;
+					ir = insts[readIdx];
 				}
 				if (readIdx + 1 < insts.size())
 				{
@@ -2172,6 +2916,31 @@ namespace transform
 						insts[writeIdx++] = fused;
 						readIdx += 2;
 						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 3]->type == HiOpcodeEnum::LdindVarVar_i4 && !IsNoOpTransformInstruction(next) && !IsNoOpTransformInstruction(insts[readIdx + 2]))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						IRLdlocVarVar* third = (IRLdlocVarVar*)insts[readIdx + 2];
+						IRLdindVarVar_i4* ind = (IRLdindVarVar_i4*)insts[readIdx + 3];
+						if (third->dst >= evalStackBaseOffset
+							&& third->dst != first->dst
+							&& third->dst != second->dst
+							&& third->dst != third->src
+							&& ind->dst == third->dst
+							&& ind->src == third->dst)
+						{
+							CreateIR(fused, LdlocVarVar_LdlocVarVar);
+							fused->dst1 = first->dst;
+							fused->src1 = first->src;
+							fused->dst2 = second->dst;
+							fused->src2 = second->src;
+							ind->src = third->src;
+							insts[writeIdx++] = fused;
+							insts[writeIdx++] = ind;
+							readIdx += 3;
+							continue;
+						}
 					}
 					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(next) && !IsNoOpTransformInstruction(insts[readIdx + 2]))
 					{
@@ -2883,6 +3652,44 @@ namespace transform
 						fused->compareRet = compare->ret;
 						fused->compareOp1 = compare->c1;
 						fused->compareOp2 = compare->c2;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVarSize)
+					{
+						IRLdlocVarVar_LdlocVarVar* copies = (IRLdlocVarVar_LdlocVarVar*)ir;
+						IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_LdlocVarVarSize);
+						fused->copyDst1 = copies->dst1;
+						fused->copySrc1 = copies->src1;
+						fused->copyDst2 = copies->dst2;
+						fused->copySrc2 = copies->src2;
+						fused->sizedCopyDst = copy->dst;
+						fused->sizedCopySrc = copy->src;
+						fused->sizedCopySize = copy->size;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar && next->type == HiOpcodeEnum::GetArrayElementVarVar_size_28 && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVarSize)
+					{
+						IRLdlocVarVar_LdlocVarVar_LdlocVarVar* copies = (IRLdlocVarVar_LdlocVarVar_LdlocVarVar*)ir;
+						IRGetArrayElementVarVar_size_28* element = (IRGetArrayElementVarVar_size_28*)next;
+						IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize);
+						fused->copyDst1 = copies->dst1;
+						fused->copySrc1 = copies->src1;
+						fused->copyDst2 = copies->dst2;
+						fused->copySrc2 = copies->src2;
+						fused->copyDst3 = copies->dst3;
+						fused->copySrc3 = copies->src3;
+						fused->elementDst = element->dst;
+						fused->arraySrc = element->arr;
+						fused->indexSrc = element->index;
+						fused->sizedCopyDst = copy->dst;
+						fused->sizedCopySrc = copy->src;
+						fused->sizedCopySize = copy->size;
 						insts[writeIdx++] = fused;
 						readIdx += 2;
 						continue;
@@ -3913,6 +4720,65 @@ namespace transform
 			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
 			{
 				IRCommon* ir = insts[readIdx];
+				if (readIdx + 3 < insts.size()
+					&& ir->type == HiOpcodeEnum::LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4
+					&& insts[readIdx + 1]->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4
+					&& insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize
+					&& insts[readIdx + 3]->type == HiOpcodeEnum::SetArrayElementVarVar_size_28)
+				{
+					IRLdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4* head = (IRLdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4*)ir;
+					IRLdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4* mid = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4*)insts[readIdx + 1];
+					IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize* tail = (IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize*)insts[readIdx + 2];
+					IRSetArrayElementVarVar_size_12* store = (IRSetArrayElementVarVar_size_12*)insts[readIdx + 3];
+					CreateIR(fused, Hotc233FieldAddPair_SetArrayElement_size_28);
+					fused->copyDst = head->copyDst;
+					fused->copySrc = head->copySrc;
+					fused->fieldDst0 = head->fieldDst0;
+					fused->obj0 = head->obj0;
+					fused->offset0 = head->offset0;
+					fused->fieldDst1 = head->fieldDst1;
+					fused->obj1 = head->obj1;
+					fused->offset1 = head->offset1;
+					fused->addRet1 = head->addRet1;
+					fused->addOp11 = head->addOp11;
+					fused->addOp21 = head->addOp21;
+					fused->fieldDst2 = head->fieldDst2;
+					fused->obj2 = head->obj2;
+					fused->offset2 = head->offset2;
+					fused->addRet2 = head->addRet2;
+					fused->addOp12 = head->addOp12;
+					fused->addOp22 = head->addOp22;
+					fused->midFieldDst1 = mid->fieldDst1;
+					fused->midObj1 = mid->obj1;
+					fused->midOffset1 = mid->offset1;
+					fused->midAddRet1 = mid->addRet1;
+					fused->midAddOp11 = mid->addOp11;
+					fused->midAddOp21 = mid->addOp21;
+					fused->midFieldDst2 = mid->fieldDst2;
+					fused->midObj2 = mid->obj2;
+					fused->midOffset2 = mid->offset2;
+					fused->midAddRet2 = mid->addRet2;
+					fused->midAddOp12 = mid->addOp12;
+					fused->midAddOp22 = mid->addOp22;
+					fused->tailAddRet = tail->addRet;
+					fused->tailAddOp1 = tail->addOp1;
+					fused->tailAddOp2 = tail->addOp2;
+					fused->tailCopyDst1 = tail->copyDst1;
+					fused->tailCopySrc1 = tail->copySrc1;
+					fused->tailCopyDst2 = tail->copyDst2;
+					fused->tailCopySrc2 = tail->copySrc2;
+					fused->tailCopyDst3 = tail->copyDst3;
+					fused->tailCopySrc3 = tail->copySrc3;
+					fused->tailSizedCopyDst = tail->sizedCopyDst;
+					fused->tailSizedCopySrc = tail->sizedCopySrc;
+					fused->tailSizedCopySize = tail->sizedCopySize;
+					fused->arraySrc = store->arr;
+					fused->indexSrc = store->index;
+					fused->elementSrc = store->ele;
+					insts[writeIdx++] = fused;
+					readIdx += 3;
+					continue;
+				}
 				if (readIdx + 1 < insts.size())
 				{
 					IRCommon* next = insts[readIdx + 1];
@@ -8739,6 +9605,103 @@ ir->ele = ele.locOffset;
 		}
 	}
 
+	static uint32_t ClassifyHotc233FastPath(
+		const byte* codes,
+		uint32_t codeLength,
+		bool hasExceptionClauses,
+		uint32_t initLocals,
+		uint32_t argStackObjectSize,
+		uint32_t localStackSize)
+	{
+		if (!codes || hasExceptionClauses || initLocals || argStackObjectSize != localStackSize)
+		{
+			return Hotc233FastPath_Unsupported;
+		}
+
+		if (codeLength == 8)
+		{
+			return *(HiOpcodeEnum*)codes == HiOpcodeEnum::RetVar_void ? Hotc233FastPath_EmptyVoid : Hotc233FastPath_Unsupported;
+		}
+
+		if (codeLength == 16)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)codes;
+			HiOpcodeEnum retOp = *(HiOpcodeEnum*)(codes + 8);
+			if (retOp == HiOpcodeEnum::RetVar_ret_4)
+			{
+				uint16_t ret = *(uint16_t*)(codes + 10);
+				if (op == HiOpcodeEnum::LdlocVarVar && *(uint16_t*)(codes + 2) == ret)
+				{
+					return *(uint16_t*)(codes + 4) < argStackObjectSize ? Hotc233FastPath_ReturnI4 : Hotc233FastPath_Unsupported;
+				}
+				if (*(uint16_t*)(codes + 2) == ret &&
+					(op == HiOpcodeEnum::LdcVarConst_4 ||
+						(*(uint16_t*)(codes + 4) < argStackObjectSize && *(uint16_t*)(codes + 6) < argStackObjectSize)))
+				{
+					switch (op)
+					{
+					case HiOpcodeEnum::BinOpVarVarVar_Add_i4: return Hotc233FastPath_AddI4;
+					case HiOpcodeEnum::BinOpVarVarVar_Sub_i4: return Hotc233FastPath_SubI4;
+					case HiOpcodeEnum::BinOpVarVarVar_Mul_i4: return Hotc233FastPath_MulI4;
+					case HiOpcodeEnum::BinOpVarVarVar_And_i4: return Hotc233FastPath_AndI4;
+					case HiOpcodeEnum::BinOpVarVarVar_Or_i4: return Hotc233FastPath_OrI4;
+					case HiOpcodeEnum::BinOpVarVarVar_Xor_i4: return Hotc233FastPath_XorI4;
+					case HiOpcodeEnum::LdcVarConst_4: return Hotc233FastPath_ConstI4;
+					default: break;
+					}
+				}
+			}
+			else if (retOp == HiOpcodeEnum::RetVar_ret_8)
+			{
+				uint16_t ret = *(uint16_t*)(codes + 10);
+				if (op == HiOpcodeEnum::LdlocVarVar && *(uint16_t*)(codes + 2) == ret)
+				{
+					return *(uint16_t*)(codes + 4) < argStackObjectSize ? Hotc233FastPath_ReturnI8 : Hotc233FastPath_Unsupported;
+				}
+				if (*(uint16_t*)(codes + 2) == ret &&
+					(*(uint16_t*)(codes + 4) < argStackObjectSize && *(uint16_t*)(codes + 6) < argStackObjectSize))
+				{
+					switch (op)
+					{
+					case HiOpcodeEnum::BinOpVarVarVar_Add_i8: return Hotc233FastPath_AddI8;
+					case HiOpcodeEnum::BinOpVarVarVar_Sub_i8: return Hotc233FastPath_SubI8;
+					case HiOpcodeEnum::BinOpVarVarVar_Mul_i8: return Hotc233FastPath_MulI8;
+					case HiOpcodeEnum::BinOpVarVarVar_And_i8: return Hotc233FastPath_AndI8;
+					case HiOpcodeEnum::BinOpVarVarVar_Or_i8: return Hotc233FastPath_OrI8;
+					case HiOpcodeEnum::BinOpVarVarVar_Xor_i8: return Hotc233FastPath_XorI8;
+					default: break;
+					}
+				}
+			}
+		}
+		else if (codeLength == 24)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)codes;
+			if (op == HiOpcodeEnum::LdcVarConst_8 &&
+				*(HiOpcodeEnum*)(codes + 16) == HiOpcodeEnum::RetVar_ret_8 &&
+				*(uint16_t*)(codes + 2) == *(uint16_t*)(codes + 18))
+			{
+				return Hotc233FastPath_ConstI8;
+			}
+			if (op == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4_RetVar_ret_4 &&
+				*(uint16_t*)(codes + 12) == *(uint16_t*)(codes + 18) &&
+				*(uint16_t*)(codes + 4) < argStackObjectSize)
+			{
+				uint16_t copyDst = *(uint16_t*)(codes + 2);
+				uint16_t constDst = *(uint16_t*)(codes + 6);
+				uint16_t op1 = *(uint16_t*)(codes + 14);
+				uint16_t op2 = *(uint16_t*)(codes + 16);
+				if ((op1 == copyDst || op1 == constDst || op1 < argStackObjectSize) &&
+					(op2 == copyDst || op2 == constDst || op2 < argStackObjectSize))
+				{
+					return Hotc233FastPath_CopyConstMulRetI4;
+				}
+			}
+		}
+
+		return Hotc233FastPath_Unsupported;
+	}
+
 	void TransformContext::BuildInterpMethodInfo(interpreter::InterpMethodInfo& result)
 	{
 		il2cpp::utils::dynamic_array<hotc233::metadata::ILMapper>* ilMappers;
@@ -8813,6 +9776,13 @@ ir->ele = ele.locOffset;
 		result.localStackSize = totalArgLocalSize;
 		result.maxStackSize = maxStackSize;
 		result.initLocals = initLocals;
+		result.hotc233FastPathKind = ClassifyHotc233FastPath(
+			tranCodes,
+			totalIRSize,
+			!exClauses.empty(),
+			initLocals,
+			totalArgSize,
+			totalArgLocalSize);
 
 		if (resolveDatas.empty())
 		{

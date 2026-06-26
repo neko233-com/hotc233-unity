@@ -102,6 +102,30 @@ namespace hotc233
 			uint16_t stackObjectSize;
 		};
 
+		enum Hotc233FastPathKind : uint32_t
+		{
+			Hotc233FastPath_None = 0,
+			Hotc233FastPath_Unsupported = 1,
+			Hotc233FastPath_ReturnI4 = 2,
+			Hotc233FastPath_ReturnI8 = 3,
+			Hotc233FastPath_ConstI4 = 4,
+			Hotc233FastPath_ConstI8 = 5,
+			Hotc233FastPath_EmptyVoid = 6,
+			Hotc233FastPath_AddI4 = 10,
+			Hotc233FastPath_SubI4 = 11,
+			Hotc233FastPath_MulI4 = 12,
+			Hotc233FastPath_AndI4 = 13,
+			Hotc233FastPath_OrI4 = 14,
+			Hotc233FastPath_XorI4 = 15,
+			Hotc233FastPath_AddI8 = 20,
+			Hotc233FastPath_SubI8 = 21,
+			Hotc233FastPath_MulI8 = 22,
+			Hotc233FastPath_AndI8 = 23,
+			Hotc233FastPath_OrI8 = 24,
+			Hotc233FastPath_XorI8 = 25,
+			Hotc233FastPath_CopyConstMulRetI4 = 30,
+		};
+
 		struct InterpMethodInfo
 		{
 			byte* codes;
@@ -118,6 +142,7 @@ namespace hotc233
 			uint32_t localVarBaseOffset;
 			uint32_t evalStackBaseOffset;
 			uint32_t exClauseCount;
+			uint32_t hotc233FastPathKind;
 		};
 	}
 }

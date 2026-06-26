@@ -5,6 +5,8 @@
 #include "vm/Array.h"
 #include "vm/Exception.h"
 #include "vm/Class.h"
+#include "vm/Method.h"
+#include "vm/StackTrace.h"
 #include "vm/String.h"
 
 #include "metadata/MetadataModule.h"
@@ -86,6 +88,7 @@ namespace hotc233
 		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::ResetOpcodeProfiler()", (Il2CppMethodPointer)ResetOpcodeProfiler);
 		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::SetOpcodeProfilerEnabled(System.Int32)", (Il2CppMethodPointer)SetOpcodeProfilerEnabled);
 		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::GetOpcodeProfilerSnapshot(System.Int32)", (Il2CppMethodPointer)GetOpcodeProfilerSnapshot);
+		il2cpp::vm::InternalCalls::Add("Hotc233.RuntimeApi::GetInterpreterStackTraceJson(System.Int32)", (Il2CppMethodPointer)GetInterpreterStackTraceJson);
 	}
 
 	int32_t RuntimeApi::LoadMetadataForAOTAssembly(Il2CppArray* dllBytes, int32_t mode)
@@ -372,6 +375,51 @@ namespace hotc233
 				<< ",\"opcode\":" << pair.opcode
 				<< ",\"count\":" << pair.count
 				<< "}";
+		}
+		os << "]}";
+		return NewJsonString(os.str());
+	}
+
+	Il2CppString* RuntimeApi::GetInterpreterStackTraceJson(int32_t maxFrames)
+	{
+		if (maxFrames <= 0)
+		{
+			maxFrames = 64;
+		}
+		maxFrames = std::min(maxFrames, 256);
+
+		il2cpp::vm::StackFrames frames;
+		interpreter::MachineState& machine = interpreter::InterpreterModule::GetCurrentThreadMachineState();
+		machine.CollectFrames(&frames);
+
+		std::ostringstream os;
+		os << "{\"success\":true";
+		os << ",\"frameTracking\":true";
+		os << ",\"maxFrames\":" << maxFrames;
+		os << ",\"totalFrames\":" << frames.size();
+		os << ",\"frames\":[";
+		int32_t frameCount = std::min((int32_t)frames.size(), maxFrames);
+		for (int32_t i = 0; i < frameCount; ++i)
+		{
+			const Il2CppStackFrameInfo& frame = frames[i];
+			if (i > 0)
+			{
+				os << ",";
+			}
+			os << "{\"index\":" << i;
+			os << ",\"method\":\"";
+			if (frame.method)
+			{
+				std::string methodName = il2cpp::vm::Method::GetFullName(frame.method);
+				AppendJsonEscaped(os, methodName.c_str());
+			}
+			os << "\"";
+			os << ",\"rawIp\":\"0x" << std::hex << frame.raw_ip << std::dec << "\"";
+			os << ",\"ilOffset\":" << frame.ilOffset;
+			os << ",\"line\":" << frame.sourceCodeLineNumber;
+			os << ",\"filePath\":\"";
+			AppendJsonEscaped(os, frame.filePath);
+			os << "\"}";
 		}
 		os << "]}";
 		return NewJsonString(os.str());

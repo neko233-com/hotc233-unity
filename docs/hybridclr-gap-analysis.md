@@ -13,6 +13,25 @@
 | 是否可以说整体超过专业版 | 不能。当前报告必须以 Pro 上限为达标线，而不是专业版下限。 |
 | 是否可以说超过社区版 | 暂不能作为实测结论。本仓库没有安装官方社区版并跑同机同工程对照，只能按官方倍率做粗推。 |
 
+## 同机 HybridCLR 8.11.0 实测
+
+2026-06-26 已建立独立项目 `D:/Code/Tuanjie-Projects/hybridclr-benchmark-demo`，固定 HybridCLR 8.11.0 embedded package 和 `HybridCLRData/LocalIl2CppData-WindowsEditor` 安装缓存。当前报告来自两个独立 Tuanjie 项目、同一套 HybridCLR 官方 performance benchmark 代码形状、WebGL 浏览器 headless 捕获。
+
+| hotc233 | HybridCLR 本地实测 | 结论 |
+|---|---:|---|
+| 官方基准最低相对项 | 50.6% | `hybridclr-array-op`，需要 1.98x |
+| 官方基准最高相对项 | 111.7% | `hybridclr-gameobject-create-destroy`，已超过 |
+| static AOT call | 79.8% | 需要 1.25x，单点优化空间有限，必须做 call site cache |
+| typeof | 87.9% | 需要 1.14x，但相对原生仍只有 45.9% |
+| 数值复杂运算 | 54.6% | 需要 1.83x，说明 typed register IR/quickened numeric op 是 P0 |
+| 数组写读 | 50.6% | 需要 1.98x，说明数组地址/类型/边界快路径是 P0 |
+
+完整表：
+
+- `Assets/EditorForBuild/Generated/performance-webgl-hotc-vs-hybridclr-base.md`
+- `Assets/EditorForBuild/Generated/performance-webgl-hotc-vs-hybridclr-base.html`
+- `Assets/EditorForBuild/Generated/performance-webgl-hotc-vs-hybridclr-base.json`
+
 ## 对标口径
 
 HybridCLR 官方商业能力包括完全泛型共享、元数据优化、标准解释优化、Hotfix、Assembly.Load 优化、解释器栈诊断、代码加固和访问控制等。hotc233 当前明确排除 DHE，不通过把大量热更逻辑预置进首包 AOT 来换性能。

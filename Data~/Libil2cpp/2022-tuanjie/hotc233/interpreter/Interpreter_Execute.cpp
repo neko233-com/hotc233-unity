@@ -539,6 +539,163 @@ namespace interpreter
 		return (uint64_t)a >> b;
 	}
 
+	IL2CPP_FORCE_INLINE bool TryExecuteHotc233FastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
+	{
+		if (!imi)
+		{
+			return false;
+		}
+
+		byte* codes = imi->codes;
+		switch ((Hotc233FastPathKind)imi->hotc233FastPathKind)
+		{
+		case Hotc233FastPath_EmptyVoid:
+			return true;
+		default:
+			break;
+		}
+		if (!ret)
+		{
+			return false;
+		}
+
+		switch ((Hotc233FastPathKind)imi->hotc233FastPathKind)
+		{
+		case Hotc233FastPath_ReturnI4:
+		{
+			uint16_t src = *(uint16_t*)(codes + 4);
+			*(int32_t*)ret = *(int32_t*)(localVarBase + src);
+			return true;
+		}
+		case Hotc233FastPath_ReturnI8:
+		{
+			uint16_t src = *(uint16_t*)(codes + 4);
+			*(int64_t*)ret = *(int64_t*)(localVarBase + src);
+			return true;
+		}
+		case Hotc233FastPath_ConstI4:
+		{
+			*(int32_t*)ret = *(int32_t*)(codes + 4);
+			return true;
+		}
+		case Hotc233FastPath_ConstI8:
+		{
+			*(int64_t*)ret = *(int64_t*)(codes + 8);
+			return true;
+		}
+		case Hotc233FastPath_AddI4:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int32_t*)ret = *(int32_t*)(localVarBase + op1) + *(int32_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_SubI4:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int32_t*)ret = *(int32_t*)(localVarBase + op1) - *(int32_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_MulI4:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int32_t*)ret = *(int32_t*)(localVarBase + op1) * *(int32_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_AndI4:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int32_t*)ret = *(int32_t*)(localVarBase + op1) & *(int32_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_OrI4:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int32_t*)ret = *(int32_t*)(localVarBase + op1) | *(int32_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_XorI4:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int32_t*)ret = *(int32_t*)(localVarBase + op1) ^ *(int32_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_AddI8:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int64_t*)ret = *(int64_t*)(localVarBase + op1) + *(int64_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_SubI8:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int64_t*)ret = *(int64_t*)(localVarBase + op1) - *(int64_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_MulI8:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int64_t*)ret = *(int64_t*)(localVarBase + op1) * *(int64_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_AndI8:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int64_t*)ret = *(int64_t*)(localVarBase + op1) & *(int64_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_OrI8:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int64_t*)ret = *(int64_t*)(localVarBase + op1) | *(int64_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_XorI8:
+		{
+			uint16_t op1 = *(uint16_t*)(codes + 4);
+			uint16_t op2 = *(uint16_t*)(codes + 6);
+			*(int64_t*)ret = *(int64_t*)(localVarBase + op1) ^ *(int64_t*)(localVarBase + op2);
+			return true;
+		}
+		case Hotc233FastPath_CopyConstMulRetI4:
+		{
+			uint16_t copyDst = *(uint16_t*)(codes + 2);
+			uint16_t copySrc = *(uint16_t*)(codes + 4);
+			uint16_t constDst = *(uint16_t*)(codes + 6);
+			int32_t constant = *(int32_t*)(codes + 8);
+			uint16_t op1 = *(uint16_t*)(codes + 14);
+			uint16_t op2 = *(uint16_t*)(codes + 16);
+			int32_t v1 = op1 == copyDst ? *(int32_t*)(localVarBase + copySrc) : (op1 == constDst ? constant : *(int32_t*)(localVarBase + op1));
+			int32_t v2 = op2 == copyDst ? *(int32_t*)(localVarBase + copySrc) : (op2 == constDst ? constant : *(int32_t*)(localVarBase + op2));
+			*(int32_t*)ret = v1 * v2;
+			return true;
+		}
+		default:
+			return false;
+		}
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteHotc233CallFastPath(const MethodInfo* methodInfo, StackObject* argBasePtr, void* retPtr)
+	{
+		InterpMethodInfo* calleeImi = methodInfo->interpData ? (InterpMethodInfo*)methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(methodInfo);
+		if (calleeImi->hotc233FastPathKind <= Hotc233FastPath_Unsupported)
+		{
+			return false;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(methodInfo);
+		return TryExecuteHotc233FastPath(calleeImi, argBasePtr, retPtr);
+	}
+
 
 	inline void HiCheckFinite(float x)
 	{
@@ -1309,6 +1466,15 @@ namespace interpreter
 	localVarBase = frame->stackBasePtr; \
 }
 
+#define PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(newMethodInfo, preparedImi, argBasePtr, retPtr) { \
+	imi = preparedImi; \
+	frame = interpFrameGroup.EnterFrameFromInterpreter(newMethodInfo, argBasePtr); \
+	frame->ret = retPtr; \
+	ip = ipBase = imi->codes; \
+	frame->ip = (byte*)ip; \
+	localVarBase = frame->stackBasePtr; \
+}
+
 #define LEAVE_FRAME() { \
 	frame = interpFrameGroup.LeaveFrame(); \
 	if (frame) \
@@ -1337,13 +1503,32 @@ namespace interpreter
 }
 
 #define CALL_INTERP_VOID(nextIp, methodInfo, argBasePtr) { \
-	SAVE_CUR_FRAME(nextIp) \
-	PREPARE_NEW_FRAME_FROM_INTERPRETER(methodInfo, argBasePtr, nullptr); \
+	if (TryExecuteHotc233CallFastPath(methodInfo, argBasePtr, nullptr)) \
+	{ \
+		ip = (byte*)(nextIp); \
+	} \
+	else \
+	{ \
+		SAVE_CUR_FRAME(nextIp) \
+		PREPARE_NEW_FRAME_FROM_INTERPRETER(methodInfo, argBasePtr, nullptr); \
+	} \
 }
 
 #define CALL_INTERP_RET(nextIp, methodInfo, argBasePtr, retPtr) { \
+	if (TryExecuteHotc233CallFastPath(methodInfo, argBasePtr, retPtr)) \
+	{ \
+		ip = (byte*)(nextIp); \
+	} \
+	else \
+	{ \
+		SAVE_CUR_FRAME(nextIp) \
+		PREPARE_NEW_FRAME_FROM_INTERPRETER(methodInfo, argBasePtr, retPtr); \
+	} \
+}
+
+#define CALL_INTERP_RET_PREPARED(nextIp, methodInfo, preparedImi, argBasePtr, retPtr) { \
 	SAVE_CUR_FRAME(nextIp) \
-	PREPARE_NEW_FRAME_FROM_INTERPRETER(methodInfo, argBasePtr, retPtr); \
+	PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(methodInfo, preparedImi, argBasePtr, retPtr); \
 }
 
 #pragma endregion
@@ -1696,6 +1881,13 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 
 	void Interpreter::Execute(const MethodInfo* methodInfo, StackObject* args, void* ret)
 	{
+		InterpMethodInfo* directImi = methodInfo->interpData ? (InterpMethodInfo*)methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(methodInfo);
+		RuntimeInitClassCCtorWithoutInitClass(methodInfo);
+		if (directImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(directImi, args, ret))
+		{
+			return;
+		}
+
 		MachineState& machine = InterpreterModule::GetCurrentThreadMachineState();
 		InterpFrameGroup interpFrameGroup(machine);
 
@@ -1915,6 +2107,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 						goto HOTC233_EXEC_BranchUncondition_4;
 					}
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::LdlocVarAddress)
+					{
+						ip = __nextIp;
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarAddress;
+					}
 				    ip = __nextIp;
 				    continue;
 				}
@@ -1951,12 +2152,29 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::LdlocVarVarSize:
+				HOTC233_EXEC_LdlocVarVarSize:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
 					uint16_t __size = *(uint16_t*)(ip + 6);
 					std::memmove((void*)(localVarBase + __dst), (void*)(localVarBase + __src), __size);
-				    ip += 8;
+					ip += 8;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::SetArrayElementVarVar_size_24)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_SetArrayElementVarVar_size_24;
+					}
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar:
@@ -1995,6 +2213,24 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
 						}
 						goto HOTC233_EXEC_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar;
+					}
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::ConvertVarVar_i4_u1_SetArrayElementVarVar_i1)
+					{
+						ip = __nextIp;
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_ConvertVarVar_i4_u1_SetArrayElementVarVar_i1;
+					}
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::LdindVarVar_i4)
+					{
+						ip = __nextIp;
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdindVarVar_i4;
 					}
 				    ip = __nextIp;
 				    continue;
@@ -2056,6 +2292,63 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    Copy28((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(arr, _index, 28));
 					std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
 				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVarSize:
+				HOTC233_EXEC_LdlocVarVar_LdlocVarVar_LdlocVarVarSize:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __sizedCopyDst = *(uint16_t*)(ip + 10);
+					uint16_t __sizedCopySrc = *(uint16_t*)(ip + 12);
+					uint16_t __sizedCopySize = *(uint16_t*)(ip + 14);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+				    ip += 16;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::SetArrayElementVarVar_size_24)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_SetArrayElementVarVar_size_24;
+					}
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize:
+				HOTC233_EXEC_LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __copyDst3 = *(uint16_t*)(ip + 10);
+					uint16_t __copySrc3 = *(uint16_t*)(ip + 12);
+					uint16_t __elementDst = *(uint16_t*)(ip + 14);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 16);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 18);
+					uint16_t __sizedCopyDst = *(uint16_t*)(ip + 20);
+					uint16_t __sizedCopySrc = *(uint16_t*)(ip + 22);
+					uint16_t __sizedCopySize = *(uint16_t*)(ip + 24);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    Copy28((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(arr, _index, 28));
+					std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+				    ip += 32;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_i4:
@@ -2871,11 +3164,20 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::LdlocVarAddress:
+				HOTC233_EXEC_LdlocVarAddress:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
 					(*(void**)(localVarBase + __dst)) = (void*)(localVarBase + __src);
 				    ip += 8;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdfldValueTypeVarVar_i4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdfldValueTypeVarVar_i4;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::LdlocVarAddress_LdcVarConst_4:
@@ -2888,6 +3190,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
 					(*(int32_t*)(localVarBase + __constDst)) = __constant;
 					ip += 16;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdfldValueTypeVarVar_i4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdfldValueTypeVarVar_i4;
+					}
 					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4)
 					{
 						if (g_opcodeProfilerEnabled)
@@ -4292,8 +4602,24 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __ret = *(uint16_t*)(ip + 2);
 					uint16_t __op1 = *(uint16_t*)(ip + 4);
 					uint16_t __op2 = *(uint16_t*)(ip + 6);
-					(*(int32_t*)(localVarBase + __ret)) = (*(int32_t*)(localVarBase + __op1)) + (*(int32_t*)(localVarBase + __op2));
+					int32_t __value = (*(int32_t*)(localVarBase + __op1)) + (*(int32_t*)(localVarBase + __op2));
+					(*(int32_t*)(localVarBase + __ret)) = __value;
 					ip += 8;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::StindVarVar_i4)
+					{
+						uint16_t __dst = *(uint16_t*)(ip + 2);
+						uint16_t __src = *(uint16_t*)(ip + 4);
+						if (__src == __ret)
+						{
+							if (g_opcodeProfilerEnabled)
+							{
+								opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+							}
+							(*(int32_t*)*(void**)(localVarBase + __dst)) = __value;
+							ip += 8;
+							continue;
+						}
+					}
 					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::CallDelegateInvoke_void)
 					{
 						if (g_opcodeProfilerEnabled)
@@ -4407,6 +4733,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4:
+				HOTC233_EXEC_BinOpVarVarVar_Add_i4_LdcVarConst_4:
 				{
 					uint16_t __addRet = *(uint16_t*)(ip + 2);
 					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
@@ -4416,6 +4743,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
 					(*(int32_t*)(localVarBase + __constDst)) = __constant;
 				    ip += 16;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::BinOpVarVarVar_Rem_i4_BranchTrueVar_i4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_BinOpVarVarVar_Rem_i4_BranchTrueVar_i4;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4_BinOpAnd_i4_GetArrayElementVarVar_i4:
@@ -4539,7 +4874,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					int32_t __v1 = (*(int32_t*)(localVarBase + __maxOp1));
 					int32_t __v2 = (*(int32_t*)(localVarBase + __maxOp2));
 					(*(int32_t*)(localVarBase + __maxRet)) = __v1 > __v2 ? __v1 : __v2;
-				    ip += 16;
+					ip += 16;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::StfldVarVar_i4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_StfldVarVar_i4;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4:
@@ -4788,6 +5131,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
 						}
 						goto HOTC233_EXEC_LdlocVarAddress_LdcVarConst_4_LdfldValueTypeVarVar_i4_LdcVarConst_4;
+					}
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarAddress_LdcVarConst_4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarAddress_LdcVarConst_4;
 					}
 				    continue;
 				}
@@ -6764,7 +7115,16 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					{
 						CHECK_NOT_NULL_THROW((localVarBase + __argBase)->obj);
 					}
-					CALL_INTERP_RET((ip + 16), __methodInfo, (StackObject*)(void*)(localVarBase + __argBase), (void*)(localVarBase + __ret));
+					InterpMethodInfo* __calleeImi = __methodInfo->interpData ? (InterpMethodInfo*)__methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(__methodInfo);
+					RuntimeInitClassCCtorWithoutInitClass(__methodInfo);
+					void* __retPtr = (void*)(localVarBase + __ret);
+					StackObject* __argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
+					if (__calleeImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(__calleeImi, __argBasePtr, __retPtr))
+					{
+						ip += 16;
+						continue;
+					}
+					CALL_INTERP_RET_PREPARED((ip + 16), __methodInfo, __calleeImi, __argBasePtr, __retPtr);
 				    continue;
 				}
 				case HiOpcodeEnum::CallInterpStatic_ret:
@@ -6772,7 +7132,16 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					MethodInfo* __methodInfo = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
 					uint16_t __argBase = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
-					CALL_INTERP_RET((ip + 16), __methodInfo, (StackObject*)(void*)(localVarBase + __argBase), (void*)(localVarBase + __ret));
+					InterpMethodInfo* __calleeImi = __methodInfo->interpData ? (InterpMethodInfo*)__methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(__methodInfo);
+					RuntimeInitClassCCtorWithoutInitClass(__methodInfo);
+					void* __retPtr = (void*)(localVarBase + __ret);
+					StackObject* __argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
+					if (__calleeImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(__calleeImi, __argBasePtr, __retPtr))
+					{
+						ip += 16;
+						continue;
+					}
+					CALL_INTERP_RET_PREPARED((ip + 16), __methodInfo, __calleeImi, __argBasePtr, __retPtr);
 				    continue;
 				}
 				case HiOpcodeEnum::CallVirtual_void:
@@ -6820,7 +7189,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod))
 				    {
-				        CALL_INTERP_RET((ip + 16), _actualMethod, _objPtr, _ret);
+				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        RuntimeInitClassCCtorWithoutInitClass(_actualMethod);
+				        if (_actualImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_actualImi, _objPtr, _ret))
+				        {
+				            ip += 16;
+				            continue;
+				        }
+				        CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _objPtr, _ret);
 				    }
 				    else 
 				    {
@@ -6860,7 +7236,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod))
 				    {
-				        CALL_INTERP_RET((ip + 24), _actualMethod, _objPtr, _ret);
+				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        RuntimeInitClassCCtorWithoutInitClass(_actualMethod);
+				        if (_actualImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_actualImi, _objPtr, _ret))
+				        {
+				            ip += 24;
+				            continue;
+				        }
+				        CALL_INTERP_RET_PREPARED((ip + 24), _actualMethod, _actualImi, _objPtr, _ret);
 				    }
 				    else 
 				    {
@@ -6907,7 +7290,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    {
 				        _argBasePtr->obj += 1;
 				    }
-				    CALL_INTERP_RET((ip + 16), _actualMethod, _argBasePtr, (void*)(localVarBase + __ret));
+				    void* _ret = (void*)(localVarBase + __ret);
+				    InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				    RuntimeInitClassCCtorWithoutInitClass(_actualMethod);
+				    if (_actualImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_actualImi, _argBasePtr, _ret))
+				    {
+				        ip += 16;
+				        continue;
+				    }
+				    CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _argBasePtr, _ret);
 				    continue;
 				}
 				case HiOpcodeEnum::CallInd_void:
@@ -6980,7 +7371,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					    }
 					    if (IsInterpreterImplement(_method))
 					    {
-				            CALL_INTERP_RET((ip + 24), _method, _argBasePtr, _ret);
+				            InterpMethodInfo* _methodImi = _method->interpData ? (InterpMethodInfo*)_method->interpData : InterpreterModule::GetInterpMethodInfo(_method);
+				            RuntimeInitClassCCtorWithoutInitClass(_method);
+				            if (_methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_methodImi, _argBasePtr, _ret))
+				            {
+				                ip += 24;
+				                continue;
+				            }
+				            CALL_INTERP_RET_PREPARED((ip + 24), _method, _methodImi, _argBasePtr, _ret);
 				            continue;
 					    }
 					    if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
@@ -7025,7 +7423,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					    }
 					    if (IsInterpreterImplement(_method))
 					    {
-				            CALL_INTERP_RET((ip + 24), _method, _argBasePtr, _ret);
+				            InterpMethodInfo* _methodImi = _method->interpData ? (InterpMethodInfo*)_method->interpData : InterpreterModule::GetInterpMethodInfo(_method);
+				            RuntimeInitClassCCtorWithoutInitClass(_method);
+				            if (_methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_methodImi, _argBasePtr, _ret))
+				            {
+				                ip += 24;
+				                continue;
+				            }
+				            CALL_INTERP_RET_PREPARED((ip + 24), _method, _methodImi, _argBasePtr, _ret);
 				            continue;
 					    }
 					    if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
@@ -7198,7 +7603,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						{
 							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
 							{
-								CALL_INTERP_RET((ip + 24), method, fastArgBase, _ret);
+								InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+								RuntimeInitClassCCtorWithoutInitClass(method);
+								if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
+								{
+									ip += 24;
+									continue;
+								}
+								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
 								continue;
 							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
@@ -7233,7 +7645,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								RaiseExecutionEngineException("CallInterpDelegate");
 							}
 							}
-							CALL_INTERP_RET((ip + 24), method, _argBasePtr, _ret);
+							InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+							RuntimeInitClassCCtorWithoutInitClass(method);
+							if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
+							{
+								ip += 24;
+								continue;
+							}
+							CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
 							continue;
 						}
 						else
@@ -7285,7 +7704,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						{
 							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
 							{
-								CALL_INTERP_RET((ip + 24), method, fastArgBase, _ret);
+								InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+								RuntimeInitClassCCtorWithoutInitClass(method);
+								if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
+								{
+									ip += 24;
+									continue;
+								}
+								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
 								continue;
 							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
@@ -7320,7 +7746,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								RaiseExecutionEngineException("CallInterpDelegate");
 							}
 							}
-							CALL_INTERP_RET((ip + 24), method, _argBasePtr, _ret);
+							InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+							RuntimeInitClassCCtorWithoutInitClass(method);
+							if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
+							{
+								ip += 24;
+								continue;
+							}
+							CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
 							continue;
 						}
 						else
@@ -11652,6 +12085,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 						goto HOTC233_EXEC_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4;
 					}
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_BinOpVarVarVar_Add_i4_LdcVarConst_4;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4:
@@ -11900,6 +12341,39 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
 						}
 						goto HOTC233_EXEC_SetArrayElementVarVar_size_28_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar;
+					}
+				    continue;
+				}
+				case HiOpcodeEnum::Hotc233FieldAddPair_SetArrayElement_size_28:
+				HOTC233_EXEC_Hotc233FieldAddPair_SetArrayElement_size_28:
+				{
+					IRHotc233FieldAddPair_SetArrayElement_size_28* __ir = (IRHotc233FieldAddPair_SetArrayElement_size_28*)ip;
+					(*(uint64_t*)(localVarBase + __ir->copyDst)) = (*(uint64_t*)(localVarBase + __ir->copySrc));
+					(*(int32_t*)(localVarBase + __ir->fieldDst0)) = *(int32_t*)((byte*)(void*)(localVarBase + __ir->obj0) + __ir->offset0);
+					(*(int32_t*)(localVarBase + __ir->fieldDst1)) = *(int32_t*)((byte*)(void*)(localVarBase + __ir->obj1) + __ir->offset1);
+					(*(int32_t*)(localVarBase + __ir->addRet1)) = (*(int32_t*)(localVarBase + __ir->addOp11)) + (*(int32_t*)(localVarBase + __ir->addOp21));
+					(*(int32_t*)(localVarBase + __ir->fieldDst2)) = *(int32_t*)((byte*)(void*)(localVarBase + __ir->obj2) + __ir->offset2);
+					(*(int32_t*)(localVarBase + __ir->addRet2)) = (*(int32_t*)(localVarBase + __ir->addOp12)) + (*(int32_t*)(localVarBase + __ir->addOp22));
+					(*(int32_t*)(localVarBase + __ir->midFieldDst1)) = *(int32_t*)((byte*)(void*)(localVarBase + __ir->midObj1) + __ir->midOffset1);
+					(*(int32_t*)(localVarBase + __ir->midAddRet1)) = (*(int32_t*)(localVarBase + __ir->midAddOp11)) + (*(int32_t*)(localVarBase + __ir->midAddOp21));
+					(*(int32_t*)(localVarBase + __ir->midFieldDst2)) = *(int32_t*)((byte*)(void*)(localVarBase + __ir->midObj2) + __ir->midOffset2);
+					(*(int32_t*)(localVarBase + __ir->midAddRet2)) = (*(int32_t*)(localVarBase + __ir->midAddOp12)) + (*(int32_t*)(localVarBase + __ir->midAddOp22));
+					(*(int32_t*)(localVarBase + __ir->tailAddRet)) = (*(int32_t*)(localVarBase + __ir->tailAddOp1)) + (*(int32_t*)(localVarBase + __ir->tailAddOp2));
+					(*(uint64_t*)(localVarBase + __ir->tailCopyDst1)) = (*(uint64_t*)(localVarBase + __ir->tailCopySrc1));
+					(*(uint64_t*)(localVarBase + __ir->tailCopyDst2)) = (*(uint64_t*)(localVarBase + __ir->tailCopySrc2));
+					(*(uint64_t*)(localVarBase + __ir->tailCopyDst3)) = (*(uint64_t*)(localVarBase + __ir->tailCopySrc3));
+					std::memmove((void*)(localVarBase + __ir->tailSizedCopyDst), (void*)(localVarBase + __ir->tailSizedCopySrc), __ir->tailSizedCopySize);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __ir->arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __ir->indexSrc));
+				    Copy28(GetCheckedArrayElementAddress(_arr, _index, 28), (void*)(localVarBase + __ir->elementSrc));
+					ip += 96;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVarSize)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarVar_LdlocVarVar_LdlocVarVarSize;
 					}
 				    continue;
 				}
@@ -14253,6 +14727,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::SetArrayElementVarVar_size_24:
+				HOTC233_EXEC_SetArrayElementVarVar_size_24:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -14260,10 +14735,19 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
 					int32_t _index = (*(int32_t*)(localVarBase + __index));
 				    Copy24(GetCheckedArrayElementAddress(_arr, _index, 24), (void*)(localVarBase + __ele));
-				    ip += 8;
+					ip += 8;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::SetArrayElementVarVar_size_28:
+				HOTC233_EXEC_SetArrayElementVarVar_size_28:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -14271,7 +14755,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
 					int32_t _index = (*(int32_t*)(localVarBase + __index));
 				    Copy28(GetCheckedArrayElementAddress(_arr, _index, 28), (void*)(localVarBase + __ele));
-				    ip += 8;
+					ip += 8;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdlocVarVar)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarVar_LdlocVarVar;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::SetArrayElementVarVar_size_28_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar:
@@ -14318,8 +14810,16 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					(*(int32_t*)(localVarBase + __convertDst)) = _converted;
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
 					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
-				    SetArrayElementFast<int8_t>(_arr, _index, (int8_t)_converted);
+					SetArrayElementFast<int8_t>(_arr, _index, (int8_t)_converted);
 					ip += 16;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdindVarVar_i4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdindVarVar_i4;
+					}
 					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar)
 					{
 						if (g_opcodeProfilerEnabled)
