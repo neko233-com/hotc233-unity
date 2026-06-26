@@ -34,6 +34,8 @@ namespace Hotc233
 
         public bool PreJitHotUpdateTypesOnLoad { get; set; } = false;
 
+        public Hotc233LoadPolicy LoadPolicy { get; set; } = Hotc233LoadPolicy.None;
+
         public bool AllowUnsafePreJitHotUpdateTypes { get; set; } =
             string.Equals(Environment.GetEnvironmentVariable(UnsafePreJitEnvironmentVariable), "1", StringComparison.OrdinalIgnoreCase)
             || string.Equals(Environment.GetEnvironmentVariable(UnsafePreJitEnvironmentVariable), "true", StringComparison.OrdinalIgnoreCase)
@@ -102,21 +104,22 @@ namespace Hotc233
             int count = 0;
             foreach (var binary in binaries)
             {
-                if (binary.Bytes == null || binary.Bytes.Length == 0)
+                var prepared = PrepareBinary(binary);
+                if (prepared.Bytes == null || prepared.Bytes.Length == 0)
                 {
                     throw new ArgumentException($"Runtime metadata binary is empty: {binary.Name}");
                 }
 
-                Hotc233RuntimeDiagnostics.Info("metadata.load.begin", Hotc233RuntimeDiagnostics.DescribeBinary(binary.Name, binary.Bytes));
-                var result = RuntimeApi.LoadMetadataForAOTAssembly(binary.Bytes, mode);
+                Hotc233RuntimeDiagnostics.Info("metadata.load.begin", Hotc233RuntimeDiagnostics.DescribeBinary(prepared.Name, prepared.Bytes));
+                var result = RuntimeApi.LoadMetadataForAOTAssembly(prepared.Bytes, mode);
                 if (result != LoadImageErrorCode.OK)
                 {
-                    Hotc233RuntimeDiagnostics.Error("metadata.load.failed", $"{binary.Name} result={result}");
-                    throw new InvalidOperationException($"Runtime metadata load failed: {binary.Name}, result:{result}");
+                    Hotc233RuntimeDiagnostics.Error("metadata.load.failed", $"{prepared.Name} result={result}");
+                    throw new InvalidOperationException($"Runtime metadata load failed: {prepared.Name}, result:{result}");
                 }
 
                 count++;
-                Hotc233RuntimeDiagnostics.Info("metadata.load.ok", $"{binary.Name} mode={mode}");
+                Hotc233RuntimeDiagnostics.Info("metadata.load.ok", $"{prepared.Name} mode={mode}");
             }
 
             Hotc233RuntimeDiagnostics.Info("metadata.load.complete", $"count={count}");
@@ -131,18 +134,19 @@ namespace Hotc233
 
             foreach (var binary in binaries)
             {
-                if (binary.Bytes == null || binary.Bytes.Length == 0)
+                var prepared = PrepareBinary(binary);
+                if (prepared.Bytes == null || prepared.Bytes.Length == 0)
                 {
                     throw new ArgumentException($"Hot update binary is empty: {binary.Name}");
                 }
 
-                Hotc233RuntimeDiagnostics.Info("assembly.load.begin", Hotc233RuntimeDiagnostics.DescribeBinary(binary.Name, binary.Bytes));
-                var assembly = Assembly.Load(binary.Bytes);
+                Hotc233RuntimeDiagnostics.Info("assembly.load.begin", Hotc233RuntimeDiagnostics.DescribeBinary(prepared.Name, prepared.Bytes));
+                var assembly = Assembly.Load(prepared.Bytes);
                 assemblies.Add(assembly);
                 typeCache.Clear();
                 staticMethodCache.Clear();
                 staticDelegateCache.Clear();
-                Hotc233RuntimeDiagnostics.Info("assembly.load.ok", $"{assembly.GetName().Name} from {binary.Name}");
+                Hotc233RuntimeDiagnostics.Info("assembly.load.ok", $"{assembly.GetName().Name} from {prepared.Name}");
             }
 
             Hotc233RuntimeDiagnostics.Info(
@@ -152,6 +156,35 @@ namespace Hotc233
             PreJitLoadedAssembliesIfNeeded();
             Hotc233RuntimeDiagnostics.Info("assembly.load.complete", $"count={assemblies.Count}; names={string.Join(",", assemblies.Select(assembly => assembly.GetName().Name))}");
             return assemblies;
+        }
+
+        public IReadOnlyList<Assembly> ReloadHotUpdateAssemblies(IEnumerable<NamedBinary> binaries)
+        {
+            assemblies.Clear();
+            typeCache.Clear();
+            staticMethodCache.Clear();
+            staticDelegateCache.Clear();
+            Hotc233RuntimeDiagnostics.Info("assembly.reload.begin", "cleared loader assembly resolution caches");
+            return LoadHotUpdateAssemblies(binaries);
+        }
+
+        public Assembly ReplaceHotUpdateAssembly(NamedBinary binary)
+        {
+            var prepared = PrepareBinary(binary);
+            if (prepared.Bytes == null || prepared.Bytes.Length == 0)
+            {
+                throw new ArgumentException($"Hotfix binary is empty: {prepared.Name}");
+            }
+
+            var assembly = Assembly.Load(prepared.Bytes);
+            string assemblyName = assembly.GetName().Name;
+            assemblies.RemoveAll(item => string.Equals(item.GetName().Name, assemblyName, StringComparison.Ordinal));
+            assemblies.Insert(0, assembly);
+            typeCache.Clear();
+            staticMethodCache.Clear();
+            staticDelegateCache.Clear();
+            Hotc233RuntimeDiagnostics.Info("assembly.hotfix.replace", $"{assemblyName} from {prepared.Name}; old Assembly objects remain loaded by CLR but hotc233 resolution now prefers the replacement");
+            return assembly;
         }
 
         public void ApplyPerformanceDefaultsIfNeeded()
@@ -336,6 +369,11 @@ namespace Hotc233
             }
 
             return type;
+        }
+
+        private NamedBinary PrepareBinary(NamedBinary binary)
+        {
+            return (LoadPolicy ?? Hotc233LoadPolicy.None).Apply(binary);
         }
 
         private static void SetRuntimeOptionAtLeast(RuntimeOptionId optionId, int minValue)

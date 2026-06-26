@@ -2,7 +2,8 @@
   "name": "com.neko233.hotc233-unity",
   "version": "1.0.0",
   "displayName": "hotc233-unity",
-  "description": "hotc233-unity is a single-repository native C# hot update solution for Unity 2022 and Tuanjie Engine 1.8.0+. Single package, bundled libil2cpp, no extra package installation required.",
+  "description": "hotc233-unity is a single-repository native C# hot update solution for Unity/Tuanjie 2022+. Single package, bundled libil2cpp, no extra package installation required.",
+  "unity": "2022.3",
   "category": "Scripting",
   "keywords": [
     "hotc233-unity",

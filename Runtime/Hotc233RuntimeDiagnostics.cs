@@ -50,6 +50,21 @@ namespace Hotc233
             return $"{name} bytes={bytes.Length} sha256={Sha256Short(bytes)}";
         }
 
+        public static string Sha256Hex(byte[] bytes)
+        {
+            using (var sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(bytes ?? Array.Empty<byte>());
+                var sb = new StringBuilder(hash.Length * 2);
+                for (int i = 0; i < hash.Length; i++)
+                {
+                    sb.Append(hash[i].ToString("x2"));
+                }
+
+                return sb.ToString();
+            }
+        }
+
         public static string DescribeException(Exception exception, string stage = null)
         {
             var sb = new StringBuilder();
@@ -112,17 +127,8 @@ namespace Hotc233
 
         private static string Sha256Short(byte[] bytes)
         {
-            using (var sha = SHA256.Create())
-            {
-                byte[] hash = sha.ComputeHash(bytes);
-                var sb = new StringBuilder(16);
-                for (int i = 0; i < 8 && i < hash.Length; i++)
-                {
-                    sb.Append(hash[i].ToString("x2"));
-                }
-
-                return sb.ToString();
-            }
+            string hex = Sha256Hex(bytes);
+            return hex.Length <= 16 ? hex : hex.Substring(0, 16);
         }
     }
 }

@@ -61,6 +61,37 @@ namespace Hotc233.Editor.Settings
         [Tooltip("扫描 MethodBridge 泛型引用时的最大迭代次数")]
         public int maxMethodBridgeGenericIteration = 10;
 
+        [Header("Unity 2022+ Business Compatibility")]
+        [Tooltip("启用完全泛型共享兼容路径。hotc233-unity 最低支持 Unity/Tuanjie 2022+。")]
+        public bool enableFullGenericSharing = true;
+
+        [Tooltip("启用元数据优化与完整性校验配置。WebGL/minigame 建议保持开启。")]
+        public bool enableMetadataOptimization = true;
+
+        [Tooltip("启用 RuntimeFast 标准解释优化。性能对比必须使用 RuntimeFast。")]
+        public bool enableStandardInterpreterOptimization = true;
+
+        [Tooltip("启用离线指令优化产物，用于生成合成 IR 与解释器快路径。")]
+        public bool enableOfflineInstructionOptimization = true;
+
+        [Tooltip("启用 Hotfix 动态热修复入口。运行时通过 HotUpdateBinaryLoader.ReplaceHotUpdateAssembly 应用。")]
+        public bool enableHotfix = true;
+
+        [Tooltip("启用热重载工作流入口。运行时通过 HotUpdateBinaryLoader.ReloadHotUpdateAssemblies 应用。")]
+        public bool enableHotReloadWorkflow = true;
+
+        [Tooltip("启用热更 payload 加密/完整性校验策略。具体解密由 Hotc233LoadPolicy 提供。")]
+        public bool enableCodeProtection = true;
+
+        [Tooltip("启用热更 payload 访问控制策略。具体白名单或签名校验由 Hotc233LoadPolicy 提供。")]
+        public bool enableAccessControl = true;
+
+        [Tooltip("代码保护使用的默认密钥标识。不要在仓库中提交真实生产密钥。")]
+        public string payloadProtectionKeyId = "dev-hotc233-key";
+
+        [Tooltip("热更 payload manifest 默认路径")]
+        public string payloadManifestPath = "Assets/StreamingAssets/Hotc233Probe/Payload/payload-manifest.json";
+
         private static Hotc233Settings s_Instance;
 
         public static Hotc233Settings Instance

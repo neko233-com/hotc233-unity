@@ -21,6 +21,16 @@ namespace Hotc233.Editor.Settings
         private SerializedProperty _outputAOTGenericReferenceFile;
         private SerializedProperty _maxGenericReferenceIteration;
         private SerializedProperty _maxMethodBridgeGenericIteration;
+        private SerializedProperty _enableFullGenericSharing;
+        private SerializedProperty _enableMetadataOptimization;
+        private SerializedProperty _enableStandardInterpreterOptimization;
+        private SerializedProperty _enableOfflineInstructionOptimization;
+        private SerializedProperty _enableHotfix;
+        private SerializedProperty _enableHotReloadWorkflow;
+        private SerializedProperty _enableCodeProtection;
+        private SerializedProperty _enableAccessControl;
+        private SerializedProperty _payloadProtectionKeyId;
+        private SerializedProperty _payloadManifestPath;
 
         public Hotc233SettingProvider() : base("Project/Hotc233 Settings", SettingsScope.Project) { }
 
@@ -48,6 +58,16 @@ namespace Hotc233.Editor.Settings
             _outputAOTGenericReferenceFile = _serializedObject.FindProperty("outputAOTGenericReferenceFile");
             _maxGenericReferenceIteration = _serializedObject.FindProperty("maxGenericReferenceIteration");
             _maxMethodBridgeGenericIteration = _serializedObject.FindProperty("maxMethodBridgeGenericIteration");
+            _enableFullGenericSharing = _serializedObject.FindProperty("enableFullGenericSharing");
+            _enableMetadataOptimization = _serializedObject.FindProperty("enableMetadataOptimization");
+            _enableStandardInterpreterOptimization = _serializedObject.FindProperty("enableStandardInterpreterOptimization");
+            _enableOfflineInstructionOptimization = _serializedObject.FindProperty("enableOfflineInstructionOptimization");
+            _enableHotfix = _serializedObject.FindProperty("enableHotfix");
+            _enableHotReloadWorkflow = _serializedObject.FindProperty("enableHotReloadWorkflow");
+            _enableCodeProtection = _serializedObject.FindProperty("enableCodeProtection");
+            _enableAccessControl = _serializedObject.FindProperty("enableAccessControl");
+            _payloadProtectionKeyId = _serializedObject.FindProperty("payloadProtectionKeyId");
+            _payloadManifestPath = _serializedObject.FindProperty("payloadManifestPath");
         }
 
         public override void OnGUI(string searchContext)
@@ -72,6 +92,18 @@ namespace Hotc233.Editor.Settings
             EditorGUILayout.PropertyField(_outputAOTGenericReferenceFile);
             EditorGUILayout.PropertyField(_maxGenericReferenceIteration);
             EditorGUILayout.PropertyField(_maxMethodBridgeGenericIteration);
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Unity 2022+ Business Compatibility", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(_enableFullGenericSharing);
+            EditorGUILayout.PropertyField(_enableMetadataOptimization);
+            EditorGUILayout.PropertyField(_enableStandardInterpreterOptimization);
+            EditorGUILayout.PropertyField(_enableOfflineInstructionOptimization);
+            EditorGUILayout.PropertyField(_enableHotfix);
+            EditorGUILayout.PropertyField(_enableHotReloadWorkflow);
+            EditorGUILayout.PropertyField(_enableCodeProtection);
+            EditorGUILayout.PropertyField(_enableAccessControl);
+            EditorGUILayout.PropertyField(_payloadProtectionKeyId);
+            EditorGUILayout.PropertyField(_payloadManifestPath);
             if (EditorGUI.EndChangeCheck())
             {
                 _serializedObject.ApplyModifiedProperties();

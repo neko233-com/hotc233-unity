@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">hotc233 logo</title>
+  <desc id="desc">A cyan h, lime fast-forward mark, and code brackets for Unity IL2CPP hot update.</desc>
+  <defs>
+    <linearGradient id="cyan" x1="116" y1="96" x2="312" y2="416" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="lime" x1="246" y1="152" x2="430" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#bef264"/>
+      <stop offset="1" stop-color="#22c55e"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.08 0 0 0 0 0.78 0 0 0 0 0.72 0 0 0 .45 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <path d="M112 154c0-23 19-42 42-42s42 19 42 42v68h44c64 0 116 52 116 116v20c0 23-19 42-42 42s-42-19-42-42v-20c0-18-14-32-32-32h-44v52c0 23-19 42-42 42s-42-19-42-42V154z" fill="url(#cyan)" filter="url(#glow)"/>
+  <path d="M305 157c-15-12-36-1-36 18v162c0 19 21 30 36 18l92-72c18-14 18-41 0-55l-92-71z" fill="url(#lime)"/>
+  <path d="M365 157c-15-12-36-1-36 18v162c0 19 21 30 36 18l92-72c18-14 18-41 0-55l-92-71z" fill="#67e8f9" opacity=".78"/>
+  <path d="M94 215l-38 41 38 41" fill="none" stroke="#e2e8f0" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M418 215l38 41-38 41" fill="none" stroke="#e2e8f0" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

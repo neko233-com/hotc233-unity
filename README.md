@@ -23,6 +23,28 @@ https://neko233-com.github.io/hotc233-unity/
 - 外部自动化工具统一使用 Go 1.26。
 - 使用包内 `Data~/Libil2cpp`，不需要 HybridCLR 式外部 install。
 
+## Unity 2022+ 商业能力兼容
+
+hotc233-unity 只维护 Unity / Tuanjie 2022+ 作为最低支持线。对标 HybridCLR 专业版时，DHE 明确不在当前范围内；其余商业版常见能力都提供 hotc233 对应入口：
+
+| 能力 | hotc233-unity 支持入口 |
+|------|------------------------|
+| 完全泛型共享 | `enableFullGenericSharing`、`Data~/Libil2cpp/2022-tuanjie/metadata/GenericSharing.*`、AOT 泛型引用分析 |
+| 元数据优化 | AOT metadata 裁剪、`LoadRuntimeMetadata`、`Hotc233LoadPolicy.RequireSha256` |
+| 标准解释优化 | `HotUpdatePerformanceProfile.RuntimeFast`、离线 IR 合成、解释器快路径 |
+| Hotfix 动态热修复 | `HotUpdateBinaryLoader.ReplaceHotUpdateAssembly` |
+| 热重载工作流 | `HotUpdateBinaryLoader.ReloadHotUpdateAssemblies` |
+| 代码加密 / 加固 | `Hotc233LoadPolicy.DecryptBinary`、`CreateXorProtected`、完整性校验 |
+| Assembly.Load 加载优化 | 本地 payload manifest、StreamingAssets 原始 `.dll.bytes`、loader cache |
+| 解释器栈崩溃日志 | `Hotc233RuntimeDiagnostics` session / recent events / exception context |
+| 访问控制策略 | `Hotc233LoadPolicy.AllowOnly`、`AccessValidator` |
+
+GitHub Pages 文档采用商业能力左侧目录布局，入口为：
+
+```text
+https://neko233-com.github.io/hotc233-unity/
+```
+
 ## 目录
 
 ```text
@@ -60,6 +82,23 @@ var result = loader.InvokeStatic(
 
 `metadataBinaries` 和 `hotUpdateBinaries` 都是 `IEnumerable<NamedBinary>`。调用方负责从本地文件、远端 CDN、AssetBundle 或资源系统拿到 `byte[]`。
 `HotUpdateBinaryLoader` 会通过 `Hotc233RuntimeDiagnostics` 打印 session、平台、二进制大小、短 hash、程序集名和入口调用结果，真机失败时优先看这些日志。重复调用 `InvokeStatic` 时会复用已解析的 Type / MethodInfo。业务热更代码不需要为了 hotc233 写 bridge、强类型入口委托或特殊批处理；入口缓存、profile 选择和性能基准都属于宿主基础设施职责。
+
+代码加密、完整性校验、访问控制和 hotfix 可以通过同一个 loader 接入：
+
+```csharp
+var policy = Hotc233LoadPolicy.CreateXorProtected("dev-key")
+    .RequireSha256("HotUpdateDlls/Feature_HotUpdate.dll.bytes", expectedSha256);
+policy.EnableAccessControl = true;
+policy.AllowedBinaryNames.Add("HotUpdateDlls/Feature_HotUpdate.dll.bytes");
+
+var loader = new HotUpdateBinaryLoader
+{
+    LoadPolicy = policy,
+};
+
+loader.LoadHotUpdateAssemblies(hotUpdateBinaries);
+loader.ReplaceHotUpdateAssembly(new NamedBinary("HotUpdateDlls/Feature_HotUpdate.dll.bytes", hotfixBytes));
+```
 
 可选 loader profile：
 
