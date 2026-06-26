@@ -352,6 +352,7 @@ namespace interpreter
 		CallInterp_void,
 		CallInterpStatic_void,
 		CallInterp_ret,
+		CallInterpStatic_ret,
 		CallVirtual_void,
 		CallVirtual_ret,
 		CallVirtual_ret_expand,
@@ -978,6 +979,7 @@ namespace interpreter
 		BinOpVarVarVar_Rem_i4_BranchTrueVar_i4,
 		LdlocVarVar_LdlocVarVar_LdlocVarVar,
 		SetArrayElementVarVar_size_28_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar,
+		ConvertVarVar_i4_u1_SetArrayElementVarVar_i1,
 		LdlocVarVar_LdfldValueTypeVarVar_i4,
 		LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4,
 		BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4,
@@ -4040,6 +4042,19 @@ namespace interpreter
 		uint8_t __pad7;
 		uint32_t methodInfo;
 		uint8_t isInstanceMethod;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRCallInterpStatic_ret : IRCommon
+	{
+		uint16_t argBase;
+		uint16_t ret;
+		uint8_t __pad6;
+		uint8_t __pad7;
+		uint32_t methodInfo;
+		uint8_t __pad12;
 		uint8_t __pad13;
 		uint8_t __pad14;
 		uint8_t __pad15;
@@ -11200,6 +11215,20 @@ namespace interpreter
 		uint16_t copySrc2;
 		uint8_t __pad30;
 		uint8_t __pad31;
+	};
+
+	struct IRConvertVarVar_i4_u1_SetArrayElementVarVar_i1 : IRCommon
+	{
+		uint16_t convertDst;
+		uint16_t convertSrc;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
 	};
 
 	struct IRLdlocVarVar_LdfldValueTypeVarVar_i4 : IRCommon

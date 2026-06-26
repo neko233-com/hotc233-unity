@@ -25,7 +25,7 @@ https://neko233-com.github.io/hotc233-unity/
 
 ## Unity 2022+ 商业能力兼容
 
-hotc233-unity 只维护 Unity / Tuanjie 2022+ 作为最低支持线。对标 HybridCLR 专业版时，DHE 明确不在当前范围内；其余商业版常见能力都提供 hotc233 对应入口：
+hotc233-unity 只维护 Unity / Tuanjie 2022+ 作为最低支持线，不为 2021 及更早版本保留 legacy 分支。对标 HybridCLR 专业版时，DHE 明确不在当前范围内；其余商业版常见能力都提供 hotc233 对应入口：
 
 | 能力 | hotc233-unity 支持入口 |
 |------|------------------------|
@@ -428,6 +428,8 @@ hotc233/EditorForBuild/Run Performance Comparison Baselines
 
 HybridCLR 专业版列不是本地官方包实测，而是按 HybridCLR 官方性能页换算的目标区间：专业/商业版纯解释器约为原生 AOT 的 `7.8% ~ 76.9%`。该目标不依赖 DHE，也不允许通过把大量热更逻辑预置进首包 AOT 来换性能。
 
+性能套件必须覆盖机制成本、游戏业务热循环和 WebGL/minigame 内存风险。当前固定包含 `game-low-gc-frame` 与 `game-memory-stability`：前者要求热循环 `gc0=0,gc1=0,gc2=0`，后者在预分配战斗、配置和序列化缓冲区上记录 `heapBefore`、`heapAfterFullCollect` 和 `retainedDelta`。`validate-reports` 与 `headless` 会读取 PC hotc233、PC 原生 IL2CPP、WebGL hotc233、WebGL 原生 IL2CPP 的原始 JSON，强制 `retainedDelta <= 65536` bytes。
+
 专业版能力完成度、社区版粗推区间和逐项差距见 `docs/hybridclr-gap-analysis.md`。
 
 输出：
@@ -442,6 +444,8 @@ Assets/EditorForBuild/Generated/performance-comparison-report.json
 Assets/EditorForBuild/Generated/performance-minigame-local-il2cpp.md
 Assets/EditorForBuild/Generated/performance-minigame-local-il2cpp.html
 Assets/EditorForBuild/Generated/minigame-runtimefast-health.md
+Assets/EditorForBuild/Generated/headless-performance-gate.md
+Assets/EditorForBuild/Generated/headless-performance-gate.html
 ```
 
 `performance-comparison-report.md` 按 HybridCLR 风格显示比例：原生 IL2CPP ops/s 固定为 **100%**，hotc233 与原生 Mono 都用 `自身 ops/s / 原生 IL2CPP ops/s * 100%` 量化；HybridCLR 专业版列显示官方目标区间。不要用 Editor 安全模式的 `performance-report.json` 冒充这个对比表。
@@ -468,8 +472,8 @@ go run ./hotc233ctl validate-reports -project D:\Code\neko233-Projects\unity-hot
 - `health`: 检查 RuntimeFast、官方 HybridCLR 包禁用、微信小游戏 slim/fbslim 关闭。
 - `apply-health`: 一键设置 RuntimeFast + minigame 热更安全选项。
 - `minigame`: 生成 AssetLib233 + minigame(WebGL2) 本地 IL2CPP 性能对比表。
-- `validate-reports`: 不启动 Unity，只读校验 RuntimeFast 性能表、minigame 健康报告、manifest/lock 和 slim 设置。
-- `headless`: 不启动 Unity/Tuanjie，先跑 Go 编译/测试、报告结构、指令表、RuntimeFast/minigame、HybridCLR 适配层和 benchmark 覆盖门禁，输出 `headless-performance-gate.json/.md/.html`。
+- `validate-reports`: 不启动 Unity，只读校验 RuntimeFast 性能表、minigame 健康报告、manifest/lock、slim 设置、低 GC 帧循环和内存稳定哨兵。
+- `headless`: 不启动 Unity/Tuanjie，先跑 Go 编译/测试、报告结构、指令表、RuntimeFast/minigame、HybridCLR 适配层、benchmark 覆盖、GC/retained heap 门禁，输出 `headless-performance-gate.json/.md/.html`。
 - `import-hybridclr-settings`: 从旧 `ProjectSettings/HybridCLRSettings.asset` 导入配置。
 - `all`: 先 `build`，再 `player`，最后 `device`。
 

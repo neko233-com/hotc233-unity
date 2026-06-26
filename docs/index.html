@@ -318,7 +318,7 @@
         <div class="grid">
           <article class="card">
             <h3>低内存优先</h3>
-            <p>面向 WebGL/minigame，默认使用 RuntimeFast、原始 .dll.bytes payload、metadata 完整性校验和低 GC 热路径报告。</p>
+            <p>面向 WebGL/minigame，默认使用 RuntimeFast、原始 .dll.bytes payload、metadata 完整性校验、低 GC 热路径和 retained heap 哨兵。</p>
           </article>
           <article class="card">
             <h3>HybridCLR 习惯兼容</h3>
@@ -374,7 +374,7 @@ loader.LoadRuntimeMetadata(metadataBytes, HomologousImageMode.SuperSet);</code><
 
       <section id="interpreter">
         <h2>标准解释优化与离线指令优化</h2>
-        <p>性能测试必须使用 RuntimeFast。当前 PC IL2CPP 报告包含 18 个 benchmark，其中 10 个是游戏业务热循环；低 GC 帧循环会输出 `gc0=0,gc1=0,gc2=0`。解释器侧继续优先做稳定快路径、delegate 调用、序列化写入和结构体数组循环优化。</p>
+        <p>性能测试必须使用 RuntimeFast。当前 PC/WebGL IL2CPP 报告包含机制成本、游戏业务热循环、低 GC 帧循环和内存稳定哨兵；`headless` 与 `validate-reports` 会强制读取原始 JSON，要求 `game-low-gc-frame` 与 `game-memory-stability` 都保持 `gc0=0,gc1=0,gc2=0`，并要求 retained heap delta 不超过 64KB。</p>
         <p>专业版能力完成度、社区版粗推区间和逐项差距见 <a href="hybridclr-gap-analysis.md">HybridCLR 差距说明</a>。</p>
         <pre><code>go run ./tools/hotc233ctl headless -project . -loader-profile RuntimeFast
 go run ./tools/hotc233ctl perf -project . -loader-profile RuntimeFast
@@ -431,13 +431,13 @@ hotc233/HybridCLR Compatibility/Import HybridCLR Settings</code></pre>
 
       <section id="verify">
         <h2>性能验证</h2>
-        <p>推荐先跑 headless 缩短周期，通过后再跑真正的 IL2CPP Player。最终结论只看 Player 报告，不看 Editor 或普通 .NET microbenchmark。</p>
+        <p>当前只把 WebGL/minigame 作为性能验收平台。报告直接加载产出的 .dll.bytes / RuntimeMetadata，不统计 Unity 打包、AssetLib233、YooAsset 或 HTTP 下载链路。</p>
         <table>
           <thead><tr><th>命令</th><th>用途</th><th>输出</th></tr></thead>
           <tbody>
-            <tr><td><code>hotc233ctl headless</code></td><td>不启动 Unity，验证覆盖、报告结构、RuntimeFast/minigame 守门。</td><td><code>headless-performance-gate.md/html/json</code></td></tr>
-            <tr><td><code>hotc233ctl perf</code></td><td>PC hotc-to-IL2CPP 三路性能对比。</td><td><code>performance-comparison-report.md/html/json</code></td></tr>
-            <tr><td><code>hotc233ctl webgl</code></td><td>WebGL/minigame 本地 IL2CPP 浏览器采集。</td><td><code>performance-webgl-local-il2cpp.md/html/json</code></td></tr>
+            <tr><td><code>hotc233ctl webgl</code></td><td>WebGL/minigame 本地 IL2CPP 直接 dll 性能采集，并与上一轮优化对比。</td><td><code>performance-webgl-local-il2cpp.md/html/json</code></td></tr>
+            <tr><td><code>hotc233ctl headless</code></td><td>不启动 Unity，验证 WebGL 报告结构、RuntimeFast/minigame 守门、GC/内存门禁。</td><td><code>headless-performance-gate.md/html/json</code></td></tr>
+            <tr><td><a href="webgl-performance.md"><code>docs/webgl-performance.md</code></a></td><td>中文说明：直接 dll 验证口径、HybridCLR 社区/Pro 对比和停止优化规则。</td><td>文档入口</td></tr>
           </tbody>
         </table>
       </section>

@@ -2998,11 +2998,20 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::LdindVarVar_i4:
+				HOTC233_EXEC_LdindVarVar_i4:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
 					(*(int32_t*)(localVarBase + __dst)) = (*(int32_t*)*(void**)(localVarBase + __src));
-				    ip += 8;
+					ip += 8;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdlocVarVar)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarVar_LdlocVarVar;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::LdindVarVar_u4:
@@ -3067,6 +3076,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
 						}
 						goto HOTC233_EXEC_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4;
+					}
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdlocVarVar)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarVar_LdlocVarVar;
 					}
 				    continue;
 				}
@@ -4285,6 +4302,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 						goto HOTC233_EXEC_CallDelegateInvoke_void;
 					}
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::RetVar_ret_4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						__ret = *(uint16_t*)(ip + 2);
+						SET_RET_AND_LEAVE_FRAME(4, 8);
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar:
@@ -4305,6 +4331,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
 						}
 						goto HOTC233_EXEC_LdlocVarVar;
+					}
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::RetVar_ret_4)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						uint16_t __ret = *(uint16_t*)(ip + 2);
+						SET_RET_AND_LEAVE_FRAME(4, 8);
 					}
 				    continue;
 				}
@@ -5313,7 +5348,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __value = *(uint16_t*)(ip + 4);
 					uint16_t __shiftAmount = *(uint16_t*)(ip + 6);
 					(*(int32_t*)(localVarBase + __ret)) = (*(int32_t*)(localVarBase + __value)) >> (*(int32_t*)(localVarBase + __shiftAmount));
-				    ip += 8;
+					ip += 8;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::ConvertVarVar_i4_u1_SetArrayElementVarVar_i1)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_ConvertVarVar_i4_u1_SetArrayElementVarVar_i1;
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::BitShiftBinOpVarVarVar_ShrUn_i4_i4:
@@ -6721,6 +6764,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					{
 						CHECK_NOT_NULL_THROW((localVarBase + __argBase)->obj);
 					}
+					CALL_INTERP_RET((ip + 16), __methodInfo, (StackObject*)(void*)(localVarBase + __argBase), (void*)(localVarBase + __ret));
+				    continue;
+				}
+				case HiOpcodeEnum::CallInterpStatic_ret:
+				{
+					MethodInfo* __methodInfo = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
+					uint16_t __argBase = *(uint16_t*)(ip + 2);
+					uint16_t __ret = *(uint16_t*)(ip + 4);
 					CALL_INTERP_RET((ip + 16), __methodInfo, (StackObject*)(void*)(localVarBase + __argBase), (void*)(localVarBase + __ret));
 				    continue;
 				}
@@ -14253,6 +14304,29 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
 						}
 						goto HOTC233_EXEC_LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4;
+				    }
+				    continue;
+				}
+				case HiOpcodeEnum::ConvertVarVar_i4_u1_SetArrayElementVarVar_i1:
+				HOTC233_EXEC_ConvertVarVar_i4_u1_SetArrayElementVarVar_i1:
+				{
+					uint16_t __convertDst = *(uint16_t*)(ip + 2);
+					uint16_t __convertSrc = *(uint16_t*)(ip + 4);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 6);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 8);
+					int32_t _converted = (uint8_t)(uint32_t)((*(int32_t*)(localVarBase + __convertSrc)));
+					(*(int32_t*)(localVarBase + __convertDst)) = _converted;
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    SetArrayElementFast<int8_t>(_arr, _index, (int8_t)_converted);
+					ip += 16;
+					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar)
+					{
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarVar_LdlocVarVar_LdlocVarVar;
 					}
 				    continue;
 				}

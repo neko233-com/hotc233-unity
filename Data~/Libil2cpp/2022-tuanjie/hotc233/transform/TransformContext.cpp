@@ -1742,6 +1742,22 @@ namespace transform
 				if (readIdx + 1 < insts.size())
 				{
 					IRCommon* next = insts[readIdx + 1];
+					if (ir->type == HiOpcodeEnum::ConvertVarVar_i4_u1 && next->type == HiOpcodeEnum::SetArrayElementVarVar_i1)
+					{
+						IRConvertVarVar_i4_u1* convert = (IRConvertVarVar_i4_u1*)ir;
+						IRSetArrayElementVarVar_i1* store = (IRSetArrayElementVarVar_i1*)next;
+						if (store->ele == convert->dst)
+						{
+							CreateIR(fused, ConvertVarVar_i4_u1_SetArrayElementVarVar_i1);
+							fused->convertDst = convert->dst;
+							fused->convertSrc = convert->src;
+							fused->arraySrc = store->arr;
+							fused->indexSrc = store->index;
+							insts[writeIdx++] = fused;
+							readIdx++;
+							continue;
+						}
+					}
 					if (readIdx + 4 < insts.size() && ir->type == HiOpcodeEnum::SetArrayElementVarVar_size_28 && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 3]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && insts[readIdx + 4]->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(insts[readIdx + 4]))
 					{
 						IRSetArrayElementVarVar_size_12* store = (IRSetArrayElementVarVar_size_12*)ir;
@@ -5792,21 +5808,33 @@ else \
 							if (resolvedIsInstanceMethod)
 							{
 								CreateAddIR(ir, CallInterp_void);
+								ir->methodInfo = methodDataIndex;
+								ir->argBase = argBaseOffset;
 							}
 							else
 							{
 								CreateAddIR(ir, CallInterpStatic_void);
+								ir->methodInfo = methodDataIndex;
+								ir->argBase = argBaseOffset;
 							}
-							ir->methodInfo = methodDataIndex;
-							ir->argBase = argBaseOffset;
 						}
 						else
 						{
-							CreateAddIR(ir, CallInterp_ret);
-							ir->methodInfo = methodDataIndex;
-							ir->argBase = argBaseOffset;
-							ir->ret = argBaseOffset;
-							ir->isInstanceMethod = resolvedIsInstanceMethod ? 1 : 0;
+							if (resolvedIsInstanceMethod)
+							{
+								CreateAddIR(ir, CallInterp_ret);
+								ir->isInstanceMethod = 1;
+								ir->methodInfo = methodDataIndex;
+								ir->argBase = argBaseOffset;
+								ir->ret = argBaseOffset;
+							}
+							else
+							{
+								CreateAddIR(ir, CallInterpStatic_ret);
+								ir->methodInfo = methodDataIndex;
+								ir->argBase = argBaseOffset;
+								ir->ret = argBaseOffset;
+							}
 						}
 					}
 					PopStackN(resolvedTotalArgNum);
