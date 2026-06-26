@@ -2503,6 +2503,27 @@ namespace transform
 							continue;
 						}
 					}
+					if (readIdx + 2 < insts.size()
+						&& ir->type == HiOpcodeEnum::GetArrayElementVarVar_i4
+						&& next->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4
+						&& insts[readIdx + 2]->type == HiOpcodeEnum::SetArrayElementVarVar_i4)
+					{
+						IRGetArrayElementVarVar_i4* load = (IRGetArrayElementVarVar_i4*)ir;
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)next;
+						IRSetArrayElementVarVar_i4* store = (IRSetArrayElementVarVar_i4*)insts[readIdx + 2];
+						if (store->ele == add->ret && add->op1 == load->dst)
+						{
+							CreateIR(fused, GetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4);
+							fused->loadArraySrc = load->arr;
+							fused->loadIndexSrc = load->index;
+							fused->addValueSrc = add->op2;
+							fused->storeArraySrc = store->arr;
+							fused->storeIndexSrc = store->index;
+							insts[writeIdx++] = fused;
+							readIdx += 2;
+							continue;
+						}
+					}
 					if (readIdx + 3 < insts.size()
 						&& ir->type == HiOpcodeEnum::GetArrayElementVarVar_i4
 						&& next->type == HiOpcodeEnum::LdlocVarVar
@@ -5106,6 +5127,7 @@ namespace transform
 				insts[writeIdx++] = ir;
 			}
 			insts.resize(writeIdx);
+			FoldRunArrayI4IncrementTrace(insts);
 			std::vector<IRCommon*> traceOutput;
 			traceOutput.reserve(insts.size());
 			for (size_t readIdx = 0; readIdx < insts.size();)
@@ -5120,7 +5142,7 @@ namespace transform
 					{
 						runLength++;
 					}
-					if (runLength >= 4)
+					if (runLength >= 3)
 					{
 						int32_t traceDataIndex = 0;
 						uint64_t* traceData = nullptr;
@@ -5299,7 +5321,165 @@ namespace transform
 			RecordTypedRegisterCoverage(insts);
 			LowerTypedRegisterI32(insts);
 			FoldRegI32NumericTrace(insts);
+			FoldRegI32AddCopyTrace(insts);
 		}
+	}
+
+	void TransformContext::FoldRunArrayI4IncrementTrace(std::vector<IRCommon*>& insts)
+	{
+		const size_t kMinRunLength = 4;
+		std::vector<IRCommon*> folded;
+		folded.reserve(insts.size());
+		for (size_t readIdx = 0; readIdx < insts.size();)
+		{
+			IRCommon* ir = insts[readIdx];
+			if (ir->type != HiOpcodeEnum::GetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+			size_t scanIdx = readIdx;
+			size_t runLength = 0;
+			while (scanIdx < insts.size()
+				&& insts[scanIdx]->type == HiOpcodeEnum::GetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4)
+			{
+				runLength++;
+				scanIdx++;
+			}
+			if (runLength < kMinRunLength)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+			int32_t traceDataIndex = 0;
+			uint64_t* traceData = nullptr;
+			AllocResolvedData(resolveDatas, (int32_t)runLength * 2, traceDataIndex, traceData);
+			for (size_t step = 0; step < runLength; step++)
+			{
+				IRGetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4* fused =
+					(IRGetArrayElementVarVar_i4_LdlocVarVar_BinOpAdd_i4_SetArrayElementVarVar_i4*)insts[readIdx + step];
+				traceData[step * 2] =
+					((uint64_t)fused->loadArraySrc) |
+					((uint64_t)fused->loadIndexSrc << 16) |
+					((uint64_t)fused->addValueSrc << 32) |
+					((uint64_t)fused->storeArraySrc << 48);
+				traceData[step * 2 + 1] = fused->storeIndexSrc;
+			}
+			CreateIR(trace, RunArrayI4IncrementTrace);
+			trace->stepCount = (uint16_t)runLength;
+			trace->traceData = (uint32_t)traceDataIndex;
+			folded.push_back(trace);
+			readIdx = scanIdx;
+		}
+		insts.swap(folded);
+	}
+
+	void TransformContext::FoldRegI32AddCopyTrace(std::vector<IRCommon*>& insts)
+	{
+		const size_t kMinRunLength = 3;
+		std::vector<IRCommon*> folded;
+		folded.reserve(insts.size());
+		for (size_t readIdx = 0; readIdx < insts.size();)
+		{
+			if (insts[readIdx]->type != HiOpcodeEnum::RegI32Add)
+			{
+				folded.push_back(insts[readIdx]);
+				readIdx++;
+				continue;
+			}
+			size_t groupStart = readIdx;
+			size_t groupCount = 0;
+			size_t scanIdx = readIdx;
+			while (scanIdx < insts.size() && insts[scanIdx]->type == HiOpcodeEnum::RegI32Add)
+			{
+				scanIdx++;
+				size_t copyIdx = scanIdx;
+				uint8_t copyCount = 0;
+				while (copyIdx < insts.size()
+					&& copyCount < 3
+					&& insts[copyIdx]->type == HiOpcodeEnum::RegI32Copy)
+				{
+					IRRegI32Copy* copy = (IRRegI32Copy*)insts[copyIdx];
+					if (copy->dst == copy->src)
+					{
+						copyIdx++;
+						continue;
+					}
+					copyCount++;
+					copyIdx++;
+				}
+				scanIdx = copyIdx;
+				groupCount++;
+			}
+			if (groupCount < kMinRunLength)
+			{
+				folded.push_back(insts[readIdx]);
+				readIdx++;
+				continue;
+			}
+			int32_t traceDataIndex = 0;
+			uint64_t* traceData = nullptr;
+			AllocResolvedData(resolveDatas, (int32_t)groupCount * 3, traceDataIndex, traceData);
+			size_t writeStep = 0;
+			scanIdx = groupStart;
+			while (writeStep < groupCount)
+			{
+				IRRegI32Add* add = (IRRegI32Add*)insts[scanIdx++];
+				uint16_t copyDst1 = 0xffff;
+				uint16_t copySrc1 = 0;
+				uint16_t copyDst2 = 0xffff;
+				uint16_t copySrc2 = 0;
+				uint16_t copyDst3 = 0xffff;
+				uint16_t copySrc3 = 0;
+				uint8_t packedCopies = 0;
+				while (scanIdx < insts.size()
+					&& packedCopies < 3
+					&& insts[scanIdx]->type == HiOpcodeEnum::RegI32Copy)
+				{
+					IRRegI32Copy* copy = (IRRegI32Copy*)insts[scanIdx++];
+					if (copy->dst == copy->src)
+					{
+						continue;
+					}
+					if (packedCopies == 0)
+					{
+						copyDst1 = copy->dst;
+						copySrc1 = copy->src;
+					}
+					else if (packedCopies == 1)
+					{
+						copyDst2 = copy->dst;
+						copySrc2 = copy->src;
+					}
+					else
+					{
+						copyDst3 = copy->dst;
+						copySrc3 = copy->src;
+					}
+					packedCopies++;
+				}
+				traceData[writeStep * 3] =
+					((uint64_t)add->ret) |
+					((uint64_t)add->op1 << 16) |
+					((uint64_t)add->op2 << 32) |
+					((uint64_t)copyDst1 << 48);
+				traceData[writeStep * 3 + 1] =
+					((uint64_t)copySrc1) |
+					((uint64_t)copyDst2 << 16) |
+					((uint64_t)copySrc2 << 32) |
+					((uint64_t)copyDst3 << 48);
+				traceData[writeStep * 3 + 2] = copySrc3;
+				writeStep++;
+			}
+			CreateIR(trace, RunRegI32AddCopyTrace);
+			trace->stepCount = (uint16_t)groupCount;
+			trace->traceData = (uint32_t)traceDataIndex;
+			folded.push_back(trace);
+			readIdx = scanIdx;
+		}
+		insts.swap(folded);
 	}
 
 	uint32_t TransformContext::AllocResolveCacheSlot()
@@ -5312,7 +5492,7 @@ namespace transform
 
 	void TransformContext::FoldRegI32NumericTrace(std::vector<IRCommon*>& insts)
 	{
-		const size_t kMinRunLength = 4;
+		const size_t kMinRunLength = 3;
 		std::vector<IRCommon*> folded;
 		folded.reserve(insts.size());
 		for (size_t readIdx = 0; readIdx < insts.size();)

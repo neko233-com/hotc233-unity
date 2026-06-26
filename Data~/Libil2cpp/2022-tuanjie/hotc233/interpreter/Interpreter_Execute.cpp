@@ -9945,6 +9945,64 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::RunRegI32AddCopyTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
+					for (uint16_t __step = 0; __step < __stepCount; __step++)
+					{
+						uint64_t __word0 = __trace[__step * 3];
+						uint64_t __word1 = __trace[__step * 3 + 1];
+						uint64_t __word2 = __trace[__step * 3 + 2];
+						uint16_t __addRet = (uint16_t)__word0;
+						uint16_t __addOp1 = (uint16_t)(__word0 >> 16);
+						uint16_t __addOp2 = (uint16_t)(__word0 >> 32);
+						uint16_t __copyDst1 = (uint16_t)(__word0 >> 48);
+						uint16_t __copySrc1 = (uint16_t)__word1;
+						uint16_t __copyDst2 = (uint16_t)(__word1 >> 16);
+						uint16_t __copySrc2 = (uint16_t)(__word1 >> 32);
+						uint16_t __copyDst3 = (uint16_t)(__word1 >> 48);
+						uint16_t __copySrc3 = (uint16_t)__word2;
+						(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+						if (__copyDst1 != 0xffff)
+						{
+							(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+						}
+						if (__copyDst2 != 0xffff)
+						{
+							(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+						}
+						if (__copyDst3 != 0xffff)
+						{
+							(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+						}
+					}
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::RunArrayI4IncrementTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
+					for (uint16_t __step = 0; __step < __stepCount; __step++)
+					{
+						uint64_t __word0 = __trace[__step * 2];
+						uint64_t __word1 = __trace[__step * 2 + 1];
+						uint16_t __loadArr = (uint16_t)__word0;
+						uint16_t __loadIndex = (uint16_t)(__word0 >> 16);
+						uint16_t __addValue = (uint16_t)(__word0 >> 32);
+						uint16_t __storeArr = (uint16_t)(__word0 >> 48);
+						uint16_t __storeIndex = (uint16_t)__word1;
+						Il2CppArray* loadArr = (*(Il2CppArray**)(localVarBase + __loadArr));
+						int32_t loadIndex = (*(int32_t*)(localVarBase + __loadIndex));
+						int32_t value = *(int32_t*)GetCheckedArrayElementAddress(loadArr, loadIndex, 4);
+						Il2CppArray* storeArr = (*(Il2CppArray**)(localVarBase + __storeArr));
+						int32_t storeIndex = (*(int32_t*)(localVarBase + __storeIndex));
+						SetArrayElementFast<int32_t>(storeArr, storeIndex, value + (*(int32_t*)(localVarBase + __addValue)));
+					}
+				    ip += 8;
+				    continue;
+				}
 				case HiOpcodeEnum::CallCommonNativeStatic_f8_0:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 4);

@@ -172,6 +172,10 @@ namespace transform
 
 		void FoldRegI32NumericTrace(std::vector<interpreter::IRCommon*>& insts);
 
+		void FoldRegI32AddCopyTrace(std::vector<interpreter::IRCommon*>& insts);
+
+		void FoldRunArrayI4IncrementTrace(std::vector<interpreter::IRCommon*>& insts);
+
 		uint32_t AllocResolveCacheSlot();
 
 	public:

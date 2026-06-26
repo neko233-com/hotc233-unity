@@ -1036,6 +1036,8 @@ namespace interpreter
 		RunStaticI4CallTrace,
 		CallCommonNativeStatic_i4_0Cached,
 		RunRegI32NumericTrace,
+		RunRegI32AddCopyTrace,
+		RunArrayI4IncrementTrace,
 
 		//!!!}}OPCODE
 	};
@@ -12228,6 +12230,20 @@ namespace interpreter
 
 
 	struct IRRunRegI32NumericTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint32_t traceData;
+	};
+
+
+	struct IRRunRegI32AddCopyTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint32_t traceData;
+	};
+
+
+	struct IRRunArrayI4IncrementTrace : IRCommon
 	{
 		uint16_t stepCount;
 		uint32_t traceData;

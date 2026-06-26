@@ -430,15 +430,6 @@ default:\
 				return true;
 			}
 
-			if (actRet == ArgCommonType::I4)
-			{
-				CreateAddIR(ir, CallCommonNativeStatic_i4_0Cached);
-				ir->method = methodDataIndex;
-				ir->ret = argBaseOffset;
-				ir->thunkCache = AllocResolveCacheSlot();
-				return true;
-			}
-
 			CreateAddIR(ir, CallCommonNativeStatic_i1_0);
 			ir->method = methodDataIndex;
 			ir->ret = argBaseOffset;
@@ -462,6 +453,11 @@ default:\
 			case ArgCommonType::U2:
 			{
 				ir->type = HiOpcodeEnum::CallCommonNativeStatic_u2_0;
+				break;
+			}
+			case ArgCommonType::I4:
+			{
+				ir->type = HiOpcodeEnum::CallCommonNativeStatic_i4_0;
 				break;
 			}
 			case ArgCommonType::I8:

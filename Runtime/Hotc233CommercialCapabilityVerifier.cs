@@ -233,8 +233,10 @@ namespace Hotc233
                 && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext.cpp"), "RunStaticI4CallTrace")
                 && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "RunRegI32NumericTrace")
                 && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext.cpp"), "FoldRegI32NumericTrace")
-                && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "CallCommonNativeStatic_i4_0Cached")
-                && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext_CallCommon.cpp"), "CallCommonNativeStatic_i4_0Cached")
+                && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "RunRegI32AddCopyTrace")
+                && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext.cpp"), "FoldRegI32AddCopyTrace")
+                && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "RunArrayI4IncrementTrace")
+                && FileContains(Path.Combine(hotcRoot, "transform", "TransformContext.cpp"), "FoldRunArrayI4IncrementTrace")
                 && FileContains(Path.Combine(hotcRoot, "interpreter", "Interpreter_Execute.cpp"), "LdtokenTypeObjectVar");
         }
 

@@ -1052,6 +1052,8 @@ namespace interpreter
 		16,
 		12,
 		8,
+		8,
+		8,
 
         //!!!}}INST_SIZE
     };
