@@ -78,10 +78,20 @@
 
 - `HotUpdateBinaryLoader` 默认 profile 必须是 `RuntimeFast`；`RuntimeOptions` 只作为兼容别名。
 - demo 与自动化必须提供分组性能菜单，并且每次对比都写出性能表。
+- WebGL 与 PC 的性能验证必须优先使用 `StreamingAssets/Hotc233Probe/Payload/payload-manifest.json` 指向的原始 `.dll.bytes` 和 RuntimeMetadata bytes，避免把 AssetBundle、YooAsset 或 HTTP 下载耗时混入解释器性能表。
+- WebGL 本地 IL2CPP 对比必须生成 `performance-webgl-local-il2cpp.md/json`，并明确 hotc233、原生 WebGL IL2CPP、HybridCLR 专业版纯解释目标区间。
 - 微信小游戏/minigame(WebGL2) 热更必须关闭 `weixinMiniGameUseSlimMetaFileFormat` 和全部 `m_SlimFeaturesWeixinMiniGame`。
 - 只读报告守门必须能通过 `go run ./hotc233ctl validate-reports -project <demo>`，不得要求 Unity editor 路径或触发 batchmode。
 - 修改解释器 opcode 时，必须同步 `Instruction.h`、`Instruction.cpp`、`Interpreter_Execute.cpp`、transform 选择逻辑和宿主 `hotc233ctl validate-reports` 的指令表守门；RuntimeFast 热路径至少覆盖 `System.Math.Min/Max` signed int/long intrinsic 和 20/24/28/32 字节无引用 struct array store。
+- 超越 HybridCLR 专业版纯解释器的路线必须按稳定性优先推进：SSA、常量折叠、热路径 profiling、多核增量编译、低/无 GC 生成都需要先通过 WebGL/PC 回归和性能表，再扩大平台范围。
 - 修改 loader、性能菜单、AssetLib233/minigame 对接、报告字段或配置导入器时，同步更新 README、宿主 demo 文档、AGENTS 和 CI 守门。
+
+## 包结构与复制接入
+
+- `hotc233-unity` 必须保持可复制到任意宿主项目直接编译；不要依赖 `unity-hotc233-demo` 的 EditorForBuild、场景或生成目录。
+- 包内 asmdef 分层目标为 `Runtime`、`Editor`、`Plugin_xxx`：运行时代码只在 `Runtime`，编辑器生成/分析代码只在 `Editor`，第三方预编译依赖必须放在明确命名的 `Plugin_dnlib`、`Plugin_LZ4` 等目录。
+- 调整 `Plugin_xxx/` 时必须验证 `Hotc233.Editor.asmdef`、Unity plugin import settings、CI 和 package export；不得让 Runtime asmdef 引用 dnlib/LZ4。
+- 复制接入习惯必须贴近 HybridCLR 社区版：用户配置热更 asmdef、AOT metadata、执行 Generate/All、发布 `.dll.bytes`，但不要求执行外部 install。
 
 ## 修改守则
 

@@ -1683,13 +1683,2502 @@ namespace transform
 		return false;
 	}
 
+	static bool IsNoOpTransformInstruction(IRCommon* ir)
+	{
+		if (ir->type == HiOpcodeEnum::LdlocVarVar)
+		{
+			IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+			return copy->dst == copy->src;
+		}
+		if (ir->type == HiOpcodeEnum::LdlocVarVarSize)
+		{
+			IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)ir;
+			return copy->dst == copy->src;
+		}
+		switch (ir->type)
+		{
+		case HiOpcodeEnum::ConvertVarVar_i4_i4:
+		case HiOpcodeEnum::ConvertVarVar_u4_u4:
+		case HiOpcodeEnum::ConvertVarVar_i8_i8:
+		case HiOpcodeEnum::ConvertVarVar_u8_u8:
+		case HiOpcodeEnum::ConvertVarVar_f4_f4:
+		case HiOpcodeEnum::ConvertVarVar_f8_f8:
+		{
+			IRConvertVarVar_i4_i4* conv = (IRConvertVarVar_i4_i4*)ir;
+			return conv->dst == conv->src;
+		}
+		default:
+			return false;
+		}
+	}
+
 	void TransformContext::AddInst(IRCommon* ir)
 	{
 		IL2CPP_ASSERT(ir->type != HiOpcodeEnum::None);
+		if (IsNoOpTransformInstruction(ir))
+		{
+			return;
+		}
 		curbb->insts.push_back(ir);
 		if (ir2offsetMap)
 		{
 			ir2offsetMap->insert({ ir, ipOffset });
+		}
+	}
+
+	void TransformContext::OptimizeBasicBlocks()
+	{
+		for (IRBasicBlock* bb : irbbs)
+		{
+			std::vector<IRCommon*>& insts = bb->insts;
+			size_t writeIdx = 0;
+			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (IsNoOpTransformInstruction(ir))
+				{
+					continue;
+				}
+				if (readIdx + 1 < insts.size())
+				{
+					IRCommon* next = insts[readIdx + 1];
+					if (readIdx + 4 < insts.size() && ir->type == HiOpcodeEnum::SetArrayElementVarVar_size_28 && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 3]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && insts[readIdx + 4]->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(insts[readIdx + 4]))
+					{
+						IRSetArrayElementVarVar_size_12* store = (IRSetArrayElementVarVar_size_12*)ir;
+						IRLdlocVarVar* copy1 = (IRLdlocVarVar*)next;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)insts[readIdx + 2];
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)insts[readIdx + 3];
+						IRLdlocVarVar* copy2 = (IRLdlocVarVar*)insts[readIdx + 4];
+						CreateIR(fused, SetArrayElementVarVar_size_28_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar);
+						fused->arraySrc = store->arr;
+						fused->indexSrc = store->index;
+						fused->elementSrc = store->ele;
+						fused->copyDst1 = copy1->dst;
+						fused->copySrc1 = copy1->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						fused->copyDst2 = copy2->dst;
+						fused->copySrc2 = copy2->src;
+						insts[writeIdx++] = fused;
+						readIdx += 4;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::BranchVarVar_CneUn_i4)
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRBranchVarVar_CneUn_i4* branch = (IRBranchVarVar_CneUn_i4*)next;
+						CreateIR(fused, LdlocVarVar_BranchVarVar_CneUn_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->branchOp1 = branch->op1;
+						fused->branchOp2 = branch->op2;
+						fused->offset = branch->offset;
+						relocationOffsets.push_back(&fused->offset);
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && !IsNoOpTransformInstruction(ir))
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdfldValueTypeVarVar_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->offset = field->offset;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4 && insts[readIdx + 2]->type == HiOpcodeEnum::StindVarVar_i4 && !IsNoOpTransformInstruction(ir))
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRBinOpVarVarVar_Sub_i4* sub = (IRBinOpVarVarVar_Sub_i4*)next;
+						IRStindVarVar_i4* store = (IRStindVarVar_i4*)insts[readIdx + 2];
+						if (store->src == sub->ret && store->dst != sub->ret)
+						{
+							CreateIR(fused, LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4);
+							fused->copyDst = copy->dst;
+							fused->copySrc = copy->src;
+							fused->subRet = sub->ret;
+							fused->subOp1 = sub->op1;
+							fused->subOp2 = sub->op2;
+							fused->storeAddress = store->dst;
+							insts[writeIdx++] = fused;
+							readIdx += 2;
+							continue;
+						}
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 2]->type == HiOpcodeEnum::BranchVarVar_Clt_i4)
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						IRBranchVarVar_Clt_i4* branch = (IRBranchVarVar_Clt_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4_BranchVarVar_Clt_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						fused->branchOp1 = branch->op1;
+						fused->branchOp2 = branch->op2;
+						fused->offset = branch->offset;
+						relocationOffsets.push_back(&fused->offset);
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && insts[readIdx + 3]->type == HiOpcodeEnum::LdlocVarVar)
+					{
+						IRLdlocVarVar* copy1 = (IRLdlocVarVar*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)insts[readIdx + 2];
+						IRLdlocVarVar* copy2 = (IRLdlocVarVar*)insts[readIdx + 3];
+						if (!IsNoOpTransformInstruction(copy2))
+						{
+							CreateIR(fused, LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar);
+							fused->copyDst1 = copy1->dst;
+							fused->copySrc1 = copy1->src;
+							fused->constDst = constant->dst;
+							fused->constant = constant->src;
+							fused->addRet = add->ret;
+							fused->addOp1 = add->op1;
+							fused->addOp2 = add->op2;
+							fused->copyDst2 = copy2->dst;
+							fused->copySrc2 = copy2->src;
+							insts[writeIdx++] = fused;
+							readIdx += 3;
+							continue;
+						}
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4)
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4_BinOpAdd_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Rem_i4)
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						IRBinOpVarVarVar_Rem_i4* rem = (IRBinOpVarVarVar_Rem_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4_BinOpRem_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						fused->remRet = rem->ret;
+						fused->remOp1 = rem->op1;
+						fused->remOp2 = rem->op2;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Mul_i4)
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						IRBinOpVarVarVar_Mul_i4* mul = (IRBinOpVarVarVar_Mul_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4_BinOpMul_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						fused->mulRet = mul->ret;
+						fused->mulOp1 = mul->op1;
+						fused->mulOp2 = mul->op2;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdcVarConst_4)
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && insts[readIdx + 2]->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 3]->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4* sub = (IRBinOpVarVarVar_Sub_i4*)ir;
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)next;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)insts[readIdx + 2];
+						IRBinOpVarVarVar_Div_i4* div = (IRBinOpVarVarVar_Div_i4*)insts[readIdx + 3];
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4);
+						fused->subRet = sub->ret;
+						fused->subOp1 = sub->op1;
+						fused->subOp2 = sub->op2;
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->offset = field->offset;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						fused->divRet = div->ret;
+						fused->divOp1 = div->op1;
+						fused->divOp2 = div->op2;
+						insts[writeIdx++] = fused;
+						readIdx += 3;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4 && next->type == HiOpcodeEnum::StindVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4* sub = (IRBinOpVarVarVar_Sub_i4*)ir;
+						IRStindVarVar_i4* store = (IRStindVarVar_i4*)next;
+						if (store->src == sub->ret && store->dst != sub->ret)
+						{
+							CreateIR(fused, BinOpVarVarVar_Sub_i4_StindVarVar_i4);
+							fused->subRet = sub->ret;
+							fused->subOp1 = sub->op1;
+							fused->subOp2 = sub->op2;
+							fused->storeAddress = store->dst;
+							insts[writeIdx++] = fused;
+							readIdx++;
+							continue;
+						}
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4 && next->type == HiOpcodeEnum::MathMaxVarVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4* sub = (IRBinOpVarVarVar_Sub_i4*)ir;
+						IRBinOpVarVarVar_Add_i4* max = (IRBinOpVarVarVar_Add_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4);
+						fused->subRet = sub->ret;
+						fused->subOp1 = sub->op1;
+						fused->subOp2 = sub->op2;
+						fused->maxRet = max->ret;
+						fused->maxOp1 = max->op1;
+						fused->maxOp2 = max->op2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 4 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarAddress && next->type == HiOpcodeEnum::LdfldaVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 3]->type == HiOpcodeEnum::LdindVarVar_i4 && insts[readIdx + 4]->type == HiOpcodeEnum::LdcVarConst_4 && !IsNoOpTransformInstruction(insts[readIdx + 2]))
+					{
+						IRLdlocVarAddress* address = (IRLdlocVarAddress*)ir;
+						IRLdfldaVarVar* fieldAddress = (IRLdfldaVarVar*)next;
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)insts[readIdx + 2];
+						IRLdindVarVar_i4* ind = (IRLdindVarVar_i4*)insts[readIdx + 3];
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)insts[readIdx + 4];
+						CreateIR(fused, LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4);
+						fused->addressDst = address->dst;
+						fused->addressSrc = address->src;
+						fused->fieldAddressDst = fieldAddress->dst;
+						fused->obj = fieldAddress->obj;
+						fused->offset = fieldAddress->offset;
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->indDst = ind->dst;
+						fused->indSrc = ind->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						insts[writeIdx++] = fused;
+						readIdx += 4;
+						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarAddress && next->type == HiOpcodeEnum::LdfldaVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 3]->type == HiOpcodeEnum::LdindVarVar_i4 && !IsNoOpTransformInstruction(insts[readIdx + 2]))
+					{
+						IRLdlocVarAddress* address = (IRLdlocVarAddress*)ir;
+						IRLdfldaVarVar* fieldAddress = (IRLdfldaVarVar*)next;
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)insts[readIdx + 2];
+						IRLdindVarVar_i4* ind = (IRLdindVarVar_i4*)insts[readIdx + 3];
+						CreateIR(fused, LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4);
+						fused->addressDst = address->dst;
+						fused->addressSrc = address->src;
+						fused->fieldAddressDst = fieldAddress->dst;
+						fused->obj = fieldAddress->obj;
+						fused->offset = fieldAddress->offset;
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->indDst = ind->dst;
+						fused->indSrc = ind->src;
+						insts[writeIdx++] = fused;
+						readIdx += 3;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarAddress && next->type == HiOpcodeEnum::LdcVarConst_4)
+					{
+						IRLdlocVarAddress* address = (IRLdlocVarAddress*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						CreateIR(fused, LdlocVarAddress_LdcVarConst_4);
+						fused->addressDst = address->dst;
+						fused->addressSrc = address->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdindVarVar_i4)
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdindVarVar_i4* ind = (IRLdindVarVar_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdindVarVar_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->indDst = ind->dst;
+						fused->indSrc = ind->src;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 4 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdfldVarVar_i4 && insts[readIdx + 3]->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 4]->type == HiOpcodeEnum::BranchVarVar_CneUn_i4 && !IsNoOpTransformInstruction(next) && !IsNoOpTransformInstruction(insts[readIdx + 3]))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						IRLdfldVarVar_i4* field = (IRLdfldVarVar_i4*)insts[readIdx + 2];
+						IRLdlocVarVar* branchCopy = (IRLdlocVarVar*)insts[readIdx + 3];
+						IRBranchVarVar_CneUn_i4* branch = (IRBranchVarVar_CneUn_i4*)insts[readIdx + 4];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4);
+						fused->copyDst1 = first->dst;
+						fused->copySrc1 = first->src;
+						fused->copyDst2 = second->dst;
+						fused->copySrc2 = second->src;
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->fieldOffset = field->offset;
+						fused->copyDst3 = branchCopy->dst;
+						fused->copySrc3 = branchCopy->src;
+						fused->branchOp1 = branch->op1;
+						fused->branchOp2 = branch->op2;
+						fused->offsetBranch = branch->offset;
+						relocationOffsets.push_back(&fused->offsetBranch);
+						insts[writeIdx++] = fused;
+						readIdx += 4;
+						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && insts[readIdx + 3]->type == HiOpcodeEnum::LdcVarConst_4 && !IsNoOpTransformInstruction(next))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)insts[readIdx + 2];
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)insts[readIdx + 3];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4);
+						fused->copyDst1 = first->dst;
+						fused->copySrc1 = first->src;
+						fused->copyDst2 = second->dst;
+						fused->copySrc2 = second->src;
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						insts[writeIdx++] = fused;
+						readIdx += 3;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::GetArrayElementVarVar_size_24 && !IsNoOpTransformInstruction(next))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						IRGetArrayElementVarVar_size_24* element = (IRGetArrayElementVarVar_size_24*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24);
+						fused->copyDst1 = first->dst;
+						fused->copySrc1 = first->src;
+						fused->copyDst2 = second->dst;
+						fused->copySrc2 = second->src;
+						fused->elementDst = element->dst;
+						fused->arraySrc = element->arr;
+						fused->indexSrc = element->index;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::GetArrayElementVarVar_i4 && !IsNoOpTransformInstruction(next))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						IRGetArrayElementVarVar_i4* element = (IRGetArrayElementVarVar_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_i4);
+						fused->copyDst1 = first->dst;
+						fused->copySrc1 = first->src;
+						fused->copyDst2 = second->dst;
+						fused->copySrc2 = second->src;
+						fused->elementDst = element->dst;
+						fused->arraySrc = element->arr;
+						fused->indexSrc = element->index;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::GetArrayLengthVarVar && insts[readIdx + 3]->type == HiOpcodeEnum::BranchVarVar_Clt_i4 && !IsNoOpTransformInstruction(next))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						IRGetArrayLengthVarVar* length = (IRGetArrayLengthVarVar*)insts[readIdx + 2];
+						IRBranchVarVar_Clt_i4* branch = (IRBranchVarVar_Clt_i4*)insts[readIdx + 3];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4);
+						fused->copyDst1 = first->dst;
+						fused->copySrc1 = first->src;
+						fused->copyDst2 = second->dst;
+						fused->copySrc2 = second->src;
+						fused->lengthDst = length->len;
+						fused->arraySrc = length->arr;
+						fused->branchOp1 = branch->op1;
+						fused->branchOp2 = branch->op2;
+						fused->offset = branch->offset;
+						relocationOffsets.push_back(&fused->offset);
+						insts[writeIdx++] = fused;
+						readIdx += 3;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::GetArrayLengthVarVar && !IsNoOpTransformInstruction(next))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						IRGetArrayLengthVarVar* length = (IRGetArrayLengthVarVar*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar);
+						fused->copyDst1 = first->dst;
+						fused->copySrc1 = first->src;
+						fused->copyDst2 = second->dst;
+						fused->copySrc2 = second->src;
+						fused->lengthDst = length->len;
+						fused->arraySrc = length->arr;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(next) && !IsNoOpTransformInstruction(insts[readIdx + 2]))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						IRLdlocVarVar* third = (IRLdlocVarVar*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_LdlocVarVar);
+						fused->dst1 = first->dst;
+						fused->src1 = first->src;
+						fused->dst2 = second->dst;
+						fused->src2 = second->src;
+						fused->dst3 = third->dst;
+						fused->src3 = third->src;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(next))
+					{
+						IRLdlocVarVar* first = (IRLdlocVarVar*)ir;
+						IRLdlocVarVar* second = (IRLdlocVarVar*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarVar);
+						fused->dst1 = first->dst;
+						fused->src1 = first->src;
+						fused->dst2 = second->dst;
+						fused->src2 = second->src;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVarSize && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4)
+					{
+						IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)ir;
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)next;
+						if (field->obj == copy->dst)
+						{
+							if (readIdx + 3 < insts.size() && insts[readIdx + 2]->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 3]->type == HiOpcodeEnum::BranchVarVar_Cle_i4)
+							{
+								IRLdcVarConst_4* constant = (IRLdcVarConst_4*)insts[readIdx + 2];
+								IRBranchVarVar_Cle_i4* branch = (IRBranchVarVar_Cle_i4*)insts[readIdx + 3];
+								CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4);
+								fused->fieldDst = field->dst;
+								fused->obj = copy->src;
+								fused->offset = field->offset;
+								fused->constDst = constant->dst;
+								fused->constant = constant->src;
+								fused->branchOp1 = branch->op1;
+								fused->branchOp2 = branch->op2;
+								fused->offsetBranch = branch->offset;
+								relocationOffsets.push_back(&fused->offsetBranch);
+								insts[writeIdx++] = fused;
+								readIdx += 3;
+								continue;
+							}
+							if (readIdx + 3 < insts.size() && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 3]->type == HiOpcodeEnum::BranchVarVar_CneUn_i4 && !IsNoOpTransformInstruction(insts[readIdx + 2]))
+							{
+								IRLdlocVarVar* branchCopy = (IRLdlocVarVar*)insts[readIdx + 2];
+								IRBranchVarVar_CneUn_i4* branch = (IRBranchVarVar_CneUn_i4*)insts[readIdx + 3];
+								CreateIR(fused, LdfldValueTypeVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4);
+								fused->fieldDst = field->dst;
+								fused->obj = copy->src;
+								fused->offset = field->offset;
+								fused->copyDst = branchCopy->dst;
+								fused->copySrc = branchCopy->src;
+								fused->branchOp1 = branch->op1;
+								fused->branchOp2 = branch->op2;
+								fused->offsetBranch = branch->offset;
+								relocationOffsets.push_back(&fused->offsetBranch);
+								insts[writeIdx++] = fused;
+								readIdx += 3;
+								continue;
+							}
+							if (readIdx + 2 < insts.size() && insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4)
+							{
+								IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)insts[readIdx + 2];
+								CreateIR(fused, LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+								fused->fieldDst = field->dst;
+								fused->obj = copy->src;
+								fused->offset = field->offset;
+								fused->addRet = add->ret;
+								fused->addOp1 = add->op1;
+								fused->addOp2 = add->op2;
+								insts[writeIdx++] = fused;
+								readIdx += 2;
+								continue;
+							}
+							if (readIdx + 3 < insts.size() && insts[readIdx + 2]->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 3]->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4)
+							{
+								IRLdcVarConst_4* constant = (IRLdcVarConst_4*)insts[readIdx + 2];
+								IRBinOpVarVarVar_Div_i4* div = (IRBinOpVarVarVar_Div_i4*)insts[readIdx + 3];
+								CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4);
+								fused->fieldDst = field->dst;
+								fused->obj = copy->src;
+								fused->offset = field->offset;
+								fused->constDst = constant->dst;
+								fused->constant = constant->src;
+								fused->divRet = div->ret;
+								fused->divOp1 = div->op1;
+								fused->divOp2 = div->op2;
+								insts[writeIdx++] = fused;
+								readIdx += 3;
+								continue;
+							}
+							if (readIdx + 2 < insts.size() && insts[readIdx + 2]->type == HiOpcodeEnum::LdcVarConst_4)
+							{
+								IRLdcVarConst_4* constant = (IRLdcVarConst_4*)insts[readIdx + 2];
+								CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4);
+								fused->fieldDst = field->dst;
+								fused->obj = copy->src;
+								fused->offset = field->offset;
+								fused->constDst = constant->dst;
+								fused->constant = constant->src;
+								insts[writeIdx++] = fused;
+								readIdx += 2;
+								continue;
+							}
+							CreateIR(directField, LdfldValueTypeVarVar_i4);
+							directField->dst = field->dst;
+							directField->obj = copy->src;
+							directField->offset = field->offset;
+							insts[writeIdx++] = directField;
+							readIdx++;
+							continue;
+						}
+					}
+					if (ir->type == HiOpcodeEnum::LdfldVarVar_u1 && next->type == HiOpcodeEnum::BranchFalseVar_i4)
+					{
+						IRLdfldVarVar_u1* field = (IRLdfldVarVar_u1*)ir;
+						IRBranchFalseVar_i4* branch = (IRBranchFalseVar_i4*)next;
+						CreateIR(fused, LdfldVarVar_u1_BranchFalseVar_i4);
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->offset = field->offset;
+						fused->branchOp = branch->op;
+						fused->offsetBranch = branch->offset;
+						relocationOffsets.push_back(&fused->offsetBranch);
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdfldVarVar_i4 && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::BranchVarVar_CneUn_i4 && !IsNoOpTransformInstruction(next))
+					{
+						IRLdfldVarVar_i4* field = (IRLdfldVarVar_i4*)ir;
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)next;
+						IRBranchVarVar_CneUn_i4* branch = (IRBranchVarVar_CneUn_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4);
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->offset = field->offset;
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->branchOp1 = branch->op1;
+						fused->branchOp2 = branch->op2;
+						fused->offsetBranch = branch->offset;
+						relocationOffsets.push_back(&fused->offsetBranch);
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::BranchVarVar_CneUn_i4 && !IsNoOpTransformInstruction(next))
+					{
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)ir;
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)next;
+						IRBranchVarVar_CneUn_i4* branch = (IRBranchVarVar_CneUn_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4);
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->offset = field->offset;
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->branchOp1 = branch->op1;
+						fused->branchOp2 = branch->op2;
+						fused->offsetBranch = branch->offset;
+						relocationOffsets.push_back(&fused->offsetBranch);
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && next->type == HiOpcodeEnum::LdcVarConst_4)
+					{
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						if (readIdx + 2 < insts.size() && insts[readIdx + 2]->type == HiOpcodeEnum::BranchVarVar_Cle_i4)
+						{
+							IRBranchVarVar_Cle_i4* branch = (IRBranchVarVar_Cle_i4*)insts[readIdx + 2];
+							CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4);
+							fused->fieldDst = field->dst;
+							fused->obj = field->obj;
+							fused->offset = field->offset;
+							fused->constDst = constant->dst;
+							fused->constant = constant->src;
+							fused->branchOp1 = branch->op1;
+							fused->branchOp2 = branch->op2;
+							fused->offsetBranch = branch->offset;
+							relocationOffsets.push_back(&fused->offsetBranch);
+							insts[writeIdx++] = fused;
+							readIdx += 2;
+							continue;
+						}
+						if (readIdx + 2 < insts.size() && insts[readIdx + 2]->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4)
+						{
+							IRBinOpVarVarVar_Div_i4* div = (IRBinOpVarVarVar_Div_i4*)insts[readIdx + 2];
+							CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4);
+							fused->fieldDst = field->dst;
+							fused->obj = field->obj;
+							fused->offset = field->offset;
+							fused->constDst = constant->dst;
+							fused->constant = constant->src;
+							fused->divRet = div->ret;
+							fused->divOp1 = div->op1;
+							fused->divOp2 = div->op2;
+							insts[writeIdx++] = fused;
+							readIdx += 2;
+							continue;
+						}
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->offset = field->offset;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4)
+					{
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)ir;
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)next;
+						if (readIdx + 3 < insts.size() && insts[readIdx + 2]->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && insts[readIdx + 3]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4)
+						{
+							IRLdfldValueTypeVarVar_i4* field2 = (IRLdfldValueTypeVarVar_i4*)insts[readIdx + 2];
+							IRBinOpVarVarVar_Add_i4* add2 = (IRBinOpVarVarVar_Add_i4*)insts[readIdx + 3];
+							CreateIR(fused, LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+							fused->fieldDst1 = field->dst;
+							fused->obj1 = field->obj;
+							fused->offset1 = field->offset;
+							fused->addRet1 = add->ret;
+							fused->addOp11 = add->op1;
+							fused->addOp21 = add->op2;
+							fused->fieldDst2 = field2->dst;
+							fused->obj2 = field2->obj;
+							fused->offset2 = field2->offset;
+							fused->addRet2 = add2->ret;
+							fused->addOp12 = add2->op1;
+							fused->addOp22 = add2->op2;
+							insts[writeIdx++] = fused;
+							readIdx += 3;
+							continue;
+						}
+						CreateIR(fused, LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->offset = field->offset;
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdfldaVarVar && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdindVarVar_i4 && !IsNoOpTransformInstruction(next))
+					{
+						IRLdfldaVarVar* fieldAddress = (IRLdfldaVarVar*)ir;
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)next;
+						IRLdindVarVar_i4* ind = (IRLdindVarVar_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdfldaVarVar_LdlocVarVar_LdindVarVar_i4);
+						fused->fieldAddressDst = fieldAddress->dst;
+						fused->obj = fieldAddress->obj;
+						fused->offset = fieldAddress->offset;
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->indDst = ind->dst;
+						fused->indSrc = ind->src;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldaVarVar && next->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(next))
+					{
+						IRLdfldaVarVar* fieldAddress = (IRLdfldaVarVar*)ir;
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)next;
+						CreateIR(fused, LdfldaVarVar_LdlocVarVar);
+						fused->fieldAddressDst = fieldAddress->dst;
+						fused->obj = fieldAddress->obj;
+						fused->offset = fieldAddress->offset;
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && next->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVar && insts[readIdx + 3]->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(next) && !IsNoOpTransformInstruction(insts[readIdx + 2]) && !IsNoOpTransformInstruction(insts[readIdx + 3]))
+					{
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)ir;
+						IRLdlocVarVar* copy1 = (IRLdlocVarVar*)next;
+						IRLdlocVarVar* copy2 = (IRLdlocVarVar*)insts[readIdx + 2];
+						IRLdlocVarVar* copy3 = (IRLdlocVarVar*)insts[readIdx + 3];
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar);
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						fused->copyDst1 = copy1->dst;
+						fused->copySrc1 = copy1->src;
+						fused->copyDst2 = copy2->dst;
+						fused->copySrc2 = copy2->src;
+						fused->copyDst3 = copy3->dst;
+						fused->copySrc3 = copy3->src;
+						insts[writeIdx++] = fused;
+						readIdx += 3;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && next->type == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(next))
+					{
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)ir;
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdlocVarVar);
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && next->type == HiOpcodeEnum::StfldVarVar_i4 && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarAddress && insts[readIdx + 3]->type == HiOpcodeEnum::LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)ir;
+						IRStfldVarVar_i4* store = (IRStfldVarVar_i4*)next;
+						IRLdlocVarAddress* address = (IRLdlocVarAddress*)insts[readIdx + 2];
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)insts[readIdx + 3];
+						CreateIR(fused, BinOpVarVarVar_Add_i4_StfldVarVar_i4_LdlocVarAddress_LdcVarConst_4);
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						fused->storeObj = store->obj;
+						fused->storeOffset = store->offset;
+						fused->storeData = store->data;
+						fused->addressDst = address->dst;
+						fused->addressSrc = address->src;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						insts[writeIdx++] = fused;
+						readIdx += 3;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && next->type == HiOpcodeEnum::StfldVarVar_i4)
+					{
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)ir;
+						IRStfldVarVar_i4* store = (IRStfldVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_StfldVarVar_i4);
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						fused->storeObj = store->obj;
+						fused->storeOffset = store->offset;
+						fused->storeData = store->data;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4 && next->type == HiOpcodeEnum::LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdcVarConst_4);
+						fused->addRet = add->ret;
+						fused->addOp1 = add->op1;
+						fused->addOp2 = add->op2;
+						fused->constDst = constant->dst;
+						fused->constant = constant->src;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4 && next->type == HiOpcodeEnum::MathMinVarVarVar_i4)
+					{
+						IRBinOpVarVarVar_Div_i4* div = (IRBinOpVarVarVar_Div_i4*)ir;
+						IRBinOpVarVarVar_Add_i4* min = (IRBinOpVarVarVar_Add_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Div_i4_MathMinVarVarVar_i4);
+						fused->divRet = div->ret;
+						fused->divOp1 = div->op1;
+						fused->divOp2 = div->op2;
+						fused->minRet = min->ret;
+						fused->minOp1 = min->op1;
+						fused->minOp2 = min->op2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_And_i4 && next->type == HiOpcodeEnum::GetArrayElementVarVar_i4)
+					{
+						IRBinOpVarVarVar_And_i4* andOp = (IRBinOpVarVarVar_And_i4*)ir;
+						IRGetArrayElementVarVar_i4* element = (IRGetArrayElementVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4);
+						fused->andRet = andOp->ret;
+						fused->andOp1 = andOp->op1;
+						fused->andOp2 = andOp->op2;
+						fused->elementDst = element->dst;
+						fused->arraySrc = element->arr;
+						fused->indexSrc = element->index;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Rem_i4 && next->type == HiOpcodeEnum::BranchTrueVar_i4)
+					{
+						IRBinOpVarVarVar_Rem_i4* rem = (IRBinOpVarVarVar_Rem_i4*)ir;
+						IRBranchTrueVar_i4* branch = (IRBranchTrueVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Rem_i4_BranchTrueVar_i4);
+						fused->remRet = rem->ret;
+						fused->remOp1 = rem->op1;
+						fused->remOp2 = rem->op2;
+						fused->branchOp = branch->op;
+						fused->offsetBranch = branch->offset;
+						relocationOffsets.push_back(&fused->offsetBranch);
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+				}
+				{
+					insts[writeIdx++] = ir;
+				}
+			}
+			insts.resize(writeIdx);
+			writeIdx = 0;
+			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (readIdx + 1 < insts.size())
+				{
+					IRCommon* next = insts[readIdx + 1];
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4)
+					{
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4* fieldConst = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpSub_i4_MathMaxVarVarVar_i4);
+						fused->fieldDst = fieldConst->fieldDst;
+						fused->obj = fieldConst->obj;
+						fused->offset = fieldConst->offset;
+						fused->constDst = fieldConst->constDst;
+						fused->constant = fieldConst->constant;
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar)
+					{
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4* fieldDiv = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4*)ir;
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar* addCopy = (IRBinOpVarVarVar_Add_i4_LdlocVarVar*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar);
+						fused->fieldDst = fieldDiv->fieldDst;
+						fused->obj = fieldDiv->obj;
+						fused->offset = fieldDiv->offset;
+						fused->constDst = fieldDiv->constDst;
+						fused->constant = fieldDiv->constant;
+						fused->divRet = fieldDiv->divRet;
+						fused->divOp1 = fieldDiv->divOp1;
+						fused->divOp2 = fieldDiv->divOp2;
+						fused->addRet = addCopy->addRet;
+						fused->addOp1 = addCopy->addOp1;
+						fused->addOp2 = addCopy->addOp2;
+						fused->copyDst = addCopy->copyDst;
+						fused->copySrc = addCopy->copySrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarAddress_LdcVarConst_4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4)
+					{
+						IRLdlocVarAddress_LdcVarConst_4* addressConst = (IRLdlocVarAddress_LdcVarConst_4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4* fieldConst = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4*)next;
+						CreateIR(fused, LdlocVarAddress_LdcVarConst_4_LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->addressDst = addressConst->addressDst;
+						fused->addressSrc = addressConst->addressSrc;
+						fused->addressConstDst = addressConst->constDst;
+						fused->addressConstant = addressConst->constant;
+						fused->fieldDst = fieldConst->fieldDst;
+						fused->obj = fieldConst->obj;
+						fused->offset = fieldConst->offset;
+						fused->fieldConstDst = fieldConst->constDst;
+						fused->fieldConstant = fieldConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4)
+					{
+						IRBinOpVarVarVar_Add_i4_LdcVarConst_4* addConst = (IRBinOpVarVarVar_Add_i4_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4* andElement = (IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdcVarConst_4_BinOpAnd_i4_GetArrayElementVarVar_i4);
+						fused->addRet = addConst->addRet;
+						fused->addOp1 = addConst->addOp1;
+						fused->addOp2 = addConst->addOp2;
+						fused->constDst = addConst->constDst;
+						fused->constant = addConst->constant;
+						fused->andRet = andElement->andRet;
+						fused->andOp1 = andElement->andOp1;
+						fused->andOp2 = andElement->andOp2;
+						fused->elementDst = andElement->elementDst;
+						fused->arraySrc = andElement->arraySrc;
+						fused->indexSrc = andElement->indexSrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar && next->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4)
+					{
+						IRLdlocVarVar_LdlocVarVar_LdlocVarVar* copies = (IRLdlocVarVar_LdlocVarVar_LdlocVarVar*)ir;
+						IRBinOpVarVarVar_Add_i4_LdcVarConst_4* addConst = (IRBinOpVarVarVar_Add_i4_LdcVarConst_4*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4);
+						fused->copyDst1 = copies->dst1;
+						fused->copySrc1 = copies->src1;
+						fused->copyDst2 = copies->dst2;
+						fused->copySrc2 = copies->src2;
+						fused->copyDst3 = copies->dst3;
+						fused->copySrc3 = copies->src3;
+						fused->addRet = addConst->addRet;
+						fused->addOp1 = addConst->addOp1;
+						fused->addOp2 = addConst->addOp2;
+						fused->constDst = addConst->constDst;
+						fused->constant = addConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_StindVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_StindVarVar_i4* subStore = (IRBinOpVarVarVar_Sub_i4_StindVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->tailSubRet = subStore->subRet;
+						fused->tailSubOp1 = subStore->subOp1;
+						fused->tailSubOp2 = subStore->subOp2;
+						fused->storeAddress = subStore->storeAddress;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4* storeFieldConst = (IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->storeObj = storeFieldConst->storeObj;
+						fused->storeOffset = storeFieldConst->storeOffset;
+						fused->storeData = storeFieldConst->storeData;
+						fused->fieldDst = storeFieldConst->fieldDst;
+						fused->obj = storeFieldConst->obj;
+						fused->offset = storeFieldConst->offset;
+						fused->constDst = storeFieldConst->constDst;
+						fused->constant = storeFieldConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4* subFieldDiv = (IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4);
+						fused->subRet = subFieldDiv->subRet;
+						fused->subOp1 = subFieldDiv->subOp1;
+						fused->subOp2 = subFieldDiv->subOp2;
+						fused->fieldDst = subFieldDiv->fieldDst;
+						fused->obj = subFieldDiv->obj;
+						fused->offset = subFieldDiv->offset;
+						fused->constDst = subFieldDiv->constDst;
+						fused->constant = subFieldDiv->constant;
+						fused->divRet = subFieldDiv->divRet;
+						fused->divOp1 = subFieldDiv->divOp1;
+						fused->divOp2 = subFieldDiv->divOp2;
+						fused->tailSubRet = subMax->subRet;
+						fused->tailSubOp1 = subMax->subOp1;
+						fused->tailSubOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar)
+					{
+						IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4* andElement = (IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar* fieldDivAddCopy = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar*)next;
+						CreateIR(fused, BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar);
+						fused->andRet = andElement->andRet;
+						fused->andOp1 = andElement->andOp1;
+						fused->andOp2 = andElement->andOp2;
+						fused->elementDst = andElement->elementDst;
+						fused->arraySrc = andElement->arraySrc;
+						fused->indexSrc = andElement->indexSrc;
+						fused->fieldDst = fieldDivAddCopy->fieldDst;
+						fused->obj = fieldDivAddCopy->obj;
+						fused->offset = fieldDivAddCopy->offset;
+						fused->constDst = fieldDivAddCopy->constDst;
+						fused->constant = fieldDivAddCopy->constant;
+						fused->divRet = fieldDivAddCopy->divRet;
+						fused->divOp1 = fieldDivAddCopy->divOp1;
+						fused->divOp2 = fieldDivAddCopy->divOp2;
+						fused->addRet = fieldDivAddCopy->addRet;
+						fused->addOp1 = fieldDivAddCopy->addOp1;
+						fused->addOp2 = fieldDivAddCopy->addOp2;
+						fused->copyDst = fieldDivAddCopy->copyDst;
+						fused->copySrc = fieldDivAddCopy->copySrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4_MathMinVarVarVar_i4)
+					{
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4* divMin = (IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4);
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->copyDst = fieldCopyConst->copyDst;
+						fused->copySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						fused->divRet = divMin->divRet;
+						fused->divOp1 = divMin->divOp1;
+						fused->divOp2 = divMin->divOp2;
+						fused->minRet = divMin->minRet;
+						fused->minOp1 = divMin->minOp1;
+						fused->minOp2 = divMin->minOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpRem_i4 && next->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 2]->type == HiOpcodeEnum::CompOpVarVarVar_Ceq_i4 && insts[readIdx + 3]->type == HiOpcodeEnum::RetVar_ret_1)
+					{
+						IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4* rem = (IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						IRCompOpVarVarVar_Ceq_i4* compare = (IRCompOpVarVarVar_Ceq_i4*)insts[readIdx + 2];
+						IRRetVar_ret_1* ret = (IRRetVar_ret_1*)insts[readIdx + 3];
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4_BinOpRem_i4_LdcVarConst_4_CompOpCeq_i4_RetVar_ret_1);
+						fused->copyDst = rem->copyDst;
+						fused->copySrc = rem->copySrc;
+						fused->remConstDst = rem->constDst;
+						fused->remConstant = rem->constant;
+						fused->remRet = rem->remRet;
+						fused->remOp1 = rem->remOp1;
+						fused->remOp2 = rem->remOp2;
+						fused->compareConstDst = constant->dst;
+						fused->compareConstant = constant->src;
+						fused->compareRet = compare->ret;
+						fused->compareOp1 = compare->c1;
+						fused->compareOp2 = compare->c2;
+						fused->ret = ret->ret;
+						insts[writeIdx++] = fused;
+						readIdx += 3;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpRem_i4 && next->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 2]->type == HiOpcodeEnum::CompOpVarVarVar_Ceq_i4)
+					{
+						IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4* rem = (IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4*)ir;
+						IRLdcVarConst_4* constant = (IRLdcVarConst_4*)next;
+						IRCompOpVarVarVar_Ceq_i4* compare = (IRCompOpVarVarVar_Ceq_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4_BinOpRem_i4_LdcVarConst_4_CompOpCeq_i4);
+						fused->copyDst = rem->copyDst;
+						fused->copySrc = rem->copySrc;
+						fused->remConstDst = rem->constDst;
+						fused->remConstant = rem->constant;
+						fused->remRet = rem->remRet;
+						fused->remOp1 = rem->remOp1;
+						fused->remOp2 = rem->remOp2;
+						fused->compareConstDst = constant->dst;
+						fused->compareConstant = constant->src;
+						fused->compareRet = compare->ret;
+						fused->compareOp1 = compare->c1;
+						fused->compareOp2 = compare->c2;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24 && next->type == HiOpcodeEnum::LdlocVarVarSize)
+					{
+						IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24* element = (IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24*)ir;
+						IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24_LdlocVarVarSize);
+						fused->copyDst1 = element->copyDst1;
+						fused->copySrc1 = element->copySrc1;
+						fused->copyDst2 = element->copyDst2;
+						fused->copySrc2 = element->copySrc2;
+						fused->elementDst = element->elementDst;
+						fused->arraySrc = element->arraySrc;
+						fused->indexSrc = element->indexSrc;
+						fused->sizedCopyDst = copy->dst;
+						fused->sizedCopySrc = copy->src;
+						fused->sizedCopySize = copy->size;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar && next->type == HiOpcodeEnum::GetArrayElementVarVar_size_28 && insts[readIdx + 2]->type == HiOpcodeEnum::LdlocVarVarSize)
+					{
+						IRLdlocVarVar_LdlocVarVar* copies = (IRLdlocVarVar_LdlocVarVar*)ir;
+						IRGetArrayElementVarVar_size_28* element = (IRGetArrayElementVarVar_size_28*)next;
+						IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)insts[readIdx + 2];
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize);
+						fused->copyDst1 = copies->dst1;
+						fused->copySrc1 = copies->src1;
+						fused->copyDst2 = copies->dst2;
+						fused->copySrc2 = copies->src2;
+						fused->elementDst = element->dst;
+						fused->arraySrc = element->arr;
+						fused->indexSrc = element->index;
+						fused->sizedCopyDst = copy->dst;
+						fused->sizedCopySrc = copy->src;
+						fused->sizedCopySize = copy->size;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVarSize)
+					{
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar* addCopies = (IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar*)ir;
+						IRLdlocVarVarSize* copy = (IRLdlocVarVarSize*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize);
+						fused->addRet = addCopies->addRet;
+						fused->addOp1 = addCopies->addOp1;
+						fused->addOp2 = addCopies->addOp2;
+						fused->copyDst1 = addCopies->copyDst1;
+						fused->copySrc1 = addCopies->copySrc1;
+						fused->copyDst2 = addCopies->copyDst2;
+						fused->copySrc2 = addCopies->copySrc2;
+						fused->copyDst3 = addCopies->copyDst3;
+						fused->copySrc3 = addCopies->copySrc3;
+						fused->sizedCopyDst = copy->dst;
+						fused->sizedCopySrc = copy->src;
+						fused->sizedCopySize = copy->size;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_StindVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_StindVarVar_i4* subStore = (IRBinOpVarVarVar_Sub_i4_StindVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->tailSubRet = subStore->subRet;
+						fused->tailSubOp1 = subStore->subOp1;
+						fused->tailSubOp2 = subStore->subOp2;
+						fused->storeAddress = subStore->storeAddress;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4* storeFieldConst = (IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->storeObj = storeFieldConst->storeObj;
+						fused->storeOffset = storeFieldConst->storeOffset;
+						fused->storeData = storeFieldConst->storeData;
+						fused->fieldDst = storeFieldConst->fieldDst;
+						fused->obj = storeFieldConst->obj;
+						fused->offset = storeFieldConst->offset;
+						fused->constDst = storeFieldConst->constDst;
+						fused->constant = storeFieldConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4* subFieldDiv = (IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4);
+						fused->subRet = subFieldDiv->subRet;
+						fused->subOp1 = subFieldDiv->subOp1;
+						fused->subOp2 = subFieldDiv->subOp2;
+						fused->fieldDst = subFieldDiv->fieldDst;
+						fused->obj = subFieldDiv->obj;
+						fused->offset = subFieldDiv->offset;
+						fused->constDst = subFieldDiv->constDst;
+						fused->constant = subFieldDiv->constant;
+						fused->divRet = subFieldDiv->divRet;
+						fused->divOp1 = subFieldDiv->divOp1;
+						fused->divOp2 = subFieldDiv->divOp2;
+						fused->tailSubRet = subMax->subRet;
+						fused->tailSubOp1 = subMax->subOp1;
+						fused->tailSubOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar)
+					{
+						IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4* andElement = (IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar* fieldDivAddCopy = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar*)next;
+						CreateIR(fused, BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar);
+						fused->andRet = andElement->andRet;
+						fused->andOp1 = andElement->andOp1;
+						fused->andOp2 = andElement->andOp2;
+						fused->elementDst = andElement->elementDst;
+						fused->arraySrc = andElement->arraySrc;
+						fused->indexSrc = andElement->indexSrc;
+						fused->fieldDst = fieldDivAddCopy->fieldDst;
+						fused->obj = fieldDivAddCopy->obj;
+						fused->offset = fieldDivAddCopy->offset;
+						fused->constDst = fieldDivAddCopy->constDst;
+						fused->constant = fieldDivAddCopy->constant;
+						fused->divRet = fieldDivAddCopy->divRet;
+						fused->divOp1 = fieldDivAddCopy->divOp1;
+						fused->divOp2 = fieldDivAddCopy->divOp2;
+						fused->addRet = fieldDivAddCopy->addRet;
+						fused->addOp1 = fieldDivAddCopy->addOp1;
+						fused->addOp2 = fieldDivAddCopy->addOp2;
+						fused->copyDst = fieldDivAddCopy->copyDst;
+						fused->copySrc = fieldDivAddCopy->copySrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4_MathMinVarVarVar_i4)
+					{
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4* divMin = (IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4);
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->copyDst = fieldCopyConst->copyDst;
+						fused->copySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						fused->divRet = divMin->divRet;
+						fused->divOp1 = divMin->divOp1;
+						fused->divOp2 = divMin->divOp2;
+						fused->minRet = divMin->minRet;
+						fused->minOp1 = divMin->minOp1;
+						fused->minOp2 = divMin->minOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4 && !IsNoOpTransformInstruction(ir))
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4* fieldAdd = (IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->fieldDst0 = fieldAdd->fieldDst0;
+						fused->obj0 = fieldAdd->obj0;
+						fused->offset0 = fieldAdd->offset0;
+						fused->fieldDst1 = fieldAdd->fieldDst1;
+						fused->obj1 = fieldAdd->obj1;
+						fused->offset1 = fieldAdd->offset1;
+						fused->addRet1 = fieldAdd->addRet1;
+						fused->addOp11 = fieldAdd->addOp11;
+						fused->addOp21 = fieldAdd->addOp21;
+						fused->fieldDst2 = fieldAdd->fieldDst2;
+						fused->obj2 = fieldAdd->obj2;
+						fused->offset2 = fieldAdd->offset2;
+						fused->addRet2 = fieldAdd->addRet2;
+						fused->addOp12 = fieldAdd->addOp12;
+						fused->addOp22 = fieldAdd->addOp22;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar* addCopy = (IRBinOpVarVarVar_Add_i4_LdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4);
+						fused->addRet = addCopy->addRet;
+						fused->addOp1 = addCopy->addOp1;
+						fused->addOp2 = addCopy->addOp2;
+						fused->copyDst = addCopy->copyDst;
+						fused->copySrc = addCopy->copySrc;
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->fieldCopyDst = fieldCopyConst->copyDst;
+						fused->fieldCopySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_StindVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_StindVarVar_i4* subStore = (IRBinOpVarVarVar_Sub_i4_StindVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->tailSubRet = subStore->subRet;
+						fused->tailSubOp1 = subStore->subOp1;
+						fused->tailSubOp2 = subStore->subOp2;
+						fused->storeAddress = subStore->storeAddress;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4* storeFieldConst = (IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->storeObj = storeFieldConst->storeObj;
+						fused->storeOffset = storeFieldConst->storeOffset;
+						fused->storeData = storeFieldConst->storeData;
+						fused->fieldDst = storeFieldConst->fieldDst;
+						fused->obj = storeFieldConst->obj;
+						fused->offset = storeFieldConst->offset;
+						fused->constDst = storeFieldConst->constDst;
+						fused->constant = storeFieldConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4* subFieldDiv = (IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4);
+						fused->subRet = subFieldDiv->subRet;
+						fused->subOp1 = subFieldDiv->subOp1;
+						fused->subOp2 = subFieldDiv->subOp2;
+						fused->fieldDst = subFieldDiv->fieldDst;
+						fused->obj = subFieldDiv->obj;
+						fused->offset = subFieldDiv->offset;
+						fused->constDst = subFieldDiv->constDst;
+						fused->constant = subFieldDiv->constant;
+						fused->divRet = subFieldDiv->divRet;
+						fused->divOp1 = subFieldDiv->divOp1;
+						fused->divOp2 = subFieldDiv->divOp2;
+						fused->tailSubRet = subMax->subRet;
+						fused->tailSubOp1 = subMax->subOp1;
+						fused->tailSubOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar)
+					{
+						IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4* andElement = (IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar* fieldDivAddCopy = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar*)next;
+						CreateIR(fused, BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar);
+						fused->andRet = andElement->andRet;
+						fused->andOp1 = andElement->andOp1;
+						fused->andOp2 = andElement->andOp2;
+						fused->elementDst = andElement->elementDst;
+						fused->arraySrc = andElement->arraySrc;
+						fused->indexSrc = andElement->indexSrc;
+						fused->fieldDst = fieldDivAddCopy->fieldDst;
+						fused->obj = fieldDivAddCopy->obj;
+						fused->offset = fieldDivAddCopy->offset;
+						fused->constDst = fieldDivAddCopy->constDst;
+						fused->constant = fieldDivAddCopy->constant;
+						fused->divRet = fieldDivAddCopy->divRet;
+						fused->divOp1 = fieldDivAddCopy->divOp1;
+						fused->divOp2 = fieldDivAddCopy->divOp2;
+						fused->addRet = fieldDivAddCopy->addRet;
+						fused->addOp1 = fieldDivAddCopy->addOp1;
+						fused->addOp2 = fieldDivAddCopy->addOp2;
+						fused->copyDst = fieldDivAddCopy->copyDst;
+						fused->copySrc = fieldDivAddCopy->copySrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4_MathMinVarVarVar_i4)
+					{
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4* divMin = (IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4);
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->copyDst = fieldCopyConst->copyDst;
+						fused->copySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						fused->divRet = divMin->divRet;
+						fused->divOp1 = divMin->divOp1;
+						fused->divOp2 = divMin->divOp2;
+						fused->minRet = divMin->minRet;
+						fused->minOp1 = divMin->minOp1;
+						fused->minOp2 = divMin->minOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_StindVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_StindVarVar_i4* subStore = (IRBinOpVarVarVar_Sub_i4_StindVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->tailSubRet = subStore->subRet;
+						fused->tailSubOp1 = subStore->subOp1;
+						fused->tailSubOp2 = subStore->subOp2;
+						fused->storeAddress = subStore->storeAddress;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4* storeFieldConst = (IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->storeObj = storeFieldConst->storeObj;
+						fused->storeOffset = storeFieldConst->storeOffset;
+						fused->storeData = storeFieldConst->storeData;
+						fused->fieldDst = storeFieldConst->fieldDst;
+						fused->obj = storeFieldConst->obj;
+						fused->offset = storeFieldConst->offset;
+						fused->constDst = storeFieldConst->constDst;
+						fused->constant = storeFieldConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4* subFieldDiv = (IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4);
+						fused->subRet = subFieldDiv->subRet;
+						fused->subOp1 = subFieldDiv->subOp1;
+						fused->subOp2 = subFieldDiv->subOp2;
+						fused->fieldDst = subFieldDiv->fieldDst;
+						fused->obj = subFieldDiv->obj;
+						fused->offset = subFieldDiv->offset;
+						fused->constDst = subFieldDiv->constDst;
+						fused->constant = subFieldDiv->constant;
+						fused->divRet = subFieldDiv->divRet;
+						fused->divOp1 = subFieldDiv->divOp1;
+						fused->divOp2 = subFieldDiv->divOp2;
+						fused->tailSubRet = subMax->subRet;
+						fused->tailSubOp1 = subMax->subOp1;
+						fused->tailSubOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar)
+					{
+						IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4* andElement = (IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar* fieldDivAddCopy = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar*)next;
+						CreateIR(fused, BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar);
+						fused->andRet = andElement->andRet;
+						fused->andOp1 = andElement->andOp1;
+						fused->andOp2 = andElement->andOp2;
+						fused->elementDst = andElement->elementDst;
+						fused->arraySrc = andElement->arraySrc;
+						fused->indexSrc = andElement->indexSrc;
+						fused->fieldDst = fieldDivAddCopy->fieldDst;
+						fused->obj = fieldDivAddCopy->obj;
+						fused->offset = fieldDivAddCopy->offset;
+						fused->constDst = fieldDivAddCopy->constDst;
+						fused->constant = fieldDivAddCopy->constant;
+						fused->divRet = fieldDivAddCopy->divRet;
+						fused->divOp1 = fieldDivAddCopy->divOp1;
+						fused->divOp2 = fieldDivAddCopy->divOp2;
+						fused->addRet = fieldDivAddCopy->addRet;
+						fused->addOp1 = fieldDivAddCopy->addOp1;
+						fused->addOp2 = fieldDivAddCopy->addOp2;
+						fused->copyDst = fieldDivAddCopy->copyDst;
+						fused->copySrc = fieldDivAddCopy->copySrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4_MathMinVarVarVar_i4)
+					{
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4* divMin = (IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4);
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->copyDst = fieldCopyConst->copyDst;
+						fused->copySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						fused->divRet = divMin->divRet;
+						fused->divOp1 = divMin->divOp1;
+						fused->divOp2 = divMin->divOp2;
+						fused->minRet = divMin->minRet;
+						fused->minOp1 = divMin->minOp1;
+						fused->minOp2 = divMin->minOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize)
+					{
+						IRLdfldValueTypeVarVar_i4_BinOpAdd_i4* fieldAdd = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4*)ir;
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize* addCopies = (IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize);
+						fused->fieldDst = fieldAdd->fieldDst;
+						fused->obj = fieldAdd->obj;
+						fused->offset = fieldAdd->offset;
+						fused->fieldAddRet = fieldAdd->addRet;
+						fused->fieldAddOp1 = fieldAdd->addOp1;
+						fused->fieldAddOp2 = fieldAdd->addOp2;
+						fused->addRet = addCopies->addRet;
+						fused->addOp1 = addCopies->addOp1;
+						fused->addOp2 = addCopies->addOp2;
+						fused->copyDst1 = addCopies->copyDst1;
+						fused->copySrc1 = addCopies->copySrc1;
+						fused->copyDst2 = addCopies->copyDst2;
+						fused->copySrc2 = addCopies->copySrc2;
+						fused->copyDst3 = addCopies->copyDst3;
+						fused->copySrc3 = addCopies->copySrc3;
+						fused->sizedCopyDst = addCopies->sizedCopyDst;
+						fused->sizedCopySrc = addCopies->sizedCopySrc;
+						fused->sizedCopySize = addCopies->sizedCopySize;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4 && !IsNoOpTransformInstruction(ir))
+					{
+						IRLdlocVarVar* leadingCopy = (IRLdlocVarVar*)ir;
+						IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4* addressLoad = (IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4);
+						fused->leadingCopyDst = leadingCopy->dst;
+						fused->leadingCopySrc = leadingCopy->src;
+						fused->addressDst = addressLoad->addressDst;
+						fused->addressSrc = addressLoad->addressSrc;
+						fused->fieldAddressDst = addressLoad->fieldAddressDst;
+						fused->obj = addressLoad->obj;
+						fused->offset = addressLoad->offset;
+						fused->copyDst = addressLoad->copyDst;
+						fused->copySrc = addressLoad->copySrc;
+						fused->indDst = addressLoad->indDst;
+						fused->indSrc = addressLoad->indSrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4 && next->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar)
+					{
+						IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4* addressLoad = (IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4*)ir;
+						IRLdlocVarVar_LdlocVarVar* copies = (IRLdlocVarVar_LdlocVarVar*)next;
+						CreateIR(fused, LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar);
+						fused->addressDst = addressLoad->addressDst;
+						fused->addressSrc = addressLoad->addressSrc;
+						fused->fieldAddressDst = addressLoad->fieldAddressDst;
+						fused->obj = addressLoad->obj;
+						fused->offset = addressLoad->offset;
+						fused->copyDst = addressLoad->copyDst;
+						fused->copySrc = addressLoad->copySrc;
+						fused->indDst = addressLoad->indDst;
+						fused->indSrc = addressLoad->indSrc;
+						fused->constDst = addressLoad->constDst;
+						fused->constant = addressLoad->constant;
+						fused->tailCopyDst1 = copies->dst1;
+						fused->tailCopySrc1 = copies->src1;
+						fused->tailCopyDst2 = copies->dst2;
+						fused->tailCopySrc2 = copies->src2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4 && !IsNoOpTransformInstruction(ir))
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4* fieldAdd = (IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->fieldDst0 = fieldAdd->fieldDst0;
+						fused->obj0 = fieldAdd->obj0;
+						fused->offset0 = fieldAdd->offset0;
+						fused->fieldDst1 = fieldAdd->fieldDst1;
+						fused->obj1 = fieldAdd->obj1;
+						fused->offset1 = fieldAdd->offset1;
+						fused->addRet1 = fieldAdd->addRet1;
+						fused->addOp11 = fieldAdd->addOp11;
+						fused->addOp21 = fieldAdd->addOp21;
+						fused->fieldDst2 = fieldAdd->fieldDst2;
+						fused->obj2 = fieldAdd->obj2;
+						fused->offset2 = fieldAdd->offset2;
+						fused->addRet2 = fieldAdd->addRet2;
+						fused->addOp12 = fieldAdd->addOp12;
+						fused->addOp22 = fieldAdd->addOp22;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::StfldVarVar_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4)
+					{
+						IRStfldVarVar_i4* store = (IRStfldVarVar_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4* fieldConst = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4*)next;
+						CreateIR(fused, StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->storeObj = store->obj;
+						fused->storeOffset = store->offset;
+						fused->storeData = store->data;
+						fused->fieldDst = fieldConst->fieldDst;
+						fused->obj = fieldConst->obj;
+						fused->offset = fieldConst->offset;
+						fused->constDst = fieldConst->constDst;
+						fused->constant = fieldConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar* addCopy = (IRBinOpVarVarVar_Add_i4_LdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4);
+						fused->addRet = addCopy->addRet;
+						fused->addOp1 = addCopy->addOp1;
+						fused->addOp2 = addCopy->addOp2;
+						fused->copyDst = addCopy->copyDst;
+						fused->copySrc = addCopy->copySrc;
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->fieldCopyDst = fieldCopyConst->copyDst;
+						fused->fieldCopySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4* sub = (IRBinOpVarVarVar_Sub_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4* fieldDiv = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4);
+						fused->subRet = sub->ret;
+						fused->subOp1 = sub->op1;
+						fused->subOp2 = sub->op2;
+						fused->fieldDst = fieldDiv->fieldDst;
+						fused->obj = fieldDiv->obj;
+						fused->offset = fieldDiv->offset;
+						fused->constDst = fieldDiv->constDst;
+						fused->constant = fieldDiv->constant;
+						fused->divRet = fieldDiv->divRet;
+						fused->divOp1 = fieldDiv->divOp1;
+						fused->divOp2 = fieldDiv->divOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && next->type == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4)
+					{
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)ir;
+						IRLdlocVarVar_LdcVarConst_4* copyConst = (IRLdlocVarVar_LdcVarConst_4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4);
+						fused->fieldDst = field->dst;
+						fused->obj = field->obj;
+						fused->offset = field->offset;
+						fused->copyDst = copyConst->copyDst;
+						fused->copySrc = copyConst->copySrc;
+						fused->constDst = copyConst->constDst;
+						fused->constant = copyConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (readIdx + 2 < insts.size() && ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4 && insts[readIdx + 2]->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4)
+					{
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_BinOpAdd_i4* first = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4*)next;
+						IRLdfldValueTypeVarVar_i4_BinOpAdd_i4* second = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4*)insts[readIdx + 2];
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+						fused->fieldDst0 = field->dst;
+						fused->obj0 = field->obj;
+						fused->offset0 = field->offset;
+						fused->fieldDst1 = first->fieldDst;
+						fused->obj1 = first->obj;
+						fused->offset1 = first->offset;
+						fused->addRet1 = first->addRet;
+						fused->addOp11 = first->addOp1;
+						fused->addOp21 = first->addOp2;
+						fused->fieldDst2 = second->fieldDst;
+						fused->obj2 = second->obj;
+						fused->offset2 = second->offset;
+						fused->addRet2 = second->addRet;
+						fused->addOp12 = second->addOp1;
+						fused->addOp22 = second->addOp2;
+						insts[writeIdx++] = fused;
+						readIdx += 2;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4)
+					{
+						IRLdfldValueTypeVarVar_i4* field = (IRLdfldValueTypeVarVar_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4* doubleAdd = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+						fused->fieldDst0 = field->dst;
+						fused->obj0 = field->obj;
+						fused->offset0 = field->offset;
+						fused->fieldDst1 = doubleAdd->fieldDst1;
+						fused->obj1 = doubleAdd->obj1;
+						fused->offset1 = doubleAdd->offset1;
+						fused->addRet1 = doubleAdd->addRet1;
+						fused->addOp11 = doubleAdd->addOp11;
+						fused->addOp21 = doubleAdd->addOp21;
+						fused->fieldDst2 = doubleAdd->fieldDst2;
+						fused->obj2 = doubleAdd->obj2;
+						fused->offset2 = doubleAdd->offset2;
+						fused->addRet2 = doubleAdd->addRet2;
+						fused->addOp12 = doubleAdd->addOp12;
+						fused->addOp22 = doubleAdd->addOp22;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4)
+					{
+						IRLdfldValueTypeVarVar_i4_BinOpAdd_i4* first = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_BinOpAdd_i4* second = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+						fused->fieldDst1 = first->fieldDst;
+						fused->obj1 = first->obj;
+						fused->offset1 = first->offset;
+						fused->addRet1 = first->addRet;
+						fused->addOp11 = first->addOp1;
+						fused->addOp21 = first->addOp2;
+						fused->fieldDst2 = second->fieldDst;
+						fused->obj2 = second->obj;
+						fused->offset2 = second->offset;
+						fused->addRet2 = second->addRet;
+						fused->addOp12 = second->addOp1;
+						fused->addOp22 = second->addOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4 && !IsNoOpTransformInstruction(ir))
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4* fieldAdd = (IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->fieldDst0 = fieldAdd->fieldDst0;
+						fused->obj0 = fieldAdd->obj0;
+						fused->offset0 = fieldAdd->offset0;
+						fused->fieldDst1 = fieldAdd->fieldDst1;
+						fused->obj1 = fieldAdd->obj1;
+						fused->offset1 = fieldAdd->offset1;
+						fused->addRet1 = fieldAdd->addRet1;
+						fused->addOp11 = fieldAdd->addOp11;
+						fused->addOp21 = fieldAdd->addOp21;
+						fused->fieldDst2 = fieldAdd->fieldDst2;
+						fused->obj2 = fieldAdd->obj2;
+						fused->offset2 = fieldAdd->offset2;
+						fused->addRet2 = fieldAdd->addRet2;
+						fused->addOp12 = fieldAdd->addOp12;
+						fused->addOp22 = fieldAdd->addOp22;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar* addCopy = (IRBinOpVarVarVar_Add_i4_LdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4);
+						fused->addRet = addCopy->addRet;
+						fused->addOp1 = addCopy->addOp1;
+						fused->addOp2 = addCopy->addOp2;
+						fused->copyDst = addCopy->copyDst;
+						fused->copySrc = addCopy->copySrc;
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->fieldCopyDst = fieldCopyConst->copyDst;
+						fused->fieldCopySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+				}
+				insts[writeIdx++] = ir;
+			}
+			insts.resize(writeIdx);
+			writeIdx = 0;
+			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (readIdx + 1 < insts.size())
+				{
+					IRCommon* next = insts[readIdx + 1];
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4)
+					{
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4* fieldConst = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpSub_i4_MathMaxVarVarVar_i4);
+						fused->fieldDst = fieldConst->fieldDst;
+						fused->obj = fieldConst->obj;
+						fused->offset = fieldConst->offset;
+						fused->constDst = fieldConst->constDst;
+						fused->constant = fieldConst->constant;
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar)
+					{
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4* fieldDiv = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4*)ir;
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar* addCopy = (IRBinOpVarVarVar_Add_i4_LdlocVarVar*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar);
+						fused->fieldDst = fieldDiv->fieldDst;
+						fused->obj = fieldDiv->obj;
+						fused->offset = fieldDiv->offset;
+						fused->constDst = fieldDiv->constDst;
+						fused->constant = fieldDiv->constant;
+						fused->divRet = fieldDiv->divRet;
+						fused->divOp1 = fieldDiv->divOp1;
+						fused->divOp2 = fieldDiv->divOp2;
+						fused->addRet = addCopy->addRet;
+						fused->addOp1 = addCopy->addOp1;
+						fused->addOp2 = addCopy->addOp2;
+						fused->copyDst = addCopy->copyDst;
+						fused->copySrc = addCopy->copySrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarAddress_LdcVarConst_4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4)
+					{
+						IRLdlocVarAddress_LdcVarConst_4* addressConst = (IRLdlocVarAddress_LdcVarConst_4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4* fieldConst = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4*)next;
+						CreateIR(fused, LdlocVarAddress_LdcVarConst_4_LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->addressDst = addressConst->addressDst;
+						fused->addressSrc = addressConst->addressSrc;
+						fused->addressConstDst = addressConst->constDst;
+						fused->addressConstant = addressConst->constant;
+						fused->fieldDst = fieldConst->fieldDst;
+						fused->obj = fieldConst->obj;
+						fused->offset = fieldConst->offset;
+						fused->fieldConstDst = fieldConst->constDst;
+						fused->fieldConstant = fieldConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4)
+					{
+						IRBinOpVarVarVar_Add_i4_LdcVarConst_4* addConst = (IRBinOpVarVarVar_Add_i4_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4* andElement = (IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdcVarConst_4_BinOpAnd_i4_GetArrayElementVarVar_i4);
+						fused->addRet = addConst->addRet;
+						fused->addOp1 = addConst->addOp1;
+						fused->addOp2 = addConst->addOp2;
+						fused->constDst = addConst->constDst;
+						fused->constant = addConst->constant;
+						fused->andRet = andElement->andRet;
+						fused->andOp1 = andElement->andOp1;
+						fused->andOp2 = andElement->andOp2;
+						fused->elementDst = andElement->elementDst;
+						fused->arraySrc = andElement->arraySrc;
+						fused->indexSrc = andElement->indexSrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar && next->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4)
+					{
+						IRLdlocVarVar_LdlocVarVar_LdlocVarVar* copies = (IRLdlocVarVar_LdlocVarVar_LdlocVarVar*)ir;
+						IRBinOpVarVarVar_Add_i4_LdcVarConst_4* addConst = (IRBinOpVarVarVar_Add_i4_LdcVarConst_4*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4);
+						fused->copyDst1 = copies->dst1;
+						fused->copySrc1 = copies->src1;
+						fused->copyDst2 = copies->dst2;
+						fused->copySrc2 = copies->src2;
+						fused->copyDst3 = copies->dst3;
+						fused->copySrc3 = copies->src3;
+						fused->addRet = addConst->addRet;
+						fused->addOp1 = addConst->addOp1;
+						fused->addOp2 = addConst->addOp2;
+						fused->constDst = addConst->constDst;
+						fused->constant = addConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize)
+					{
+						IRLdfldValueTypeVarVar_i4_BinOpAdd_i4* fieldAdd = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4*)ir;
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize* addCopies = (IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize);
+						fused->fieldDst = fieldAdd->fieldDst;
+						fused->obj = fieldAdd->obj;
+						fused->offset = fieldAdd->offset;
+						fused->fieldAddRet = fieldAdd->addRet;
+						fused->fieldAddOp1 = fieldAdd->addOp1;
+						fused->fieldAddOp2 = fieldAdd->addOp2;
+						fused->addRet = addCopies->addRet;
+						fused->addOp1 = addCopies->addOp1;
+						fused->addOp2 = addCopies->addOp2;
+						fused->copyDst1 = addCopies->copyDst1;
+						fused->copySrc1 = addCopies->copySrc1;
+						fused->copyDst2 = addCopies->copyDst2;
+						fused->copySrc2 = addCopies->copySrc2;
+						fused->copyDst3 = addCopies->copyDst3;
+						fused->copySrc3 = addCopies->copySrc3;
+						fused->sizedCopyDst = addCopies->sizedCopyDst;
+						fused->sizedCopySrc = addCopies->sizedCopySrc;
+						fused->sizedCopySize = addCopies->sizedCopySize;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+				}
+				insts[writeIdx++] = ir;
+			}
+			insts.resize(writeIdx);
+			writeIdx = 0;
+			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (readIdx + 1 < insts.size())
+				{
+					IRCommon* next = insts[readIdx + 1];
+					if (ir->type == HiOpcodeEnum::LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4 && !IsNoOpTransformInstruction(ir))
+					{
+						IRLdlocVarVar* copy = (IRLdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4* fieldAdd = (IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4);
+						fused->copyDst = copy->dst;
+						fused->copySrc = copy->src;
+						fused->fieldDst0 = fieldAdd->fieldDst0;
+						fused->obj0 = fieldAdd->obj0;
+						fused->offset0 = fieldAdd->offset0;
+						fused->fieldDst1 = fieldAdd->fieldDst1;
+						fused->obj1 = fieldAdd->obj1;
+						fused->offset1 = fieldAdd->offset1;
+						fused->addRet1 = fieldAdd->addRet1;
+						fused->addOp11 = fieldAdd->addOp11;
+						fused->addOp21 = fieldAdd->addOp21;
+						fused->fieldDst2 = fieldAdd->fieldDst2;
+						fused->obj2 = fieldAdd->obj2;
+						fused->offset2 = fieldAdd->offset2;
+						fused->addRet2 = fieldAdd->addRet2;
+						fused->addOp12 = fieldAdd->addOp12;
+						fused->addOp22 = fieldAdd->addOp22;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Add_i4_LdlocVarVar* addCopy = (IRBinOpVarVarVar_Add_i4_LdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Add_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4);
+						fused->addRet = addCopy->addRet;
+						fused->addOp1 = addCopy->addOp1;
+						fused->addOp2 = addCopy->addOp2;
+						fused->copyDst = addCopy->copyDst;
+						fused->copySrc = addCopy->copySrc;
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->fieldCopyDst = fieldCopyConst->copyDst;
+						fused->fieldCopySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 && next->type == HiOpcodeEnum::StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4)
+					{
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4* subMax = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4*)ir;
+						IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4* storeFieldConst = (IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4);
+						fused->subRet = subMax->subRet;
+						fused->subOp1 = subMax->subOp1;
+						fused->subOp2 = subMax->subOp2;
+						fused->maxRet = subMax->maxRet;
+						fused->maxOp1 = subMax->maxOp1;
+						fused->maxOp2 = subMax->maxOp2;
+						fused->storeObj = storeFieldConst->storeObj;
+						fused->storeOffset = storeFieldConst->storeOffset;
+						fused->storeData = storeFieldConst->storeData;
+						fused->fieldDst = storeFieldConst->fieldDst;
+						fused->obj = storeFieldConst->obj;
+						fused->offset = storeFieldConst->offset;
+						fused->constDst = storeFieldConst->constDst;
+						fused->constant = storeFieldConst->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar)
+					{
+						IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4* andElement = (IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar* fieldDivAddCopy = (IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar*)next;
+						CreateIR(fused, BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar);
+						fused->andRet = andElement->andRet;
+						fused->andOp1 = andElement->andOp1;
+						fused->andOp2 = andElement->andOp2;
+						fused->elementDst = andElement->elementDst;
+						fused->arraySrc = andElement->arraySrc;
+						fused->indexSrc = andElement->indexSrc;
+						fused->fieldDst = fieldDivAddCopy->fieldDst;
+						fused->obj = fieldDivAddCopy->obj;
+						fused->offset = fieldDivAddCopy->offset;
+						fused->constDst = fieldDivAddCopy->constDst;
+						fused->constant = fieldDivAddCopy->constant;
+						fused->divRet = fieldDivAddCopy->divRet;
+						fused->divOp1 = fieldDivAddCopy->divOp1;
+						fused->divOp2 = fieldDivAddCopy->divOp2;
+						fused->addRet = fieldDivAddCopy->addRet;
+						fused->addOp1 = fieldDivAddCopy->addOp1;
+						fused->addOp2 = fieldDivAddCopy->addOp2;
+						fused->copyDst = fieldDivAddCopy->copyDst;
+						fused->copySrc = fieldDivAddCopy->copySrc;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Div_i4_MathMinVarVarVar_i4)
+					{
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4* fieldCopyConst = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4*)ir;
+						IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4* divMin = (IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4*)next;
+						CreateIR(fused, LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4);
+						fused->fieldDst = fieldCopyConst->fieldDst;
+						fused->obj = fieldCopyConst->obj;
+						fused->offset = fieldCopyConst->offset;
+						fused->copyDst = fieldCopyConst->copyDst;
+						fused->copySrc = fieldCopyConst->copySrc;
+						fused->constDst = fieldCopyConst->constDst;
+						fused->constant = fieldCopyConst->constant;
+						fused->divRet = divMin->divRet;
+						fused->divOp1 = divMin->divOp1;
+						fused->divOp2 = divMin->divOp2;
+						fused->minRet = divMin->minRet;
+						fused->minOp1 = divMin->minOp1;
+						fused->minOp2 = divMin->minOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+				}
+				insts[writeIdx++] = ir;
+			}
+			insts.resize(writeIdx);
+			writeIdx = 0;
+			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (readIdx + 1 < insts.size())
+				{
+					IRCommon* next = insts[readIdx + 1];
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4 && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize)
+					{
+						IRLdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4* head = (IRLdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4*)ir;
+						IRLdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize* tail = (IRLdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize*)next;
+						CreateIR(fused, LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize);
+						fused->copyDst = head->copyDst;
+						fused->copySrc = head->copySrc;
+						fused->fieldDst0 = head->fieldDst0;
+						fused->obj0 = head->obj0;
+						fused->offset0 = head->offset0;
+						fused->fieldDst1 = head->fieldDst1;
+						fused->obj1 = head->obj1;
+						fused->offset1 = head->offset1;
+						fused->addRet1 = head->addRet1;
+						fused->addOp11 = head->addOp11;
+						fused->addOp21 = head->addOp21;
+						fused->fieldDst2 = head->fieldDst2;
+						fused->obj2 = head->obj2;
+						fused->offset2 = head->offset2;
+						fused->addRet2 = head->addRet2;
+						fused->addOp12 = head->addOp12;
+						fused->addOp22 = head->addOp22;
+						fused->tailFieldDst = tail->fieldDst;
+						fused->tailObj = tail->obj;
+						fused->tailOffset = tail->offset;
+						fused->tailFieldAddRet = tail->fieldAddRet;
+						fused->tailFieldAddOp1 = tail->fieldAddOp1;
+						fused->tailFieldAddOp2 = tail->fieldAddOp2;
+						fused->tailAddRet = tail->addRet;
+						fused->tailAddOp1 = tail->addOp1;
+						fused->tailAddOp2 = tail->addOp2;
+						fused->tailCopyDst1 = tail->copyDst1;
+						fused->tailCopySrc1 = tail->copySrc1;
+						fused->tailCopyDst2 = tail->copyDst2;
+						fused->tailCopySrc2 = tail->copySrc2;
+						fused->tailCopyDst3 = tail->copyDst3;
+						fused->tailCopySrc3 = tail->copySrc3;
+						fused->tailSizedCopyDst = tail->sizedCopyDst;
+						fused->tailSizedCopySrc = tail->sizedCopySrc;
+						fused->tailSizedCopySize = tail->sizedCopySize;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+				}
+				insts[writeIdx++] = ir;
+			}
+			insts.resize(writeIdx);
+			writeIdx = 0;
+			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (readIdx + 1 < insts.size())
+				{
+					IRCommon* next = insts[readIdx + 1];
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize && next->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4)
+					{
+						IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize* element = (IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize*)ir;
+						IRLdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4* tail = (IRLdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize_LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4);
+						fused->elementCopyDst1 = element->copyDst1;
+						fused->elementCopySrc1 = element->copySrc1;
+						fused->elementCopyDst2 = element->copyDst2;
+						fused->elementCopySrc2 = element->copySrc2;
+						fused->elementDst = element->elementDst;
+						fused->arraySrc = element->arraySrc;
+						fused->indexSrc = element->indexSrc;
+						fused->sizedCopyDst = element->sizedCopyDst;
+						fused->sizedCopySrc = element->sizedCopySrc;
+						fused->sizedCopySize = element->sizedCopySize;
+						fused->tailCopyDst1 = tail->copyDst1;
+						fused->tailCopySrc1 = tail->copySrc1;
+						fused->tailCopyDst2 = tail->copyDst2;
+						fused->tailCopySrc2 = tail->copySrc2;
+						fused->tailCopyDst3 = tail->copyDst3;
+						fused->tailCopySrc3 = tail->copySrc3;
+						fused->addRet = tail->addRet;
+						fused->addOp1 = tail->addOp1;
+						fused->addOp2 = tail->addOp2;
+						fused->constDst = tail->constDst;
+						fused->constant = tail->constant;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4 && next->type == HiOpcodeEnum::LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar)
+					{
+						IRLdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4* head = (IRLdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4*)ir;
+						IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar* tail = (IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar*)next;
+						CreateIR(fused, LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar);
+						fused->copyDst = head->copyDst;
+						fused->copySrc = head->copySrc;
+						fused->subRet = head->subRet;
+						fused->subOp1 = head->subOp1;
+						fused->subOp2 = head->subOp2;
+						fused->storeAddress = head->storeAddress;
+						fused->addressDst = tail->addressDst;
+						fused->addressSrc = tail->addressSrc;
+						fused->fieldAddressDst = tail->fieldAddressDst;
+						fused->obj = tail->obj;
+						fused->offset = tail->offset;
+						fused->addressCopyDst = tail->copyDst;
+						fused->addressCopySrc = tail->copySrc;
+						fused->indDst = tail->indDst;
+						fused->indSrc = tail->indSrc;
+						fused->constDst = tail->constDst;
+						fused->constant = tail->constant;
+						fused->tailCopyDst1 = tail->tailCopyDst1;
+						fused->tailCopySrc1 = tail->tailCopySrc1;
+						fused->tailCopyDst2 = tail->tailCopyDst2;
+						fused->tailCopySrc2 = tail->tailCopySrc2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 && next->type == HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4)
+					{
+						IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4* head = (IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4*)ir;
+						IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4* tail = (IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4);
+						fused->headSubRet = head->subRet;
+						fused->headSubOp1 = head->subOp1;
+						fused->headSubOp2 = head->subOp2;
+						fused->fieldDst = head->fieldDst;
+						fused->obj = head->obj;
+						fused->offset = head->offset;
+						fused->constDst = head->constDst;
+						fused->constant = head->constant;
+						fused->divRet = head->divRet;
+						fused->divOp1 = head->divOp1;
+						fused->divOp2 = head->divOp2;
+						fused->chainSubRet = tail->subRet;
+						fused->chainSubOp1 = tail->subOp1;
+						fused->chainSubOp2 = tail->subOp2;
+						fused->maxRet = tail->maxRet;
+						fused->maxOp1 = tail->maxOp1;
+						fused->maxOp2 = tail->maxOp2;
+						fused->tailSubRet = tail->tailSubRet;
+						fused->tailSubOp1 = tail->tailSubOp1;
+						fused->tailSubOp2 = tail->tailSubOp2;
+						fused->storeAddress = tail->storeAddress;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4 && next->type == HiOpcodeEnum::LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4)
+					{
+						IRLdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4* head = (IRLdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4*)ir;
+						IRLdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4* tail = (IRLdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4);
+						fused->leadingCopyDst = head->leadingCopyDst;
+						fused->leadingCopySrc = head->leadingCopySrc;
+						fused->addressDst = head->addressDst;
+						fused->addressSrc = head->addressSrc;
+						fused->fieldAddressDst = head->fieldAddressDst;
+						fused->obj = head->obj;
+						fused->offset = head->offset;
+						fused->copyDst = head->copyDst;
+						fused->copySrc = head->copySrc;
+						fused->indDst = head->indDst;
+						fused->indSrc = head->indSrc;
+						fused->tailCopyDst = tail->copyDst;
+						fused->tailCopySrc = tail->copySrc;
+						fused->subRet = tail->subRet;
+						fused->subOp1 = tail->subOp1;
+						fused->subOp2 = tail->subOp2;
+						fused->storeAddress = tail->storeAddress;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar && next->type == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4)
+					{
+						IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar* head = (IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar*)ir;
+						IRLdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4* tail = (IRLdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4*)next;
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4);
+						fused->headCopyDst1 = head->copyDst1;
+						fused->headCopySrc1 = head->copySrc1;
+						fused->headConstDst = head->constDst;
+						fused->headConstant = head->constant;
+						fused->headAddRet = head->addRet;
+						fused->headAddOp1 = head->addOp1;
+						fused->headAddOp2 = head->addOp2;
+						fused->headCopyDst2 = head->copyDst2;
+						fused->headCopySrc2 = head->copySrc2;
+						fused->lengthCopyDst1 = tail->copyDst1;
+						fused->lengthCopySrc1 = tail->copySrc1;
+						fused->lengthCopyDst2 = tail->copyDst2;
+						fused->lengthCopySrc2 = tail->copySrc2;
+						fused->lengthDst = tail->lengthDst;
+						fused->arraySrc = tail->arraySrc;
+						fused->branchOp1 = tail->branchOp1;
+						fused->branchOp2 = tail->branchOp2;
+						fused->offset = tail->offset;
+						relocationOffsets.push_back(&fused->offset);
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+				}
+				insts[writeIdx++] = ir;
+			}
+			insts.resize(writeIdx);
+			writeIdx = 0;
+			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (readIdx + 1 < insts.size())
+				{
+					IRCommon* next = insts[readIdx + 1];
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4 && next->type == HiOpcodeEnum::LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar)
+					{
+						IRLdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4* head = (IRLdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4*)ir;
+						IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar* tail = (IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar*)next;
+						CreateIR(fused, LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar);
+						fused->leadingCopyDst = head->leadingCopyDst;
+						fused->leadingCopySrc = head->leadingCopySrc;
+						fused->firstAddressDst = head->addressDst;
+						fused->firstAddressSrc = head->addressSrc;
+						fused->firstFieldAddressDst = head->fieldAddressDst;
+						fused->firstObj = head->obj;
+						fused->firstOffset = head->offset;
+						fused->firstCopyDst = head->copyDst;
+						fused->firstCopySrc = head->copySrc;
+						fused->firstIndDst = head->indDst;
+						fused->firstIndSrc = head->indSrc;
+						fused->tailCopyDst = head->tailCopyDst;
+						fused->tailCopySrc = head->tailCopySrc;
+						fused->subRet = head->subRet;
+						fused->subOp1 = head->subOp1;
+						fused->subOp2 = head->subOp2;
+						fused->storeAddress = head->storeAddress;
+						fused->secondAddressDst = tail->addressDst;
+						fused->secondAddressSrc = tail->addressSrc;
+						fused->secondFieldAddressDst = tail->fieldAddressDst;
+						fused->secondObj = tail->obj;
+						fused->secondOffset = tail->offset;
+						fused->secondCopyDst = tail->copyDst;
+						fused->secondCopySrc = tail->copySrc;
+						fused->secondIndDst = tail->indDst;
+						fused->secondIndSrc = tail->indSrc;
+						fused->constDst = tail->constDst;
+						fused->constant = tail->constant;
+						fused->secondTailCopyDst1 = tail->tailCopyDst1;
+						fused->secondTailCopySrc1 = tail->tailCopySrc1;
+						fused->secondTailCopyDst2 = tail->tailCopyDst2;
+						fused->secondTailCopySrc2 = tail->tailCopySrc2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+					if (ir->type == HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar && next->type == HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4)
+					{
+						IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar* head = (IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar*)ir;
+						IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4* tail = (IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4*)next;
+						CreateIR(fused, BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4);
+						fused->andRet = head->andRet;
+						fused->andOp1 = head->andOp1;
+						fused->andOp2 = head->andOp2;
+						fused->elementDst = head->elementDst;
+						fused->arraySrc = head->arraySrc;
+						fused->indexSrc = head->indexSrc;
+						fused->firstFieldDst = head->fieldDst;
+						fused->firstObj = head->obj;
+						fused->firstOffset = head->offset;
+						fused->firstConstDst = head->constDst;
+						fused->firstConstant = head->constant;
+						fused->firstDivRet = head->divRet;
+						fused->firstDivOp1 = head->divOp1;
+						fused->firstDivOp2 = head->divOp2;
+						fused->addRet = head->addRet;
+						fused->addOp1 = head->addOp1;
+						fused->addOp2 = head->addOp2;
+						fused->copyDst = head->copyDst;
+						fused->copySrc = head->copySrc;
+						fused->secondFieldDst = tail->fieldDst;
+						fused->secondObj = tail->obj;
+						fused->secondOffset = tail->offset;
+						fused->secondCopyDst = tail->copyDst;
+						fused->secondCopySrc = tail->copySrc;
+						fused->secondConstDst = tail->constDst;
+						fused->secondConstant = tail->constant;
+						fused->secondDivRet = tail->divRet;
+						fused->secondDivOp1 = tail->divOp1;
+						fused->secondDivOp2 = tail->divOp2;
+						fused->minRet = tail->minRet;
+						fused->minOp1 = tail->minOp1;
+						fused->minOp2 = tail->minOp2;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
+				}
+				insts[writeIdx++] = ir;
+			}
+			insts.resize(writeIdx);
 		}
 	}
 
@@ -3293,6 +5782,7 @@ else \
 							ir->methodInfo = methodDataIndex;
 							ir->argBase = argBaseOffset;
 							ir->ret = argBaseOffset;
+							ir->isInstanceMethod = resolvedIsInstanceMethod ? 1 : 0;
 						}
 					}
 					PopStackN(resolvedTotalArgNum);
@@ -6165,6 +8655,7 @@ ir->ele = ele.locOffset;
 		}
 	finish_transform:
 
+		OptimizeBasicBlocks();
 
 		totalIRSize = 0;
 		for (IRBasicBlock* bb : irbbs)

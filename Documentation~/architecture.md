@@ -138,7 +138,18 @@ Assets/EditorForBuild/Generated/Payload/
 Library/EditorForBuild/AssetBundles/hotc233_binary_payload
 ```
 
-验证只从这个 AssetBundle 读回数据，不直接读源 DLL。这样能证明发布形态真实可用。
+功能和资源 smoke 可以从这个 AssetBundle 读回数据，证明发布形态真实可用。
+
+WebGL / PC 的解释器性能表必须使用 direct StreamingAssets payload，避免把 AssetBundle、YooAsset 或下载耗时混进 hotc 执行性能：
+
+```text
+Assets/StreamingAssets/Hotc233Probe/Payload/
+  payload-manifest.json
+  HotUpdateDlls/*.dll.bytes
+  RuntimeMetadata/*.dll.bytes
+```
+
+`hotc233ctl webgl` 会把这份 payload 打进 WebGL Player，浏览器只捕获热更性能 JSON，再与同平台原生 WebGL IL2CPP Player 对比并生成 `performance-webgl-local-il2cpp.md/json`。
 
 ## AppRoot 集成
 
@@ -227,13 +238,14 @@ flowchart TD
     B --> D["Runtime metadata DLL"]
     C --> E[".dll.bytes payload"]
     D --> E
-    E --> F["AssetBundle hotc233_binary_payload"]
-    F --> G["Load TextAsset.bytes"]
+    E --> F["Direct StreamingAssets payload"]
+    E --> AB["AssetBundle smoke payload"]
+    F --> G["Load raw bytes"]
     G --> H["LoadRuntimeMetadata"]
     G --> I["LoadHotUpdateAssemblies"]
-    H --> J["Invoke RunSelfTest"]
+    H --> J["Invoke performance / verification entry"]
     I --> J
-    J --> K["verification-report.json"]
+    J --> K["performance table / verification report"]
 ```
 
 ## 失败面

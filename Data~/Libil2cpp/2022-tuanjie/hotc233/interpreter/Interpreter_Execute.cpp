@@ -631,6 +631,24 @@ namespace interpreter
 		}
 	}
 
+	inline void* GetCheckedArrayElementAddress(Il2CppArray* arr, int32_t index, uint32_t elementSize)
+	{
+		CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, index);
+		return GET_ARRAY_ELEMENT_ADDRESS(arr, index, elementSize);
+	}
+
+	template<typename T>
+	inline T GetArrayElementFast(Il2CppArray* arr, int32_t index)
+	{
+		return *(T*)GetCheckedArrayElementAddress(arr, index, sizeof(T));
+	}
+
+	template<typename T>
+	inline void SetArrayElementFast(Il2CppArray* arr, int32_t index, T value)
+	{
+		*(T*)GetCheckedArrayElementAddress(arr, index, sizeof(T)) = value;
+	}
+
 	inline void CHECK_TYPE_MATCH_ELSE_THROW(Il2CppClass* klass1, Il2CppClass* klass2)
 	{
 		if (klass1 != klass2)
@@ -1678,15 +1696,36 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 
 		Il2CppException* lastUnwindException;
 		StackObject* tempRet = nullptr;
+		uint32_t opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
 
 		PREPARE_NEW_FRAME_FROM_NATIVE(methodInfo, args, ret);
 
 	LoopStart:
+		opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
 		try
 		{
 			for (;;)
 			{
-				switch (*(HiOpcodeEnum*)ip)
+				HiOpcodeEnum __opcode = *(HiOpcodeEnum*)ip;
+				if (g_opcodeProfilerEnabled)
+				{
+					uint32_t __opcodeIndex = (uint32_t)__opcode;
+					if (__opcodeIndex < kDynamicOpcodeProfileCapacity)
+					{
+						g_opcodeProfilerCounts[__opcodeIndex]++;
+						g_opcodeProfilerTotal++;
+						if (opcodeProfilerLastOpcode < kDynamicOpcodeProfileCapacity)
+						{
+							RecordOpcodeProfilePair(opcodeProfilerLastOpcode, __opcodeIndex);
+						}
+						opcodeProfilerLastOpcode = __opcodeIndex;
+					}
+					else
+					{
+						opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+					}
+				}
+				switch (__opcode)
 				{
 					// avoid decrement *ip when compute jump table,  boosts about 5% performance
 				case HiOpcodeEnum::None:
@@ -1778,11 +1817,22 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::LdlocVarVar:
+				HOTC233_EXEC_LdlocVarVar:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
 					(*(uint64_t*)(localVarBase + __dst)) = (*(uint64_t*)(localVarBase + __src));
-				    ip += 8;
+					byte* __nextIp = ip + 8;
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::LdfldVarVar_u1_BranchFalseVar_i4)
+					{
+						ip = __nextIp;
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdfldVarVar_u1_BranchFalseVar_i4;
+					}
+				    ip = __nextIp;
 				    continue;
 				}
 				case HiOpcodeEnum::LdlocExpandVarVar_i1:
@@ -1826,12 +1876,809 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar:
+				{
+					uint16_t __dst1 = *(uint16_t*)(ip + 2);
+					uint16_t __src1 = *(uint16_t*)(ip + 4);
+					uint16_t __dst2 = *(uint16_t*)(ip + 6);
+					uint16_t __src2 = *(uint16_t*)(ip + 8);
+					(*(uint64_t*)(localVarBase + __dst1)) = (*(uint64_t*)(localVarBase + __src1));
+					(*(uint64_t*)(localVarBase + __dst2)) = (*(uint64_t*)(localVarBase + __src2));
+					byte* __nextIp = ip + 16;
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::CallCommonNativeInstance_v_i4_1)
+					{
+						ip = __nextIp;
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_CallCommonNativeInstance_v_i4_1;
+					}
+				    ip = __nextIp;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __elementDst = *(uint16_t*)(ip + 10);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 12);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 14);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    Copy24((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(arr, _index, 24));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24_LdlocVarVarSize:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __elementDst = *(uint16_t*)(ip + 10);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 12);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 14);
+					uint16_t __sizedCopyDst = *(uint16_t*)(ip + 16);
+					uint16_t __sizedCopySrc = *(uint16_t*)(ip + 18);
+					uint16_t __sizedCopySize = *(uint16_t*)(ip + 20);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    Copy24((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(arr, _index, 24));
+					std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __elementDst = *(uint16_t*)(ip + 10);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 12);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 14);
+					uint16_t __sizedCopyDst = *(uint16_t*)(ip + 16);
+					uint16_t __sizedCopySrc = *(uint16_t*)(ip + 18);
+					uint16_t __sizedCopySize = *(uint16_t*)(ip + 20);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    Copy28((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(arr, _index, 28));
+					std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_i4:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __elementDst = *(uint16_t*)(ip + 10);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 12);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 14);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    (*(int32_t*)(localVarBase + __elementDst)) = GetArrayElementFast<int32_t>(arr, _index);
+					byte* __nextIp = ip + 16;
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4)
+					{
+						ip = __nextIp;
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarVar_LdlocVarVar_LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4;
+					}
+				    ip = __nextIp;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __addRet = *(uint16_t*)(ip + 10);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 12);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 14);
+					uint16_t __constDst = *(uint16_t*)(ip + 16);
+					uint32_t __constant = *(uint32_t*)(ip + 20);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar:
+				{
+					uint16_t __dst1 = *(uint16_t*)(ip + 2);
+					uint16_t __src1 = *(uint16_t*)(ip + 4);
+					uint16_t __dst2 = *(uint16_t*)(ip + 6);
+					uint16_t __src2 = *(uint16_t*)(ip + 8);
+					uint16_t __dst3 = *(uint16_t*)(ip + 10);
+					uint16_t __src3 = *(uint16_t*)(ip + 12);
+					(*(uint64_t*)(localVarBase + __dst1)) = (*(uint64_t*)(localVarBase + __src1));
+					(*(uint64_t*)(localVarBase + __dst2)) = (*(uint64_t*)(localVarBase + __src2));
+					(*(uint64_t*)(localVarBase + __dst3)) = (*(uint64_t*)(localVarBase + __src3));
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __copyDst3 = *(uint16_t*)(ip + 10);
+					uint16_t __copySrc3 = *(uint16_t*)(ip + 12);
+					uint16_t __addRet = *(uint16_t*)(ip + 14);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 16);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 18);
+					uint16_t __constDst = *(uint16_t*)(ip + 20);
+					uint32_t __constant = *(uint32_t*)(ip + 24);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdindVarVar_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __indDst = *(uint16_t*)(ip + 6);
+					uint16_t __indSrc = *(uint16_t*)(ip + 8);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __indDst)) = (*(int32_t*)*(void**)(localVarBase + __indSrc));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __lengthDst = *(uint16_t*)(ip + 10);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 12);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					Il2CppArray* __arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+				    CHECK_NOT_NULL_THROW(__arr);
+				    (*(int64_t*)(localVarBase + __lengthDst)) = (int64_t)il2cpp::vm::Array::GetLength(__arr);
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __lengthDst = *(uint16_t*)(ip + 10);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 12);
+					uint16_t __branchOp1 = *(uint16_t*)(ip + 14);
+					uint16_t __branchOp2 = *(uint16_t*)(ip + 16);
+					int32_t __offset = *(int32_t*)(ip + 20);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					Il2CppArray* __arr = *(Il2CppArray**)(localVarBase + __arraySrc);
+				    (*(int64_t*)(localVarBase + __lengthDst)) = (int64_t)il2cpp::vm::Array::GetLength(__arr);
+				    if (CompareCge((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+				    {
+				        ip += 24;
+				    }
+				    else
+				    {
+				        ip = ipBase + __offset;
+				    }
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __constDst = *(uint16_t*)(ip + 6);
+					uint32_t __constant = *(uint32_t*)(ip + 8);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_BranchVarVar_CneUn_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __branchOp1 = *(uint16_t*)(ip + 6);
+					uint16_t __branchOp2 = *(uint16_t*)(ip + 8);
+					int32_t __offset = *(int32_t*)(ip + 12);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+				    if (CompareCneUn((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+				    {
+				        ip = ipBase + __offset;
+				    }
+				    else
+				    {
+				        ip += 16;
+				    }
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BranchVarVar_Clt_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __constDst = *(uint16_t*)(ip + 6);
+					uint32_t __constant = *(uint32_t*)(ip + 8);
+					uint16_t __branchOp1 = *(uint16_t*)(ip + 12);
+					uint16_t __branchOp2 = *(uint16_t*)(ip + 14);
+					int32_t __offset = *(int32_t*)(ip + 16);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    if (CompareCge((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+				    {
+				        ip += 24;
+				    }
+				    else
+				    {
+				        ip = ipBase + __offset;
+				    }
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __constDst = *(uint16_t*)(ip + 6);
+					uint32_t __constant = *(uint32_t*)(ip + 8);
+					uint16_t __addRet = *(uint16_t*)(ip + 12);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 14);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 16);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpRem_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __constDst = *(uint16_t*)(ip + 6);
+					uint32_t __constant = *(uint32_t*)(ip + 8);
+					uint16_t __remRet = *(uint16_t*)(ip + 12);
+					uint16_t __remOp1 = *(uint16_t*)(ip + 14);
+					uint16_t __remOp2 = *(uint16_t*)(ip + 16);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __remRet)) = HiRem((*(int32_t*)(localVarBase + __remOp1)), (*(int32_t*)(localVarBase + __remOp2)));
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpRem_i4_LdcVarConst_4_CompOpCeq_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __remConstDst = *(uint16_t*)(ip + 6);
+					uint32_t __remConstant = *(uint32_t*)(ip + 8);
+					uint16_t __remRet = *(uint16_t*)(ip + 12);
+					uint16_t __remOp1 = *(uint16_t*)(ip + 14);
+					uint16_t __remOp2 = *(uint16_t*)(ip + 16);
+					uint16_t __compareConstDst = *(uint16_t*)(ip + 18);
+					uint32_t __compareConstant = *(uint32_t*)(ip + 20);
+					uint16_t __compareRet = *(uint16_t*)(ip + 24);
+					uint16_t __compareOp1 = *(uint16_t*)(ip + 26);
+					uint16_t __compareOp2 = *(uint16_t*)(ip + 28);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __remConstDst)) = __remConstant;
+					(*(int32_t*)(localVarBase + __remRet)) = HiRem((*(int32_t*)(localVarBase + __remOp1)), (*(int32_t*)(localVarBase + __remOp2)));
+					(*(int32_t*)(localVarBase + __compareConstDst)) = __compareConstant;
+					(*(int32_t*)(localVarBase + __compareRet)) = CompareCeq((*(int32_t*)(localVarBase + __compareOp1)), (*(int32_t*)(localVarBase + __compareOp2)));
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpRem_i4_LdcVarConst_4_CompOpCeq_i4_RetVar_ret_1:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __remConstDst = *(uint16_t*)(ip + 6);
+					uint32_t __remConstant = *(uint32_t*)(ip + 8);
+					uint16_t __remRet = *(uint16_t*)(ip + 12);
+					uint16_t __remOp1 = *(uint16_t*)(ip + 14);
+					uint16_t __remOp2 = *(uint16_t*)(ip + 16);
+					uint16_t __compareConstDst = *(uint16_t*)(ip + 18);
+					uint32_t __compareConstant = *(uint32_t*)(ip + 20);
+					uint16_t __compareRet = *(uint16_t*)(ip + 24);
+					uint16_t __compareOp1 = *(uint16_t*)(ip + 26);
+					uint16_t __compareOp2 = *(uint16_t*)(ip + 28);
+					uint16_t __ret = *(uint16_t*)(ip + 30);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __remConstDst)) = __remConstant;
+					(*(int32_t*)(localVarBase + __remRet)) = HiRem((*(int32_t*)(localVarBase + __remOp1)), (*(int32_t*)(localVarBase + __remOp2)));
+					(*(int32_t*)(localVarBase + __compareConstDst)) = __compareConstant;
+					(*(int32_t*)(localVarBase + __compareRet)) = CompareCeq((*(int32_t*)(localVarBase + __compareOp1)), (*(int32_t*)(localVarBase + __compareOp2)));
+				    SET_RET_AND_LEAVE_FRAME(1, 8);
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __constDst = *(uint16_t*)(ip + 6);
+					uint32_t __constant = *(uint32_t*)(ip + 8);
+					uint16_t __mulRet = *(uint16_t*)(ip + 12);
+					uint16_t __mulOp1 = *(uint16_t*)(ip + 14);
+					uint16_t __mulOp2 = *(uint16_t*)(ip + 16);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __mulRet)) = (*(int32_t*)(localVarBase + __mulOp1)) * (*(int32_t*)(localVarBase + __mulOp2));
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar:
+				HOTC233_EXEC_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __constDst = *(uint16_t*)(ip + 6);
+					uint32_t __constant = *(uint32_t*)(ip + 8);
+					uint16_t __addRet = *(uint16_t*)(ip + 12);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 14);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 16);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 18);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 20);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					byte* __nextIp = ip + 32;
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4)
+					{
+						ip = __nextIp;
+						uint16_t __lengthCopyDst1 = *(uint16_t*)(ip + 2);
+						uint16_t __lengthCopySrc1 = *(uint16_t*)(ip + 4);
+						uint16_t __lengthCopyDst2 = *(uint16_t*)(ip + 6);
+						uint16_t __lengthCopySrc2 = *(uint16_t*)(ip + 8);
+						uint16_t __lengthDst = *(uint16_t*)(ip + 10);
+						uint16_t __arraySrc = *(uint16_t*)(ip + 12);
+						uint16_t __branchOp1 = *(uint16_t*)(ip + 14);
+						uint16_t __branchOp2 = *(uint16_t*)(ip + 16);
+						int32_t __offset = *(int32_t*)(ip + 20);
+						(*(uint64_t*)(localVarBase + __lengthCopyDst1)) = (*(uint64_t*)(localVarBase + __lengthCopySrc1));
+						(*(uint64_t*)(localVarBase + __lengthCopyDst2)) = (*(uint64_t*)(localVarBase + __lengthCopySrc2));
+						Il2CppArray* __arr = *(Il2CppArray**)(localVarBase + __arraySrc);
+					    (*(int64_t*)(localVarBase + __lengthDst)) = (int64_t)il2cpp::vm::Array::GetLength(__arr);
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+					    if (CompareCge((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+					    {
+							byte* __fallthroughIp = ip + 24;
+							if (*(HiOpcodeEnum*)__fallthroughIp == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24_LdlocVarVarSize)
+							{
+								ip = __fallthroughIp;
+								uint16_t __elementCopyDst1 = *(uint16_t*)(ip + 2);
+								uint16_t __elementCopySrc1 = *(uint16_t*)(ip + 4);
+								uint16_t __elementCopyDst2 = *(uint16_t*)(ip + 6);
+								uint16_t __elementCopySrc2 = *(uint16_t*)(ip + 8);
+								uint16_t __elementDst = *(uint16_t*)(ip + 10);
+								uint16_t __elementArraySrc = *(uint16_t*)(ip + 12);
+								uint16_t __indexSrc = *(uint16_t*)(ip + 14);
+								uint16_t __sizedCopyDst = *(uint16_t*)(ip + 16);
+								uint16_t __sizedCopySrc = *(uint16_t*)(ip + 18);
+								uint16_t __sizedCopySize = *(uint16_t*)(ip + 20);
+								(*(uint64_t*)(localVarBase + __elementCopyDst1)) = (*(uint64_t*)(localVarBase + __elementCopySrc1));
+								(*(uint64_t*)(localVarBase + __elementCopyDst2)) = (*(uint64_t*)(localVarBase + __elementCopySrc2));
+							    Il2CppArray* __elementArr = (*(Il2CppArray**)(localVarBase + __elementArraySrc));
+								int32_t __index = (*(int32_t*)(localVarBase + __indexSrc));
+							    Copy24((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(__elementArr, __index, 24));
+								std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+								ip += 24;
+							}
+							else
+							{
+						        ip = __fallthroughIp;
+							}
+					    }
+					    else
+					    {
+							byte* __targetIp = ipBase + __offset;
+							if (*(HiOpcodeEnum*)__targetIp == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24_LdlocVarVarSize)
+							{
+								ip = __targetIp;
+								uint16_t __elementCopyDst1 = *(uint16_t*)(ip + 2);
+								uint16_t __elementCopySrc1 = *(uint16_t*)(ip + 4);
+								uint16_t __elementCopyDst2 = *(uint16_t*)(ip + 6);
+								uint16_t __elementCopySrc2 = *(uint16_t*)(ip + 8);
+								uint16_t __elementDst = *(uint16_t*)(ip + 10);
+								uint16_t __elementArraySrc = *(uint16_t*)(ip + 12);
+								uint16_t __indexSrc = *(uint16_t*)(ip + 14);
+								uint16_t __sizedCopyDst = *(uint16_t*)(ip + 16);
+								uint16_t __sizedCopySrc = *(uint16_t*)(ip + 18);
+								uint16_t __sizedCopySize = *(uint16_t*)(ip + 20);
+								(*(uint64_t*)(localVarBase + __elementCopyDst1)) = (*(uint64_t*)(localVarBase + __elementCopySrc1));
+								(*(uint64_t*)(localVarBase + __elementCopyDst2)) = (*(uint64_t*)(localVarBase + __elementCopySrc2));
+							    Il2CppArray* __elementArr = (*(Il2CppArray**)(localVarBase + __elementArraySrc));
+								int32_t __index = (*(int32_t*)(localVarBase + __indexSrc));
+							    Copy24((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(__elementArr, __index, 24));
+								std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+								ip += 24;
+							}
+							else
+							{
+					            ip = __targetIp;
+							}
+					    }
+						continue;
+					}
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BranchVarVar_Clt_i4)
+					{
+						ip = __nextIp;
+						uint16_t __branchCopyDst = *(uint16_t*)(ip + 2);
+						uint16_t __branchCopySrc = *(uint16_t*)(ip + 4);
+						uint16_t __branchConstDst = *(uint16_t*)(ip + 6);
+						uint32_t __branchConstant = *(uint32_t*)(ip + 8);
+						uint16_t __branchOp1 = *(uint16_t*)(ip + 12);
+						uint16_t __branchOp2 = *(uint16_t*)(ip + 14);
+						int32_t __offset = *(int32_t*)(ip + 16);
+						(*(uint64_t*)(localVarBase + __branchCopyDst)) = (*(uint64_t*)(localVarBase + __branchCopySrc));
+						(*(int32_t*)(localVarBase + __branchConstDst)) = __branchConstant;
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+					    if (CompareCge((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+					    {
+					        ip += 24;
+					    }
+					    else
+					    {
+					        ip = ipBase + __offset;
+					    }
+						continue;
+					}
+				    ip = __nextIp;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4:
+				{
+					uint16_t __headCopyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __headCopySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __headConstDst = *(uint16_t*)(ip + 6);
+					uint32_t __headConstant = *(uint32_t*)(ip + 8);
+					uint16_t __headAddRet = *(uint16_t*)(ip + 12);
+					uint16_t __headAddOp1 = *(uint16_t*)(ip + 14);
+					uint16_t __headAddOp2 = *(uint16_t*)(ip + 16);
+					uint16_t __headCopyDst2 = *(uint16_t*)(ip + 18);
+					uint16_t __headCopySrc2 = *(uint16_t*)(ip + 20);
+					uint16_t __lengthCopyDst1 = *(uint16_t*)(ip + 22);
+					uint16_t __lengthCopySrc1 = *(uint16_t*)(ip + 24);
+					uint16_t __lengthCopyDst2 = *(uint16_t*)(ip + 26);
+					uint16_t __lengthCopySrc2 = *(uint16_t*)(ip + 28);
+					uint16_t __lengthDst = *(uint16_t*)(ip + 30);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 32);
+					uint16_t __branchOp1 = *(uint16_t*)(ip + 34);
+					uint16_t __branchOp2 = *(uint16_t*)(ip + 36);
+					int32_t __offset = *(int32_t*)(ip + 38);
+					(*(uint64_t*)(localVarBase + __headCopyDst1)) = (*(uint64_t*)(localVarBase + __headCopySrc1));
+					(*(int32_t*)(localVarBase + __headConstDst)) = __headConstant;
+					(*(int32_t*)(localVarBase + __headAddRet)) = (*(int32_t*)(localVarBase + __headAddOp1)) + (*(int32_t*)(localVarBase + __headAddOp2));
+					(*(uint64_t*)(localVarBase + __headCopyDst2)) = (*(uint64_t*)(localVarBase + __headCopySrc2));
+					(*(uint64_t*)(localVarBase + __lengthCopyDst1)) = (*(uint64_t*)(localVarBase + __lengthCopySrc1));
+					(*(uint64_t*)(localVarBase + __lengthCopyDst2)) = (*(uint64_t*)(localVarBase + __lengthCopySrc2));
+					Il2CppArray* __arr = *(Il2CppArray**)(localVarBase + __arraySrc);
+				    (*(int64_t*)(localVarBase + __lengthDst)) = (int64_t)il2cpp::vm::Array::GetLength(__arr);
+				    if (CompareCge((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+				    {
+				        ip += 48;
+				    }
+				    else
+				    {
+				        ip = ipBase + __offset;
+				    }
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize_LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4:
+				{
+					uint16_t __elementCopyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __elementCopySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __elementCopyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __elementCopySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __elementDst = *(uint16_t*)(ip + 10);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 12);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 14);
+					uint16_t __sizedCopyDst = *(uint16_t*)(ip + 16);
+					uint16_t __sizedCopySrc = *(uint16_t*)(ip + 18);
+					uint16_t __sizedCopySize = *(uint16_t*)(ip + 20);
+					uint16_t __tailCopyDst1 = *(uint16_t*)(ip + 22);
+					uint16_t __tailCopySrc1 = *(uint16_t*)(ip + 24);
+					uint16_t __tailCopyDst2 = *(uint16_t*)(ip + 26);
+					uint16_t __tailCopySrc2 = *(uint16_t*)(ip + 28);
+					uint16_t __tailCopyDst3 = *(uint16_t*)(ip + 30);
+					uint16_t __tailCopySrc3 = *(uint16_t*)(ip + 32);
+					uint16_t __addRet = *(uint16_t*)(ip + 34);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 36);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 38);
+					uint16_t __constDst = *(uint16_t*)(ip + 40);
+					uint32_t __constant = *(uint32_t*)(ip + 44);
+					(*(uint64_t*)(localVarBase + __elementCopyDst1)) = (*(uint64_t*)(localVarBase + __elementCopySrc1));
+					(*(uint64_t*)(localVarBase + __elementCopyDst2)) = (*(uint64_t*)(localVarBase + __elementCopySrc2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    Copy28((void*)(localVarBase + __elementDst), GetCheckedArrayElementAddress(arr, _index, 28));
+					std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+					(*(uint64_t*)(localVarBase + __tailCopyDst1)) = (*(uint64_t*)(localVarBase + __tailCopySrc1));
+					(*(uint64_t*)(localVarBase + __tailCopyDst2)) = (*(uint64_t*)(localVarBase + __tailCopySrc2));
+					(*(uint64_t*)(localVarBase + __tailCopyDst3)) = (*(uint64_t*)(localVarBase + __tailCopySrc3));
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 48;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __subRet = *(uint16_t*)(ip + 6);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 8);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 10);
+					uint16_t __storeAddress = *(uint16_t*)(ip + 12);
+					uint16_t __addressDst = *(uint16_t*)(ip + 14);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 16);
+					uint16_t __fieldAddressDst = *(uint16_t*)(ip + 18);
+					uint16_t __obj = *(uint16_t*)(ip + 20);
+					uint16_t __offset = *(uint16_t*)(ip + 22);
+					uint16_t __addressCopyDst = *(uint16_t*)(ip + 24);
+					uint16_t __addressCopySrc = *(uint16_t*)(ip + 26);
+					uint16_t __indDst = *(uint16_t*)(ip + 28);
+					uint16_t __indSrc = *(uint16_t*)(ip + 30);
+					uint16_t __constDst = *(uint16_t*)(ip + 32);
+					uint32_t __constant = *(uint32_t*)(ip + 36);
+					uint16_t __tailCopyDst1 = *(uint16_t*)(ip + 40);
+					uint16_t __tailCopySrc1 = *(uint16_t*)(ip + 42);
+					uint16_t __tailCopyDst2 = *(uint16_t*)(ip + 44);
+					uint16_t __tailCopySrc2 = *(uint16_t*)(ip + 46);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					int32_t __value = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					(*(int32_t*)(localVarBase + __subRet)) = __value;
+					(*(int32_t*)*(void**)(localVarBase + __storeAddress)) = __value;
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(void**)(localVarBase + __fieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+					(*(uint64_t*)(localVarBase + __addressCopyDst)) = (*(uint64_t*)(localVarBase + __addressCopySrc));
+					(*(int32_t*)(localVarBase + __indDst)) = (*(int32_t*)*(void**)(localVarBase + __indSrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(uint64_t*)(localVarBase + __tailCopyDst1)) = (*(uint64_t*)(localVarBase + __tailCopySrc1));
+					(*(uint64_t*)(localVarBase + __tailCopyDst2)) = (*(uint64_t*)(localVarBase + __tailCopySrc2));
+				    ip += 48;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4:
+				{
+					uint16_t __headSubRet = *(uint16_t*)(ip + 2);
+					uint16_t __headSubOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __headSubOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 8);
+					uint16_t __obj = *(uint16_t*)(ip + 10);
+					uint16_t __offset = *(uint16_t*)(ip + 12);
+					uint16_t __constDst = *(uint16_t*)(ip + 14);
+					uint32_t __constant = *(uint32_t*)(ip + 16);
+					uint16_t __divRet = *(uint16_t*)(ip + 20);
+					uint16_t __divOp1 = *(uint16_t*)(ip + 22);
+					uint16_t __divOp2 = *(uint16_t*)(ip + 24);
+					uint16_t __chainSubRet = *(uint16_t*)(ip + 26);
+					uint16_t __chainSubOp1 = *(uint16_t*)(ip + 28);
+					uint16_t __chainSubOp2 = *(uint16_t*)(ip + 30);
+					uint16_t __maxRet = *(uint16_t*)(ip + 32);
+					uint16_t __maxOp1 = *(uint16_t*)(ip + 34);
+					uint16_t __maxOp2 = *(uint16_t*)(ip + 36);
+					uint16_t __tailSubRet = *(uint16_t*)(ip + 38);
+					uint16_t __tailSubOp1 = *(uint16_t*)(ip + 40);
+					uint16_t __tailSubOp2 = *(uint16_t*)(ip + 42);
+					uint16_t __storeAddress = *(uint16_t*)(ip + 44);
+					(*(int32_t*)(localVarBase + __headSubRet)) = (*(int32_t*)(localVarBase + __headSubOp1)) - (*(int32_t*)(localVarBase + __headSubOp2));
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __divRet)) = HiDiv((*(int32_t*)(localVarBase + __divOp1)), (*(int32_t*)(localVarBase + __divOp2)));
+					(*(int32_t*)(localVarBase + __chainSubRet)) = (*(int32_t*)(localVarBase + __chainSubOp1)) - (*(int32_t*)(localVarBase + __chainSubOp2));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __maxOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __maxOp2));
+					(*(int32_t*)(localVarBase + __maxRet)) = __v1 > __v2 ? __v1 : __v2;
+					int32_t __tailValue = (*(int32_t*)(localVarBase + __tailSubOp1)) - (*(int32_t*)(localVarBase + __tailSubOp2));
+					(*(int32_t*)(localVarBase + __tailSubRet)) = __tailValue;
+					(*(int32_t*)*(void**)(localVarBase + __storeAddress)) = __tailValue;
+				    ip += 48;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4:
+				{
+					uint16_t __leadingCopyDst = *(uint16_t*)(ip + 2);
+					uint16_t __leadingCopySrc = *(uint16_t*)(ip + 4);
+					uint16_t __addressDst = *(uint16_t*)(ip + 6);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 8);
+					uint16_t __fieldAddressDst = *(uint16_t*)(ip + 10);
+					uint16_t __obj = *(uint16_t*)(ip + 12);
+					uint16_t __offset = *(uint16_t*)(ip + 14);
+					uint16_t __copyDst = *(uint16_t*)(ip + 16);
+					uint16_t __copySrc = *(uint16_t*)(ip + 18);
+					uint16_t __indDst = *(uint16_t*)(ip + 20);
+					uint16_t __indSrc = *(uint16_t*)(ip + 22);
+					uint16_t __tailCopyDst = *(uint16_t*)(ip + 24);
+					uint16_t __tailCopySrc = *(uint16_t*)(ip + 26);
+					uint16_t __subRet = *(uint16_t*)(ip + 28);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 30);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 32);
+					uint16_t __storeAddress = *(uint16_t*)(ip + 34);
+					(*(uint64_t*)(localVarBase + __leadingCopyDst)) = (*(uint64_t*)(localVarBase + __leadingCopySrc));
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(void**)(localVarBase + __fieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __indDst)) = (*(int32_t*)*(void**)(localVarBase + __indSrc));
+					(*(uint64_t*)(localVarBase + __tailCopyDst)) = (*(uint64_t*)(localVarBase + __tailCopySrc));
+					int32_t __value = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					(*(int32_t*)(localVarBase + __subRet)) = __value;
+					(*(int32_t*)*(void**)(localVarBase + __storeAddress)) = __value;
+				    ip += 40;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar:
+				{
+					uint16_t __leadingCopyDst = *(uint16_t*)(ip + 2);
+					uint16_t __leadingCopySrc = *(uint16_t*)(ip + 4);
+					uint16_t __firstAddressDst = *(uint16_t*)(ip + 6);
+					uint16_t __firstAddressSrc = *(uint16_t*)(ip + 8);
+					uint16_t __firstFieldAddressDst = *(uint16_t*)(ip + 10);
+					uint16_t __firstObj = *(uint16_t*)(ip + 12);
+					uint16_t __firstOffset = *(uint16_t*)(ip + 14);
+					uint16_t __firstCopyDst = *(uint16_t*)(ip + 16);
+					uint16_t __firstCopySrc = *(uint16_t*)(ip + 18);
+					uint16_t __firstIndDst = *(uint16_t*)(ip + 20);
+					uint16_t __firstIndSrc = *(uint16_t*)(ip + 22);
+					uint16_t __tailCopyDst = *(uint16_t*)(ip + 24);
+					uint16_t __tailCopySrc = *(uint16_t*)(ip + 26);
+					uint16_t __subRet = *(uint16_t*)(ip + 28);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 30);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 32);
+					uint16_t __storeAddress = *(uint16_t*)(ip + 34);
+					uint16_t __secondAddressDst = *(uint16_t*)(ip + 36);
+					uint16_t __secondAddressSrc = *(uint16_t*)(ip + 38);
+					uint16_t __secondFieldAddressDst = *(uint16_t*)(ip + 40);
+					uint16_t __secondObj = *(uint16_t*)(ip + 42);
+					uint16_t __secondOffset = *(uint16_t*)(ip + 44);
+					uint16_t __secondCopyDst = *(uint16_t*)(ip + 46);
+					uint16_t __secondCopySrc = *(uint16_t*)(ip + 48);
+					uint16_t __secondIndDst = *(uint16_t*)(ip + 50);
+					uint16_t __secondIndSrc = *(uint16_t*)(ip + 52);
+					uint16_t __constDst = *(uint16_t*)(ip + 54);
+					uint32_t __constant = *(uint32_t*)(ip + 56);
+					uint16_t __secondTailCopyDst1 = *(uint16_t*)(ip + 60);
+					uint16_t __secondTailCopySrc1 = *(uint16_t*)(ip + 62);
+					uint16_t __secondTailCopyDst2 = *(uint16_t*)(ip + 64);
+					uint16_t __secondTailCopySrc2 = *(uint16_t*)(ip + 66);
+					(*(uint64_t*)(localVarBase + __leadingCopyDst)) = (*(uint64_t*)(localVarBase + __leadingCopySrc));
+					(*(void**)(localVarBase + __firstAddressDst)) = (void*)(localVarBase + __firstAddressSrc);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __firstObj)));
+				    (*(void**)(localVarBase + __firstFieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __firstObj)) + __firstOffset;
+					(*(uint64_t*)(localVarBase + __firstCopyDst)) = (*(uint64_t*)(localVarBase + __firstCopySrc));
+					(*(int32_t*)(localVarBase + __firstIndDst)) = (*(int32_t*)*(void**)(localVarBase + __firstIndSrc));
+					(*(uint64_t*)(localVarBase + __tailCopyDst)) = (*(uint64_t*)(localVarBase + __tailCopySrc));
+					int32_t __value = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					(*(int32_t*)(localVarBase + __subRet)) = __value;
+					(*(int32_t*)*(void**)(localVarBase + __storeAddress)) = __value;
+					(*(void**)(localVarBase + __secondAddressDst)) = (void*)(localVarBase + __secondAddressSrc);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __secondObj)));
+				    (*(void**)(localVarBase + __secondFieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __secondObj)) + __secondOffset;
+					(*(uint64_t*)(localVarBase + __secondCopyDst)) = (*(uint64_t*)(localVarBase + __secondCopySrc));
+					(*(int32_t*)(localVarBase + __secondIndDst)) = (*(int32_t*)*(void**)(localVarBase + __secondIndSrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(uint64_t*)(localVarBase + __secondTailCopyDst1)) = (*(uint64_t*)(localVarBase + __secondTailCopySrc1));
+					(*(uint64_t*)(localVarBase + __secondTailCopyDst2)) = (*(uint64_t*)(localVarBase + __secondTailCopySrc2));
+				    ip += 72;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4:
+				{
+					uint16_t __andRet = *(uint16_t*)(ip + 2);
+					uint16_t __andOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __andOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __elementDst = *(uint16_t*)(ip + 8);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 10);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 12);
+					uint16_t __firstFieldDst = *(uint16_t*)(ip + 14);
+					uint16_t __firstObj = *(uint16_t*)(ip + 16);
+					uint16_t __firstOffset = *(uint16_t*)(ip + 18);
+					uint16_t __firstConstDst = *(uint16_t*)(ip + 20);
+					uint32_t __firstConstant = *(uint32_t*)(ip + 24);
+					uint16_t __firstDivRet = *(uint16_t*)(ip + 28);
+					uint16_t __firstDivOp1 = *(uint16_t*)(ip + 30);
+					uint16_t __firstDivOp2 = *(uint16_t*)(ip + 32);
+					uint16_t __addRet = *(uint16_t*)(ip + 34);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 36);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 38);
+					uint16_t __copyDst = *(uint16_t*)(ip + 40);
+					uint16_t __copySrc = *(uint16_t*)(ip + 42);
+					uint16_t __secondFieldDst = *(uint16_t*)(ip + 44);
+					uint16_t __secondObj = *(uint16_t*)(ip + 46);
+					uint16_t __secondOffset = *(uint16_t*)(ip + 48);
+					uint16_t __secondCopyDst = *(uint16_t*)(ip + 50);
+					uint16_t __secondCopySrc = *(uint16_t*)(ip + 52);
+					uint16_t __secondConstDst = *(uint16_t*)(ip + 54);
+					uint32_t __secondConstant = *(uint32_t*)(ip + 56);
+					uint16_t __secondDivRet = *(uint16_t*)(ip + 60);
+					uint16_t __secondDivOp1 = *(uint16_t*)(ip + 62);
+					uint16_t __secondDivOp2 = *(uint16_t*)(ip + 64);
+					uint16_t __minRet = *(uint16_t*)(ip + 66);
+					uint16_t __minOp1 = *(uint16_t*)(ip + 68);
+					uint16_t __minOp2 = *(uint16_t*)(ip + 70);
+					(*(int32_t*)(localVarBase + __andRet)) = (*(int32_t*)(localVarBase + __andOp1)) & (*(int32_t*)(localVarBase + __andOp2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    (*(int32_t*)(localVarBase + __elementDst)) = GetArrayElementFast<int32_t>(arr, _index);
+					(*(int32_t*)(localVarBase + __firstFieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __firstObj) + __firstOffset);
+					(*(int32_t*)(localVarBase + __firstConstDst)) = __firstConstant;
+					(*(int32_t*)(localVarBase + __firstDivRet)) = HiDiv((*(int32_t*)(localVarBase + __firstDivOp1)), (*(int32_t*)(localVarBase + __firstDivOp2)));
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __secondFieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __secondObj) + __secondOffset);
+					(*(uint64_t*)(localVarBase + __secondCopyDst)) = (*(uint64_t*)(localVarBase + __secondCopySrc));
+					(*(int32_t*)(localVarBase + __secondConstDst)) = __secondConstant;
+					(*(int32_t*)(localVarBase + __secondDivRet)) = HiDiv((*(int32_t*)(localVarBase + __secondDivOp1)), (*(int32_t*)(localVarBase + __secondDivOp2)));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __minOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __minOp2));
+					(*(int32_t*)(localVarBase + __minRet)) = __v1 < __v2 ? __v1 : __v2;
+				    ip += 72;
+				    continue;
+				}
 				case HiOpcodeEnum::LdlocVarAddress:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
 					(*(void**)(localVarBase + __dst)) = (void*)(localVarBase + __src);
 				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarAddress_LdcVarConst_4:
+				{
+					uint16_t __addressDst = *(uint16_t*)(ip + 2);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 4);
+					uint16_t __constDst = *(uint16_t*)(ip + 6);
+					uint32_t __constant = *(uint32_t*)(ip + 8);
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarAddress_LdcVarConst_4_LdfldValueTypeVarVar_i4_LdcVarConst_4:
+				{
+					uint16_t __addressDst = *(uint16_t*)(ip + 2);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 4);
+					uint16_t __addressConstDst = *(uint16_t*)(ip + 6);
+					uint32_t __addressConstant = *(uint32_t*)(ip + 8);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 12);
+					uint16_t __obj = *(uint16_t*)(ip + 14);
+					uint16_t __offset = *(uint16_t*)(ip + 16);
+					uint16_t __fieldConstDst = *(uint16_t*)(ip + 18);
+					uint32_t __fieldConstant = *(uint32_t*)(ip + 20);
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+					(*(int32_t*)(localVarBase + __addressConstDst)) = __addressConstant;
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __fieldConstDst)) = __fieldConstant;
+				    ip += 24;
 				    continue;
 				}
 				case HiOpcodeEnum::LdcVarConst_1:
@@ -3168,6 +4015,150 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc = *(uint16_t*)(ip + 10);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc = *(uint16_t*)(ip + 10);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 12);
+					uint16_t __obj = *(uint16_t*)(ip + 14);
+					uint16_t __offset = *(uint16_t*)(ip + 16);
+					uint16_t __fieldCopyDst = *(uint16_t*)(ip + 18);
+					uint16_t __fieldCopySrc = *(uint16_t*)(ip + 20);
+					uint16_t __constDst = *(uint16_t*)(ip + 22);
+					uint32_t __constant = *(uint32_t*)(ip + 24);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(uint64_t*)(localVarBase + __fieldCopyDst)) = (*(uint64_t*)(localVarBase + __fieldCopySrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 10);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 12);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 14);
+					uint16_t __copyDst3 = *(uint16_t*)(ip + 16);
+					uint16_t __copySrc3 = *(uint16_t*)(ip + 18);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 10);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 12);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 14);
+					uint16_t __copyDst3 = *(uint16_t*)(ip + 16);
+					uint16_t __copySrc3 = *(uint16_t*)(ip + 18);
+					uint16_t __sizedCopyDst = *(uint16_t*)(ip + 20);
+					uint16_t __sizedCopySrc = *(uint16_t*)(ip + 22);
+					uint16_t __sizedCopySize = *(uint16_t*)(ip + 24);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+					std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __constDst = *(uint16_t*)(ip + 8);
+					uint32_t __constant = *(uint32_t*)(ip + 12);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4_BinOpAnd_i4_GetArrayElementVarVar_i4:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __constDst = *(uint16_t*)(ip + 8);
+					uint32_t __constant = *(uint32_t*)(ip + 12);
+					uint16_t __andRet = *(uint16_t*)(ip + 16);
+					uint16_t __andOp1 = *(uint16_t*)(ip + 18);
+					uint16_t __andOp2 = *(uint16_t*)(ip + 20);
+					uint16_t __elementDst = *(uint16_t*)(ip + 22);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 24);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 26);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __andRet)) = (*(int32_t*)(localVarBase + __andOp1)) & (*(int32_t*)(localVarBase + __andOp2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    (*(int32_t*)(localVarBase + __elementDst)) = GetArrayElementFast<int32_t>(arr, _index);
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_StfldVarVar_i4:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __storeObj = *(uint16_t*)(ip + 8);
+					uint16_t __storeOffset = *(uint16_t*)(ip + 10);
+					uint16_t __storeData = *(uint16_t*)(ip + 12);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __storeObj)));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __storeObj)) + __storeOffset;
+				    *(int32_t*)(_fieldAddr_) = (*(int32_t*)(localVarBase + __storeData));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_StfldVarVar_i4_LdlocVarAddress_LdcVarConst_4:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __storeObj = *(uint16_t*)(ip + 8);
+					uint16_t __storeOffset = *(uint16_t*)(ip + 10);
+					uint16_t __storeData = *(uint16_t*)(ip + 12);
+					uint16_t __addressDst = *(uint16_t*)(ip + 14);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 16);
+					uint16_t __constDst = *(uint16_t*)(ip + 18);
+					uint32_t __constant = *(uint32_t*)(ip + 20);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __storeObj)));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __storeObj)) + __storeOffset;
+				    *(int32_t*)(_fieldAddr_) = (*(int32_t*)(localVarBase + __storeData));
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 24;
+				    continue;
+				}
 				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -3175,6 +4166,148 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __op2 = *(uint16_t*)(ip + 6);
 					(*(int32_t*)(localVarBase + __ret)) = (*(int32_t*)(localVarBase + __op1)) - (*(int32_t*)(localVarBase + __op2));
 				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4:
+				{
+					uint16_t __subRet = *(uint16_t*)(ip + 2);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __maxRet = *(uint16_t*)(ip + 8);
+					uint16_t __maxOp1 = *(uint16_t*)(ip + 10);
+					uint16_t __maxOp2 = *(uint16_t*)(ip + 12);
+					(*(int32_t*)(localVarBase + __subRet)) = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __maxOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __maxOp2));
+					(*(int32_t*)(localVarBase + __maxRet)) = __v1 > __v2 ? __v1 : __v2;
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4:
+				{
+					uint16_t __subRet = *(uint16_t*)(ip + 2);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __maxRet = *(uint16_t*)(ip + 8);
+					uint16_t __maxOp1 = *(uint16_t*)(ip + 10);
+					uint16_t __maxOp2 = *(uint16_t*)(ip + 12);
+					uint16_t __tailSubRet = *(uint16_t*)(ip + 14);
+					uint16_t __tailSubOp1 = *(uint16_t*)(ip + 16);
+					uint16_t __tailSubOp2 = *(uint16_t*)(ip + 18);
+					uint16_t __storeAddress = *(uint16_t*)(ip + 20);
+					(*(int32_t*)(localVarBase + __subRet)) = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __maxOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __maxOp2));
+					(*(int32_t*)(localVarBase + __maxRet)) = __v1 > __v2 ? __v1 : __v2;
+					int32_t __tailValue = (*(int32_t*)(localVarBase + __tailSubOp1)) - (*(int32_t*)(localVarBase + __tailSubOp2));
+					(*(int32_t*)(localVarBase + __tailSubRet)) = __tailValue;
+					(*(int32_t*)*(void**)(localVarBase + __storeAddress)) = __tailValue;
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4:
+				{
+					uint16_t __subRet = *(uint16_t*)(ip + 2);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __maxRet = *(uint16_t*)(ip + 8);
+					uint16_t __maxOp1 = *(uint16_t*)(ip + 10);
+					uint16_t __maxOp2 = *(uint16_t*)(ip + 12);
+					uint16_t __storeObj = *(uint16_t*)(ip + 14);
+					uint16_t __storeOffset = *(uint16_t*)(ip + 16);
+					uint16_t __storeData = *(uint16_t*)(ip + 18);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 20);
+					uint16_t __obj = *(uint16_t*)(ip + 22);
+					uint16_t __offset = *(uint16_t*)(ip + 24);
+					uint16_t __constDst = *(uint16_t*)(ip + 26);
+					uint32_t __constant = *(uint32_t*)(ip + 28);
+					(*(int32_t*)(localVarBase + __subRet)) = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __maxOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __maxOp2));
+					(*(int32_t*)(localVarBase + __maxRet)) = __v1 > __v2 ? __v1 : __v2;
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __storeObj)));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __storeObj)) + __storeOffset;
+				    *(int32_t*)(_fieldAddr_) = (*(int32_t*)(localVarBase + __storeData));
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4:
+				{
+					uint16_t __subRet = *(uint16_t*)(ip + 2);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 8);
+					uint16_t __obj = *(uint16_t*)(ip + 10);
+					uint16_t __offset = *(uint16_t*)(ip + 12);
+					uint16_t __constDst = *(uint16_t*)(ip + 14);
+					uint32_t __constant = *(uint32_t*)(ip + 16);
+					uint16_t __divRet = *(uint16_t*)(ip + 20);
+					uint16_t __divOp1 = *(uint16_t*)(ip + 22);
+					uint16_t __divOp2 = *(uint16_t*)(ip + 24);
+					(*(int32_t*)(localVarBase + __subRet)) = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __divRet)) = HiDiv((*(int32_t*)(localVarBase + __divOp1)), (*(int32_t*)(localVarBase + __divOp2)));
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4:
+				{
+					uint16_t __subRet = *(uint16_t*)(ip + 2);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 8);
+					uint16_t __obj = *(uint16_t*)(ip + 10);
+					uint16_t __offset = *(uint16_t*)(ip + 12);
+					uint16_t __constDst = *(uint16_t*)(ip + 14);
+					uint32_t __constant = *(uint32_t*)(ip + 16);
+					uint16_t __divRet = *(uint16_t*)(ip + 20);
+					uint16_t __divOp1 = *(uint16_t*)(ip + 22);
+					uint16_t __divOp2 = *(uint16_t*)(ip + 24);
+					uint16_t __tailSubRet = *(uint16_t*)(ip + 26);
+					uint16_t __tailSubOp1 = *(uint16_t*)(ip + 28);
+					uint16_t __tailSubOp2 = *(uint16_t*)(ip + 30);
+					uint16_t __maxRet = *(uint16_t*)(ip + 32);
+					uint16_t __maxOp1 = *(uint16_t*)(ip + 34);
+					uint16_t __maxOp2 = *(uint16_t*)(ip + 36);
+					(*(int32_t*)(localVarBase + __subRet)) = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __divRet)) = HiDiv((*(int32_t*)(localVarBase + __divOp1)), (*(int32_t*)(localVarBase + __divOp2)));
+					(*(int32_t*)(localVarBase + __tailSubRet)) = (*(int32_t*)(localVarBase + __tailSubOp1)) - (*(int32_t*)(localVarBase + __tailSubOp2));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __maxOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __maxOp2));
+					(*(int32_t*)(localVarBase + __maxRet)) = __v1 > __v2 ? __v1 : __v2;
+				    ip += 40;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_Sub_i4_StindVarVar_i4:
+				{
+					uint16_t __subRet = *(uint16_t*)(ip + 2);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __storeAddress = *(uint16_t*)(ip + 8);
+					int32_t __value = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					(*(int32_t*)(localVarBase + __subRet)) = __value;
+					(*(int32_t*)*(void**)(localVarBase + __storeAddress)) = __value;
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __subRet = *(uint16_t*)(ip + 6);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 8);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 10);
+					uint16_t __storeAddress = *(uint16_t*)(ip + 12);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					int32_t __value = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					(*(int32_t*)(localVarBase + __subRet)) = __value;
+					(*(int32_t*)*(void**)(localVarBase + __storeAddress)) = __value;
+				    ip += 16;
 				    continue;
 				}
 				case HiOpcodeEnum::BinOpVarVarVar_Mul_i4:
@@ -3204,6 +4337,21 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::BinOpVarVarVar_Div_i4_MathMinVarVarVar_i4:
+				{
+					uint16_t __divRet = *(uint16_t*)(ip + 2);
+					uint16_t __divOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __divOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __minRet = *(uint16_t*)(ip + 8);
+					uint16_t __minOp1 = *(uint16_t*)(ip + 10);
+					uint16_t __minOp2 = *(uint16_t*)(ip + 12);
+					(*(int32_t*)(localVarBase + __divRet)) = HiDiv((*(int32_t*)(localVarBase + __divOp1)), (*(int32_t*)(localVarBase + __divOp2)));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __minOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __minOp2));
+					(*(int32_t*)(localVarBase + __minRet)) = __v1 < __v2 ? __v1 : __v2;
+				    ip += 16;
+				    continue;
+				}
 				case HiOpcodeEnum::BinOpVarVarVar_DivUn_i4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -3222,6 +4370,24 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::BinOpVarVarVar_Rem_i4_BranchTrueVar_i4:
+				{
+					uint16_t __remRet = *(uint16_t*)(ip + 2);
+					uint16_t __remOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __remOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __branchOp = *(uint16_t*)(ip + 8);
+					int32_t __offsetBranch = *(int32_t*)(ip + 12);
+					(*(int32_t*)(localVarBase + __remRet)) = HiRem((*(int32_t*)(localVarBase + __remOp1)), (*(int32_t*)(localVarBase + __remOp2)));
+				    if ((*(int32_t*)(localVarBase + __branchOp)))
+				    {
+				        ip = ipBase + __offsetBranch;
+				    }
+				    else
+				    {
+				        ip += 16;
+				    }
+				    continue;
+				}
 				case HiOpcodeEnum::BinOpVarVarVar_RemUn_i4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -3238,6 +4404,54 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __op2 = *(uint16_t*)(ip + 6);
 					(*(int32_t*)(localVarBase + __ret)) = (*(int32_t*)(localVarBase + __op1)) & (*(int32_t*)(localVarBase + __op2));
 				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4:
+				{
+					uint16_t __andRet = *(uint16_t*)(ip + 2);
+					uint16_t __andOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __andOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __elementDst = *(uint16_t*)(ip + 8);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 10);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 12);
+					(*(int32_t*)(localVarBase + __andRet)) = (*(int32_t*)(localVarBase + __andOp1)) & (*(int32_t*)(localVarBase + __andOp2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    (*(int32_t*)(localVarBase + __elementDst)) = GetArrayElementFast<int32_t>(arr, _index);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar:
+				{
+					uint16_t __andRet = *(uint16_t*)(ip + 2);
+					uint16_t __andOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __andOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __elementDst = *(uint16_t*)(ip + 8);
+					uint16_t __arraySrc = *(uint16_t*)(ip + 10);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 12);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 14);
+					uint16_t __obj = *(uint16_t*)(ip + 16);
+					uint16_t __offset = *(uint16_t*)(ip + 18);
+					uint16_t __constDst = *(uint16_t*)(ip + 20);
+					uint32_t __constant = *(uint32_t*)(ip + 24);
+					uint16_t __divRet = *(uint16_t*)(ip + 28);
+					uint16_t __divOp1 = *(uint16_t*)(ip + 30);
+					uint16_t __divOp2 = *(uint16_t*)(ip + 32);
+					uint16_t __addRet = *(uint16_t*)(ip + 34);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 36);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 38);
+					uint16_t __copyDst = *(uint16_t*)(ip + 40);
+					uint16_t __copySrc = *(uint16_t*)(ip + 42);
+					(*(int32_t*)(localVarBase + __andRet)) = (*(int32_t*)(localVarBase + __andOp1)) & (*(int32_t*)(localVarBase + __andOp2));
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    (*(int32_t*)(localVarBase + __elementDst)) = GetArrayElementFast<int32_t>(arr, _index);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __divRet)) = HiDiv((*(int32_t*)(localVarBase + __divOp1)), (*(int32_t*)(localVarBase + __divOp2)));
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+				    ip += 48;
 				    continue;
 				}
 				case HiOpcodeEnum::BinOpVarVarVar_Or_i4:
@@ -5064,7 +6278,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					MethodInfo* __methodInfo = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
 					uint16_t __argBase = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
-					if (metadata::IsInstanceMethod(__methodInfo))
+					uint8_t __isInstanceMethod = *(uint8_t*)(ip + 12);
+					if (__isInstanceMethod)
 					{
 						CHECK_NOT_NULL_THROW((localVarBase + __argBase)->obj);
 					}
@@ -5790,6 +7005,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_i4_1:
+				HOTC233_EXEC_CallCommonNativeInstance_v_i4_1:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 8);
 					uint16_t __self = *(uint16_t*)(ip + 2);
@@ -5800,7 +7016,17 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
 				    typedef void(*_NativeMethod_)(void*, int32_t, MethodInfo*);
 				    ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, (*(int32_t*)(localVarBase + __param0)), _resolvedMethod);
-				    ip += 16;
+					byte* __nextIp = ip + 16;
+					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar)
+					{
+						ip = __nextIp;
+						if (g_opcodeProfilerEnabled)
+						{
+							opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+						}
+						goto HOTC233_EXEC_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar;
+					}
+				    ip = __nextIp;
 				    continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_i4_2:
@@ -9404,6 +10630,26 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::LdfldVarVar_u1_BranchFalseVar_i4:
+				HOTC233_EXEC_LdfldVarVar_u1_BranchFalseVar_i4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __branchOp = *(uint16_t*)(ip + 8);
+					int32_t __offsetBranch = *(int32_t*)(ip + 12);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(int32_t*)(localVarBase + __fieldDst)) = *(uint8_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset);
+				    if (!(*(int32_t*)(localVarBase + __branchOp)))
+				    {
+				        ip = ipBase + __offsetBranch;
+				    }
+				    else
+				    {
+				        ip += 16;
+				    }
+				    continue;
+				}
 				case HiOpcodeEnum::LdfldVarVar_i2:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
@@ -9432,6 +10678,99 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
 				    (*(int32_t*)(localVarBase + __dst)) = *(int32_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset);
 				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc = *(uint16_t*)(ip + 10);
+					uint16_t __branchOp1 = *(uint16_t*)(ip + 12);
+					uint16_t __branchOp2 = *(uint16_t*)(ip + 14);
+					int32_t __offsetBranch = *(int32_t*)(ip + 20);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+				    if (CompareCneUn((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+				    {
+						byte* __targetIp = ipBase + __offsetBranch;
+						if (*(HiOpcodeEnum*)__targetIp == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar)
+						{
+							ip = __targetIp;
+							if (g_opcodeProfilerEnabled)
+							{
+								opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+							}
+							goto HOTC233_EXEC_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar;
+						}
+				        ip = __targetIp;
+				    }
+				    else
+				    {
+						byte* __fallthroughIp = ip + 24;
+						if (*(HiOpcodeEnum*)__fallthroughIp == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar)
+						{
+							ip = __fallthroughIp;
+							if (g_opcodeProfilerEnabled)
+							{
+								opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+							}
+							goto HOTC233_EXEC_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar;
+						}
+				        ip = __fallthroughIp;
+				    }
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4:
+				HOTC233_EXEC_LdlocVarVar_LdlocVarVar_LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4:
+				{
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 4);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 6);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 8);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 10);
+					uint16_t __obj = *(uint16_t*)(ip + 12);
+					uint16_t __fieldOffset = *(uint16_t*)(ip + 14);
+					uint16_t __copyDst3 = *(uint16_t*)(ip + 16);
+					uint16_t __copySrc3 = *(uint16_t*)(ip + 18);
+					uint16_t __branchOp1 = *(uint16_t*)(ip + 20);
+					uint16_t __branchOp2 = *(uint16_t*)(ip + 22);
+					int32_t __offsetBranch = *(int32_t*)(ip + 24);
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __fieldOffset);
+					(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+				    if (CompareCneUn((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+				    {
+						byte* __targetIp = ipBase + __offsetBranch;
+						if (*(HiOpcodeEnum*)__targetIp == HiOpcodeEnum::LdlocVarVar)
+						{
+							ip = __targetIp;
+							if (g_opcodeProfilerEnabled)
+							{
+								opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+							}
+							goto HOTC233_EXEC_LdlocVarVar;
+						}
+				        ip = __targetIp;
+				    }
+				    else
+				    {
+						byte* __fallthroughIp = ip + 32;
+						if (*(HiOpcodeEnum*)__fallthroughIp == HiOpcodeEnum::LdlocVarVar)
+						{
+							ip = __fallthroughIp;
+							if (g_opcodeProfilerEnabled)
+							{
+								opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+							}
+							goto HOTC233_EXEC_LdlocVarVar;
+						}
+				        ip = __fallthroughIp;
+				    }
 				    continue;
 				}
 				case HiOpcodeEnum::LdfldVarVar_u4:
@@ -9601,6 +10940,365 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::LdlocVarVar_LdfldValueTypeVarVar_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 6);
+					uint16_t __obj = *(uint16_t*)(ip + 8);
+					uint16_t __offset = *(uint16_t*)(ip + 10);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __constDst = *(uint16_t*)(ip + 8);
+					uint32_t __constant = *(uint32_t*)(ip + 12);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc = *(uint16_t*)(ip + 10);
+					uint16_t __constDst = *(uint16_t*)(ip + 12);
+					uint32_t __constant = *(uint32_t*)(ip + 16);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc = *(uint16_t*)(ip + 10);
+					uint16_t __constDst = *(uint16_t*)(ip + 12);
+					uint32_t __constant = *(uint32_t*)(ip + 16);
+					uint16_t __divRet = *(uint16_t*)(ip + 20);
+					uint16_t __divOp1 = *(uint16_t*)(ip + 22);
+					uint16_t __divOp2 = *(uint16_t*)(ip + 24);
+					uint16_t __minRet = *(uint16_t*)(ip + 26);
+					uint16_t __minOp1 = *(uint16_t*)(ip + 28);
+					uint16_t __minOp2 = *(uint16_t*)(ip + 30);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __divRet)) = HiDiv((*(int32_t*)(localVarBase + __divOp1)), (*(int32_t*)(localVarBase + __divOp2)));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __minOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __minOp2));
+					(*(int32_t*)(localVarBase + __minRet)) = __v1 < __v2 ? __v1 : __v2;
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __constDst = *(uint16_t*)(ip + 8);
+					uint32_t __constant = *(uint32_t*)(ip + 12);
+					uint16_t __branchOp1 = *(uint16_t*)(ip + 16);
+					uint16_t __branchOp2 = *(uint16_t*)(ip + 18);
+					int32_t __offsetBranch = *(int32_t*)(ip + 20);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    if (CompareCgt((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+				    {
+				        ip += 24;
+				    }
+				    else
+				    {
+				        ip = ipBase + __offsetBranch;
+				    }
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __constDst = *(uint16_t*)(ip + 8);
+					uint32_t __constant = *(uint32_t*)(ip + 12);
+					uint16_t __divRet = *(uint16_t*)(ip + 16);
+					uint16_t __divOp1 = *(uint16_t*)(ip + 18);
+					uint16_t __divOp2 = *(uint16_t*)(ip + 20);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __divRet)) = HiDiv((*(int32_t*)(localVarBase + __divOp1)), (*(int32_t*)(localVarBase + __divOp2)));
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpSub_i4_MathMaxVarVarVar_i4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __constDst = *(uint16_t*)(ip + 8);
+					uint32_t __constant = *(uint32_t*)(ip + 12);
+					uint16_t __subRet = *(uint16_t*)(ip + 16);
+					uint16_t __subOp1 = *(uint16_t*)(ip + 18);
+					uint16_t __subOp2 = *(uint16_t*)(ip + 20);
+					uint16_t __maxRet = *(uint16_t*)(ip + 22);
+					uint16_t __maxOp1 = *(uint16_t*)(ip + 24);
+					uint16_t __maxOp2 = *(uint16_t*)(ip + 26);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __subRet)) = (*(int32_t*)(localVarBase + __subOp1)) - (*(int32_t*)(localVarBase + __subOp2));
+					int32_t __v1 = (*(int32_t*)(localVarBase + __maxOp1));
+					int32_t __v2 = (*(int32_t*)(localVarBase + __maxOp2));
+					(*(int32_t*)(localVarBase + __maxRet)) = __v1 > __v2 ? __v1 : __v2;
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __constDst = *(uint16_t*)(ip + 8);
+					uint32_t __constant = *(uint32_t*)(ip + 12);
+					uint16_t __divRet = *(uint16_t*)(ip + 16);
+					uint16_t __divOp1 = *(uint16_t*)(ip + 18);
+					uint16_t __divOp2 = *(uint16_t*)(ip + 20);
+					uint16_t __addRet = *(uint16_t*)(ip + 22);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 24);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 26);
+					uint16_t __copyDst = *(uint16_t*)(ip + 28);
+					uint16_t __copySrc = *(uint16_t*)(ip + 30);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __divRet)) = HiDiv((*(int32_t*)(localVarBase + __divOp1)), (*(int32_t*)(localVarBase + __divOp2)));
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __addRet = *(uint16_t*)(ip + 8);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 10);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 12);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __fieldAddRet = *(uint16_t*)(ip + 8);
+					uint16_t __fieldAddOp1 = *(uint16_t*)(ip + 10);
+					uint16_t __fieldAddOp2 = *(uint16_t*)(ip + 12);
+					uint16_t __addRet = *(uint16_t*)(ip + 14);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 16);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 18);
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 20);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 22);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 24);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 26);
+					uint16_t __copyDst3 = *(uint16_t*)(ip + 28);
+					uint16_t __copySrc3 = *(uint16_t*)(ip + 30);
+					uint16_t __sizedCopyDst = *(uint16_t*)(ip + 32);
+					uint16_t __sizedCopySrc = *(uint16_t*)(ip + 34);
+					uint16_t __sizedCopySize = *(uint16_t*)(ip + 36);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __fieldAddRet)) = (*(int32_t*)(localVarBase + __fieldAddOp1)) + (*(int32_t*)(localVarBase + __fieldAddOp2));
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+					std::memmove((void*)(localVarBase + __sizedCopyDst), (void*)(localVarBase + __sizedCopySrc), __sizedCopySize);
+				    ip += 40;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4:
+				{
+					uint16_t __fieldDst1 = *(uint16_t*)(ip + 2);
+					uint16_t __obj1 = *(uint16_t*)(ip + 4);
+					uint16_t __offset1 = *(uint16_t*)(ip + 6);
+					uint16_t __addRet1 = *(uint16_t*)(ip + 8);
+					uint16_t __addOp11 = *(uint16_t*)(ip + 10);
+					uint16_t __addOp21 = *(uint16_t*)(ip + 12);
+					uint16_t __fieldDst2 = *(uint16_t*)(ip + 14);
+					uint16_t __obj2 = *(uint16_t*)(ip + 16);
+					uint16_t __offset2 = *(uint16_t*)(ip + 18);
+					uint16_t __addRet2 = *(uint16_t*)(ip + 20);
+					uint16_t __addOp12 = *(uint16_t*)(ip + 22);
+					uint16_t __addOp22 = *(uint16_t*)(ip + 24);
+					(*(int32_t*)(localVarBase + __fieldDst1)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj1) + __offset1);
+					(*(int32_t*)(localVarBase + __addRet1)) = (*(int32_t*)(localVarBase + __addOp11)) + (*(int32_t*)(localVarBase + __addOp21));
+					(*(int32_t*)(localVarBase + __fieldDst2)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj2) + __offset2);
+					(*(int32_t*)(localVarBase + __addRet2)) = (*(int32_t*)(localVarBase + __addOp12)) + (*(int32_t*)(localVarBase + __addOp22));
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4:
+				{
+					uint16_t __fieldDst0 = *(uint16_t*)(ip + 2);
+					uint16_t __obj0 = *(uint16_t*)(ip + 4);
+					uint16_t __offset0 = *(uint16_t*)(ip + 6);
+					uint16_t __fieldDst1 = *(uint16_t*)(ip + 8);
+					uint16_t __obj1 = *(uint16_t*)(ip + 10);
+					uint16_t __offset1 = *(uint16_t*)(ip + 12);
+					uint16_t __addRet1 = *(uint16_t*)(ip + 14);
+					uint16_t __addOp11 = *(uint16_t*)(ip + 16);
+					uint16_t __addOp21 = *(uint16_t*)(ip + 18);
+					uint16_t __fieldDst2 = *(uint16_t*)(ip + 20);
+					uint16_t __obj2 = *(uint16_t*)(ip + 22);
+					uint16_t __offset2 = *(uint16_t*)(ip + 24);
+					uint16_t __addRet2 = *(uint16_t*)(ip + 26);
+					uint16_t __addOp12 = *(uint16_t*)(ip + 28);
+					uint16_t __addOp22 = *(uint16_t*)(ip + 30);
+					(*(int32_t*)(localVarBase + __fieldDst0)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj0) + __offset0);
+					(*(int32_t*)(localVarBase + __fieldDst1)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj1) + __offset1);
+					(*(int32_t*)(localVarBase + __addRet1)) = (*(int32_t*)(localVarBase + __addOp11)) + (*(int32_t*)(localVarBase + __addOp21));
+					(*(int32_t*)(localVarBase + __fieldDst2)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj2) + __offset2);
+					(*(int32_t*)(localVarBase + __addRet2)) = (*(int32_t*)(localVarBase + __addOp12)) + (*(int32_t*)(localVarBase + __addOp22));
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __fieldDst0 = *(uint16_t*)(ip + 6);
+					uint16_t __obj0 = *(uint16_t*)(ip + 8);
+					uint16_t __offset0 = *(uint16_t*)(ip + 10);
+					uint16_t __fieldDst1 = *(uint16_t*)(ip + 12);
+					uint16_t __obj1 = *(uint16_t*)(ip + 14);
+					uint16_t __offset1 = *(uint16_t*)(ip + 16);
+					uint16_t __addRet1 = *(uint16_t*)(ip + 18);
+					uint16_t __addOp11 = *(uint16_t*)(ip + 20);
+					uint16_t __addOp21 = *(uint16_t*)(ip + 22);
+					uint16_t __fieldDst2 = *(uint16_t*)(ip + 24);
+					uint16_t __obj2 = *(uint16_t*)(ip + 26);
+					uint16_t __offset2 = *(uint16_t*)(ip + 28);
+					uint16_t __addRet2 = *(uint16_t*)(ip + 30);
+					uint16_t __addOp12 = *(uint16_t*)(ip + 32);
+					uint16_t __addOp22 = *(uint16_t*)(ip + 34);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __fieldDst0)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj0) + __offset0);
+					(*(int32_t*)(localVarBase + __fieldDst1)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj1) + __offset1);
+					(*(int32_t*)(localVarBase + __addRet1)) = (*(int32_t*)(localVarBase + __addOp11)) + (*(int32_t*)(localVarBase + __addOp21));
+					(*(int32_t*)(localVarBase + __fieldDst2)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj2) + __offset2);
+					(*(int32_t*)(localVarBase + __addRet2)) = (*(int32_t*)(localVarBase + __addOp12)) + (*(int32_t*)(localVarBase + __addOp22));
+				    ip += 40;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize:
+				{
+					uint16_t __copyDst = *(uint16_t*)(ip + 2);
+					uint16_t __copySrc = *(uint16_t*)(ip + 4);
+					uint16_t __fieldDst0 = *(uint16_t*)(ip + 6);
+					uint16_t __obj0 = *(uint16_t*)(ip + 8);
+					uint16_t __offset0 = *(uint16_t*)(ip + 10);
+					uint16_t __fieldDst1 = *(uint16_t*)(ip + 12);
+					uint16_t __obj1 = *(uint16_t*)(ip + 14);
+					uint16_t __offset1 = *(uint16_t*)(ip + 16);
+					uint16_t __addRet1 = *(uint16_t*)(ip + 18);
+					uint16_t __addOp11 = *(uint16_t*)(ip + 20);
+					uint16_t __addOp21 = *(uint16_t*)(ip + 22);
+					uint16_t __fieldDst2 = *(uint16_t*)(ip + 24);
+					uint16_t __obj2 = *(uint16_t*)(ip + 26);
+					uint16_t __offset2 = *(uint16_t*)(ip + 28);
+					uint16_t __addRet2 = *(uint16_t*)(ip + 30);
+					uint16_t __addOp12 = *(uint16_t*)(ip + 32);
+					uint16_t __addOp22 = *(uint16_t*)(ip + 34);
+					uint16_t __tailFieldDst = *(uint16_t*)(ip + 36);
+					uint16_t __tailObj = *(uint16_t*)(ip + 38);
+					uint16_t __tailOffset = *(uint16_t*)(ip + 40);
+					uint16_t __tailFieldAddRet = *(uint16_t*)(ip + 42);
+					uint16_t __tailFieldAddOp1 = *(uint16_t*)(ip + 44);
+					uint16_t __tailFieldAddOp2 = *(uint16_t*)(ip + 46);
+					uint16_t __tailAddRet = *(uint16_t*)(ip + 48);
+					uint16_t __tailAddOp1 = *(uint16_t*)(ip + 50);
+					uint16_t __tailAddOp2 = *(uint16_t*)(ip + 52);
+					uint16_t __tailCopyDst1 = *(uint16_t*)(ip + 54);
+					uint16_t __tailCopySrc1 = *(uint16_t*)(ip + 56);
+					uint16_t __tailCopyDst2 = *(uint16_t*)(ip + 58);
+					uint16_t __tailCopySrc2 = *(uint16_t*)(ip + 60);
+					uint16_t __tailCopyDst3 = *(uint16_t*)(ip + 62);
+					uint16_t __tailCopySrc3 = *(uint16_t*)(ip + 64);
+					uint16_t __tailSizedCopyDst = *(uint16_t*)(ip + 66);
+					uint16_t __tailSizedCopySrc = *(uint16_t*)(ip + 68);
+					uint16_t __tailSizedCopySize = *(uint16_t*)(ip + 70);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __fieldDst0)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj0) + __offset0);
+					(*(int32_t*)(localVarBase + __fieldDst1)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj1) + __offset1);
+					(*(int32_t*)(localVarBase + __addRet1)) = (*(int32_t*)(localVarBase + __addOp11)) + (*(int32_t*)(localVarBase + __addOp21));
+					(*(int32_t*)(localVarBase + __fieldDst2)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj2) + __offset2);
+					(*(int32_t*)(localVarBase + __addRet2)) = (*(int32_t*)(localVarBase + __addOp12)) + (*(int32_t*)(localVarBase + __addOp22));
+					(*(int32_t*)(localVarBase + __tailFieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __tailObj) + __tailOffset);
+					(*(int32_t*)(localVarBase + __tailFieldAddRet)) = (*(int32_t*)(localVarBase + __tailFieldAddOp1)) + (*(int32_t*)(localVarBase + __tailFieldAddOp2));
+					(*(int32_t*)(localVarBase + __tailAddRet)) = (*(int32_t*)(localVarBase + __tailAddOp1)) + (*(int32_t*)(localVarBase + __tailAddOp2));
+					(*(uint64_t*)(localVarBase + __tailCopyDst1)) = (*(uint64_t*)(localVarBase + __tailCopySrc1));
+					(*(uint64_t*)(localVarBase + __tailCopyDst2)) = (*(uint64_t*)(localVarBase + __tailCopySrc2));
+					(*(uint64_t*)(localVarBase + __tailCopyDst3)) = (*(uint64_t*)(localVarBase + __tailCopySrc3));
+					std::memmove((void*)(localVarBase + __tailSizedCopyDst), (void*)(localVarBase + __tailSizedCopySrc), __tailSizedCopySize);
+				    ip += 72;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4:
+				{
+					uint16_t __fieldDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc = *(uint16_t*)(ip + 10);
+					uint16_t __branchOp1 = *(uint16_t*)(ip + 12);
+					uint16_t __branchOp2 = *(uint16_t*)(ip + 14);
+					int32_t __offsetBranch = *(int32_t*)(ip + 20);
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+				    if (CompareCneUn((*(int32_t*)(localVarBase + __branchOp1)), (*(int32_t*)(localVarBase + __branchOp2))))
+				    {
+						byte* __targetIp = ipBase + __offsetBranch;
+						if (*(HiOpcodeEnum*)__targetIp == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar)
+						{
+							ip = __targetIp;
+							if (g_opcodeProfilerEnabled)
+							{
+								opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+							}
+							goto HOTC233_EXEC_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar;
+						}
+				        ip = __targetIp;
+				    }
+				    else
+				    {
+						byte* __fallthroughIp = ip + 24;
+						if (*(HiOpcodeEnum*)__fallthroughIp == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar)
+						{
+							ip = __fallthroughIp;
+							if (g_opcodeProfilerEnabled)
+							{
+								opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+							}
+							goto HOTC233_EXEC_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar;
+						}
+				        ip = __fallthroughIp;
+				    }
+				    continue;
+				}
 				case HiOpcodeEnum::LdfldValueTypeVarVar_u4:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
@@ -9721,6 +11419,126 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::LdfldaVarVar_LdlocVarVar:
+				{
+					uint16_t __fieldAddressDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc = *(uint16_t*)(ip + 10);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(void**)(localVarBase + __fieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdfldaVarVar_LdlocVarVar_LdindVarVar_i4:
+				{
+					uint16_t __fieldAddressDst = *(uint16_t*)(ip + 2);
+					uint16_t __obj = *(uint16_t*)(ip + 4);
+					uint16_t __offset = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc = *(uint16_t*)(ip + 10);
+					uint16_t __indDst = *(uint16_t*)(ip + 12);
+					uint16_t __indSrc = *(uint16_t*)(ip + 14);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(void**)(localVarBase + __fieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __indDst)) = (*(int32_t*)*(void**)(localVarBase + __indSrc));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4:
+				{
+					uint16_t __addressDst = *(uint16_t*)(ip + 2);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 4);
+					uint16_t __fieldAddressDst = *(uint16_t*)(ip + 6);
+					uint16_t __obj = *(uint16_t*)(ip + 8);
+					uint16_t __offset = *(uint16_t*)(ip + 10);
+					uint16_t __copyDst = *(uint16_t*)(ip + 12);
+					uint16_t __copySrc = *(uint16_t*)(ip + 14);
+					uint16_t __indDst = *(uint16_t*)(ip + 16);
+					uint16_t __indSrc = *(uint16_t*)(ip + 18);
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(void**)(localVarBase + __fieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __indDst)) = (*(int32_t*)*(void**)(localVarBase + __indSrc));
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4:
+				{
+					uint16_t __leadingCopyDst = *(uint16_t*)(ip + 2);
+					uint16_t __leadingCopySrc = *(uint16_t*)(ip + 4);
+					uint16_t __addressDst = *(uint16_t*)(ip + 6);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 8);
+					uint16_t __fieldAddressDst = *(uint16_t*)(ip + 10);
+					uint16_t __obj = *(uint16_t*)(ip + 12);
+					uint16_t __offset = *(uint16_t*)(ip + 14);
+					uint16_t __copyDst = *(uint16_t*)(ip + 16);
+					uint16_t __copySrc = *(uint16_t*)(ip + 18);
+					uint16_t __indDst = *(uint16_t*)(ip + 20);
+					uint16_t __indSrc = *(uint16_t*)(ip + 22);
+					(*(uint64_t*)(localVarBase + __leadingCopyDst)) = (*(uint64_t*)(localVarBase + __leadingCopySrc));
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(void**)(localVarBase + __fieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __indDst)) = (*(int32_t*)*(void**)(localVarBase + __indSrc));
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4:
+				{
+					uint16_t __addressDst = *(uint16_t*)(ip + 2);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 4);
+					uint16_t __fieldAddressDst = *(uint16_t*)(ip + 6);
+					uint16_t __obj = *(uint16_t*)(ip + 8);
+					uint16_t __offset = *(uint16_t*)(ip + 10);
+					uint16_t __copyDst = *(uint16_t*)(ip + 12);
+					uint16_t __copySrc = *(uint16_t*)(ip + 14);
+					uint16_t __indDst = *(uint16_t*)(ip + 16);
+					uint16_t __indSrc = *(uint16_t*)(ip + 18);
+					uint16_t __constDst = *(uint16_t*)(ip + 20);
+					uint32_t __constant = *(uint32_t*)(ip + 24);
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(void**)(localVarBase + __fieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __indDst)) = (*(int32_t*)*(void**)(localVarBase + __indSrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 32;
+				    continue;
+				}
+				case HiOpcodeEnum::LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar:
+				{
+					uint16_t __addressDst = *(uint16_t*)(ip + 2);
+					uint16_t __addressSrc = *(uint16_t*)(ip + 4);
+					uint16_t __fieldAddressDst = *(uint16_t*)(ip + 6);
+					uint16_t __obj = *(uint16_t*)(ip + 8);
+					uint16_t __offset = *(uint16_t*)(ip + 10);
+					uint16_t __copyDst = *(uint16_t*)(ip + 12);
+					uint16_t __copySrc = *(uint16_t*)(ip + 14);
+					uint16_t __indDst = *(uint16_t*)(ip + 16);
+					uint16_t __indSrc = *(uint16_t*)(ip + 18);
+					uint16_t __constDst = *(uint16_t*)(ip + 20);
+					uint32_t __constant = *(uint32_t*)(ip + 24);
+					uint16_t __tailCopyDst1 = *(uint16_t*)(ip + 28);
+					uint16_t __tailCopySrc1 = *(uint16_t*)(ip + 30);
+					uint16_t __tailCopyDst2 = *(uint16_t*)(ip + 32);
+					uint16_t __tailCopySrc2 = *(uint16_t*)(ip + 34);
+					(*(void**)(localVarBase + __addressDst)) = (void*)(localVarBase + __addressSrc);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    (*(void**)(localVarBase + __fieldAddressDst)) = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
+					(*(int32_t*)(localVarBase + __indDst)) = (*(int32_t*)*(void**)(localVarBase + __indSrc));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(uint64_t*)(localVarBase + __tailCopyDst1)) = (*(uint64_t*)(localVarBase + __tailCopySrc1));
+					(*(uint64_t*)(localVarBase + __tailCopyDst2)) = (*(uint64_t*)(localVarBase + __tailCopySrc2));
+				    ip += 40;
+				    continue;
+				}
 				case HiOpcodeEnum::StfldVarVar_i1:
 				{
 					uint16_t __obj = *(uint16_t*)(ip + 2);
@@ -9774,6 +11592,24 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
 				    *(int32_t*)(_fieldAddr_) = (*(int32_t*)(localVarBase + __data));
 				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4:
+				{
+					uint16_t __storeObj = *(uint16_t*)(ip + 2);
+					uint16_t __storeOffset = *(uint16_t*)(ip + 4);
+					uint16_t __storeData = *(uint16_t*)(ip + 6);
+					uint16_t __fieldDst = *(uint16_t*)(ip + 8);
+					uint16_t __obj = *(uint16_t*)(ip + 10);
+					uint16_t __offset = *(uint16_t*)(ip + 12);
+					uint16_t __constDst = *(uint16_t*)(ip + 14);
+					uint32_t __constant = *(uint32_t*)(ip + 16);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __storeObj)));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __storeObj)) + __storeOffset;
+				    *(int32_t*)(_fieldAddr_) = (*(int32_t*)(localVarBase + __storeData));
+					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+				    ip += 24;
 				    continue;
 				}
 				case HiOpcodeEnum::StfldVarVar_u4:
@@ -11342,8 +13178,9 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(void**)(localVarBase + __addr)) = GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), il2cpp::vm::Array::GetElementSize(arr->klass));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, _index);
+				    (*(void**)(localVarBase + __addr)) = GET_ARRAY_ELEMENT_ADDRESS(arr, _index, il2cpp::vm::Array::GetElementSize(arr->klass));
 				    ip += 8;
 				    continue;
 				}
@@ -11354,9 +13191,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 6);
 					Il2CppClass* __eleKlass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, _index);
 				    CheckArrayElementTypeMatch(arr->klass, __eleKlass);
-				    (*(void**)(localVarBase + __addr)) = GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), il2cpp::vm::Array::GetElementSize(arr->klass));
+				    (*(void**)(localVarBase + __addr)) = GET_ARRAY_ELEMENT_ADDRESS(arr, _index, il2cpp::vm::Array::GetElementSize(arr->klass));
 				    ip += 16;
 				    continue;
 				}
@@ -11366,8 +13204,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, int8_t, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    (*(int32_t*)(localVarBase + __dst)) = GetArrayElementFast<int8_t>(arr, _index);
 				    ip += 8;
 				    continue;
 				}
@@ -11377,8 +13215,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, uint8_t, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    (*(int32_t*)(localVarBase + __dst)) = GetArrayElementFast<uint8_t>(arr, _index);
 				    ip += 8;
 				    continue;
 				}
@@ -11388,8 +13226,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, int16_t, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    (*(int32_t*)(localVarBase + __dst)) = GetArrayElementFast<int16_t>(arr, _index);
 				    ip += 8;
 				    continue;
 				}
@@ -11399,8 +13237,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, uint16_t, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    (*(int32_t*)(localVarBase + __dst)) = GetArrayElementFast<uint16_t>(arr, _index);
 				    ip += 8;
 				    continue;
 				}
@@ -11410,8 +13248,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, int32_t, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    (*(int32_t*)(localVarBase + __dst)) = GetArrayElementFast<int32_t>(arr, _index);
 				    ip += 8;
 				    continue;
 				}
@@ -11421,8 +13259,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, uint32_t, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    (*(int32_t*)(localVarBase + __dst)) = GetArrayElementFast<uint32_t>(arr, _index);
 				    ip += 8;
 				    continue;
 				}
@@ -11432,8 +13270,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(int64_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, int64_t, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    (*(int64_t*)(localVarBase + __dst)) = GetArrayElementFast<int64_t>(arr, _index);
 				    ip += 8;
 				    continue;
 				}
@@ -11443,8 +13281,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    (*(int64_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, uint64_t, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    (*(int64_t*)(localVarBase + __dst)) = GetArrayElementFast<uint64_t>(arr, _index);
 				    ip += 8;
 				    continue;
 				}
@@ -11454,8 +13292,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy1((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 1));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy1((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 1));
 				    ip += 8;
 				    continue;
 				}
@@ -11465,8 +13303,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy2((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 2));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy2((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 2));
 				    ip += 8;
 				    continue;
 				}
@@ -11476,8 +13314,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy4((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 4));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy4((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 4));
 				    ip += 8;
 				    continue;
 				}
@@ -11487,8 +13325,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy8((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 8));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy8((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 8));
 				    ip += 8;
 				    continue;
 				}
@@ -11498,8 +13336,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy12((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 12));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy12((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 12));
 				    ip += 8;
 				    continue;
 				}
@@ -11509,8 +13347,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy16((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 16));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy16((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 16));
 				    ip += 8;
 				    continue;
 				}
@@ -11520,8 +13358,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy20((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 20));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy20((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 20));
 				    ip += 8;
 				    continue;
 				}
@@ -11531,8 +13369,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy24((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 24));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy24((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 24));
 				    ip += 8;
 				    continue;
 				}
@@ -11542,8 +13380,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy28((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 28));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy28((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 28));
 				    ip += 8;
 				    continue;
 				}
@@ -11553,8 +13391,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy32((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 32));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy32((void*)(localVarBase + __dst), GetCheckedArrayElementAddress(arr, _index, 32));
 				    ip += 8;
 				    continue;
 				}
@@ -11564,9 +13402,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 					uint16_t __index = *(uint16_t*)(ip + 6);
 				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, _index);
 				    int32_t eleSize = il2cpp::vm::Array::GetElementSize(arr->klass);
-				    std::memmove((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), eleSize), eleSize);
+				    std::memmove((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, _index, eleSize), eleSize);
 				    ip += 8;
 				    continue;
 				}
@@ -11576,8 +13415,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), int8_t, (*(int32_t*)(localVarBase + __index)), (*(int8_t*)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    SetArrayElementFast<int8_t>(_arr, _index, (*(int8_t*)(localVarBase + __ele)));
 				    ip += 8;
 				    continue;
 				}
@@ -11587,8 +13426,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), uint8_t, (*(int32_t*)(localVarBase + __index)), (*(uint8_t*)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    SetArrayElementFast<uint8_t>(_arr, _index, (*(uint8_t*)(localVarBase + __ele)));
 				    ip += 8;
 				    continue;
 				}
@@ -11598,8 +13437,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), int16_t, (*(int32_t*)(localVarBase + __index)), (*(int16_t*)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    SetArrayElementFast<int16_t>(_arr, _index, (*(int16_t*)(localVarBase + __ele)));
 				    ip += 8;
 				    continue;
 				}
@@ -11609,8 +13448,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), uint16_t, (*(int32_t*)(localVarBase + __index)), (*(uint16_t*)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    SetArrayElementFast<uint16_t>(_arr, _index, (*(uint16_t*)(localVarBase + __ele)));
 				    ip += 8;
 				    continue;
 				}
@@ -11620,8 +13459,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), int32_t, (*(int32_t*)(localVarBase + __index)), (*(int32_t*)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    SetArrayElementFast<int32_t>(_arr, _index, (*(int32_t*)(localVarBase + __ele)));
 				    ip += 8;
 				    continue;
 				}
@@ -11631,8 +13470,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), uint32_t, (*(int32_t*)(localVarBase + __index)), (*(uint32_t*)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    SetArrayElementFast<uint32_t>(_arr, _index, (*(uint32_t*)(localVarBase + __ele)));
 				    ip += 8;
 				    continue;
 				}
@@ -11642,8 +13481,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), int64_t, (*(int32_t*)(localVarBase + __index)), (*(int64_t*)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    SetArrayElementFast<int64_t>(_arr, _index, (*(int64_t*)(localVarBase + __ele)));
 				    ip += 8;
 				    continue;
 				}
@@ -11653,8 +13492,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), uint64_t, (*(int32_t*)(localVarBase + __index)), (*(uint64_t*)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    SetArrayElementFast<uint64_t>(_arr, _index, (*(uint64_t*)(localVarBase + __ele)));
 				    ip += 8;
 				    continue;
 				}
@@ -11664,9 +13503,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    CheckArrayElementTypeCompatible((*(Il2CppArray**)(localVarBase + __arr)), (*(Il2CppObject**)(localVarBase + __ele)));
-				    il2cpp_array_setref((*(Il2CppArray**)(localVarBase + __arr)), (*(int32_t*)(localVarBase + __index)), (*(Il2CppObject**)(localVarBase + __ele)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+					Il2CppObject* _eleObj = (*(Il2CppObject**)(localVarBase + __ele));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, _index);
+				    CheckArrayElementTypeCompatible(_arr, _eleObj);
+				    il2cpp_array_setref(_arr, _index, _eleObj);
 				    ip += 8;
 				    continue;
 				}
@@ -11676,8 +13517,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy12(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 12), (void*)(localVarBase + __ele));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy12(GetCheckedArrayElementAddress(_arr, _index, 12), (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}
@@ -11687,8 +13528,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy16(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 16), (void*)(localVarBase + __ele));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy16(GetCheckedArrayElementAddress(_arr, _index, 16), (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}
@@ -11698,8 +13539,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy20(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 20), (void*)(localVarBase + __ele));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy20(GetCheckedArrayElementAddress(_arr, _index, 20), (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}
@@ -11709,8 +13550,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy24(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 24), (void*)(localVarBase + __ele));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy24(GetCheckedArrayElementAddress(_arr, _index, 24), (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}
@@ -11720,9 +13561,33 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy28(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 28), (void*)(localVarBase + __ele));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy28(GetCheckedArrayElementAddress(_arr, _index, 28), (void*)(localVarBase + __ele));
 				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetArrayElementVarVar_size_28_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar:
+				{
+					uint16_t __arraySrc = *(uint16_t*)(ip + 2);
+					uint16_t __indexSrc = *(uint16_t*)(ip + 4);
+					uint16_t __elementSrc = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 10);
+					uint16_t __constDst = *(uint16_t*)(ip + 12);
+					uint32_t __constant = *(uint32_t*)(ip + 16);
+					uint16_t __addRet = *(uint16_t*)(ip + 20);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 22);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 24);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 26);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 28);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arraySrc));
+					int32_t _index = (*(int32_t*)(localVarBase + __indexSrc));
+				    Copy28(GetCheckedArrayElementAddress(_arr, _index, 28), (void*)(localVarBase + __elementSrc));
+					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					(*(int32_t*)(localVarBase + __constDst)) = __constant;
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+				    ip += 32;
 				    continue;
 				}
 				case HiOpcodeEnum::SetArrayElementVarVar_size_32:
@@ -11731,8 +13596,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
-				    Copy32(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int32_t*)(localVarBase + __index)), 32), (void*)(localVarBase + __ele));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    Copy32(GetCheckedArrayElementAddress(_arr, _index, 32), (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}
@@ -11742,9 +13607,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, _index);
 				    int32_t _eleSize = il2cpp::vm::Array::GetElementSize(_arr->klass);
-				    SetArrayElementWithSize(_arr, _eleSize, (*(int32_t*)(localVarBase + __index)), (void*)(localVarBase + __ele));
+				    SetArrayElementWithSize(_arr, _eleSize, _index, (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}
@@ -11754,9 +13620,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __index = *(uint16_t*)(ip + 4);
 					uint16_t __ele = *(uint16_t*)(ip + 6);
 				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
+					int32_t _index = (*(int32_t*)(localVarBase + __index));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, _index);
 				    int32_t _eleSize = il2cpp::vm::Array::GetElementSize(_arr->klass);
-				    il2cpp_array_setrefwithsize(_arr, _eleSize, (*(int32_t*)(localVarBase + __index)), (void*)(localVarBase + __ele));
+				    il2cpp_array_setrefwithsize(_arr, _eleSize, _index, (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}

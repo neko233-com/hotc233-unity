@@ -43,7 +43,7 @@ namespace Hotc233.Editor.Commands
 
             var writer = new GenericReferenceWriter();
             writer.Write(analyzer.AotGenericTypes.ToList(), analyzer.AotGenericMethods.ToList(), $"{Application.dataPath}/{gs.outputAOTGenericReferenceFile}");
-            AssetDatabase.Refresh();
+            ImportGeneratedReferenceFile(gs.outputAOTGenericReferenceFile);
         }
 
 
@@ -96,7 +96,16 @@ namespace Hotc233.Editor.Commands
             var (resultTypes, resultMethods) = ExcludeExistAOTGenericTypeAndMethodss(hotUpdateAnalyzer.AotGenericTypes.ToList(), hotUpdateAnalyzer.AotGenericMethods.ToList(), aotAnalyzer.AotGenericTypes.ToList(), aotAnalyzer.AotGenericMethods.ToList());
             var writer = new GenericReferenceWriter();
             writer.Write(resultTypes, resultMethods, $"{Application.dataPath}/{gs.outputAOTGenericReferenceFile}");
-            AssetDatabase.Refresh();
+            ImportGeneratedReferenceFile(gs.outputAOTGenericReferenceFile);
+        }
+
+        private static void ImportGeneratedReferenceFile(string assetRelativePath)
+        {
+            string normalized = assetRelativePath.Replace('\\', '/');
+            string assetPath = normalized.StartsWith("Assets/", StringComparison.Ordinal)
+                ? normalized
+                : $"Assets/{normalized}";
+            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
         }
 
 

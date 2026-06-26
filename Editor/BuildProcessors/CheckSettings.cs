@@ -71,6 +71,11 @@ namespace Hotc233.Editor.BuildProcessors
                 throw new BuildFailedException("Hotc233 builtin runtime is not ready. Use 'hotc233/Builtin Runtime...' or run Generate/All.");
             }
 
+            if (!installer.HasGeneratedIl2CppDefinitions())
+            {
+                throw new BuildFailedException("Hotc233 generated IL2CPP definitions are missing or stale. Run 'hotc233/Generate/All' before building.");
+            }
+
             Hotc233Settings gs = SettingsUtil.Hotc233Settings;
             if (((gs.hotUpdateAssemblies?.Length + gs.hotUpdateAssemblyDefinitions?.Length) ?? 0) == 0)
             {
@@ -80,6 +85,11 @@ namespace Hotc233.Editor.BuildProcessors
             if (!DisableMethodBridgeDevelopmentFlagChecking)
             {
                 string methodBridgeFile = $"{SettingsUtil.GeneratedCppDir}/MethodBridge.cpp";
+                if (!File.Exists(methodBridgeFile))
+                {
+                    throw new BuildFailedException("[CheckSettings] MethodBridge.cpp missing. Please run 'hotc233/Generate/All' before building.");
+                }
+
                 var match = Regex.Match(File.ReadAllText(methodBridgeFile), @"// DEVELOPMENT=(\d)");
                 if (match.Success)
                 {
@@ -87,12 +97,12 @@ namespace Hotc233.Editor.BuildProcessors
                     int developmentFlagInEditorSettings = EditorUserBuildSettings.development ? 1 : 0;
                     if (developmentFlagInMethodBridge != developmentFlagInEditorSettings)
                     {
-                        Debug.LogError($"[CheckSettings] MethodBridge.cpp DEVELOPMENT flag:{developmentFlagInMethodBridge} is inconsistent with EditorUserBuildSettings.development:{developmentFlagInEditorSettings}. Please run 'hotc233/Generate/All' before building.");
+                        throw new BuildFailedException($"[CheckSettings] MethodBridge.cpp DEVELOPMENT flag:{developmentFlagInMethodBridge} is inconsistent with EditorUserBuildSettings.development:{developmentFlagInEditorSettings}. Please run 'hotc233/Generate/All' before building.");
                     }
                 }
                 else
                 {
-                    Debug.LogError("[CheckSettings] MethodBridge.cpp DEVELOPMENT flag not found. Please run 'hotc233/Generate/All' before building.");
+                    throw new BuildFailedException("[CheckSettings] MethodBridge.cpp DEVELOPMENT flag not found. Please run 'hotc233/Generate/All' before building.");
                 }
             }
         }

@@ -21,9 +21,9 @@ namespace Hotc233.Editor.Commands
                 UnityVersion = Application.unityVersion,
                 HotUpdateAssemblies = SettingsUtil.HotUpdateAssemblyNamesIncludePreserved,
                 UnityVersionTemplateFile = $"{SettingsUtil.TemplatePathInPackage}/UnityVersion.h.tpl",
-                UnityVersionOutputFile = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp/hotc233/Generated/UnityVersion.h",
+                UnityVersionOutputFile = $"{SettingsUtil.GeneratedCppDir}/UnityVersion.h",
                 AssemblyManifestTemplateFile = $"{SettingsUtil.TemplatePathInPackage}/AssemblyManifest.cpp.tpl",
-                AssemblyManifestOutputFile = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp/hotc233/Generated/AssemblyManifest.cpp",
+                AssemblyManifestOutputFile = $"{SettingsUtil.GeneratedCppDir}/AssemblyManifest.cpp",
             };
 
             var g = new Il2CppDef.Il2CppDefGenerator(options);

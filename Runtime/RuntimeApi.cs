@@ -39,6 +39,44 @@ namespace Hotc233
         public static extern bool PreJitClass(Type type);
 #endif
 
+#if UNITY_EDITOR
+        public static string GetMethodOpcodeProfile(MethodInfo method, int maxRows)
+        {
+            return "{\"success\":false,\"reason\":\"editor-stub\"}";
+        }
+#else
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern string GetMethodOpcodeProfile(MethodInfo method, int maxRows);
+#endif
+
+#if UNITY_EDITOR
+        public static void ResetOpcodeProfiler()
+        {
+        }
+#else
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void ResetOpcodeProfiler();
+#endif
+
+#if UNITY_EDITOR
+        public static void SetOpcodeProfilerEnabled(int enabled)
+        {
+        }
+#else
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern void SetOpcodeProfilerEnabled(int enabled);
+#endif
+
+#if UNITY_EDITOR
+        public static string GetOpcodeProfilerSnapshot(int maxRows)
+        {
+            return "{\"success\":false,\"reason\":\"editor-stub\"}";
+        }
+#else
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern string GetOpcodeProfilerSnapshot(int maxRows);
+#endif
+
         public static int GetInterpreterThreadObjectStackSize()
         {
             return GetRuntimeOption(RuntimeOptionId.InterpreterThreadObjectStackSize);

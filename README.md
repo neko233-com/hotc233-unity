@@ -30,7 +30,8 @@ Assets/neko233/hotc233-unity/
   Runtime/              运行时 API 和二进制加载器
   Editor/               编辑器生成、构建处理、设置面板
   Data~/                内置运行时源码、模板、基准库文件
-  Plugins/              编辑器分析依赖
+  Plugin_dnlib/         dnlib 编辑器分析依赖
+  Plugin_LZ4/           LZ4 编辑器分析依赖
   Documentation~/       架构文档
 
 Assets/EditorForBuild/
@@ -285,7 +286,7 @@ hotc233/Export/Export unitypackage...
 hotc233/Export/Export unitypackage to Build/Packages
 ```
 
-但要注意：Unity 的 `ExportPackage` 不会完整包含 `Data~`、`Documentation~` 这类以 `~` 结尾的 package-private 目录。当前验证导出的 `Build/Packages/hotc233-1.0.0.unitypackage` 约 **0.55 MB**，只包含 Unity AssetDatabase 可见的 `Runtime`、`Editor`、`Plugins` 等资产，不包含完整 `Data~/Libil2cpp`。因此：
+但要注意：Unity 的 `ExportPackage` 不会完整包含 `Data~`、`Documentation~` 这类以 `~` 结尾的 package-private 目录。当前验证导出的 `Build/Packages/hotc233-1.0.0.unitypackage` 约 **0.55 MB**，只包含 Unity AssetDatabase 可见的 `Runtime`、`Editor`、`Plugin_dnlib`、`Plugin_LZ4` 等资产，不包含完整 `Data~/Libil2cpp`。因此：
 
 - 只把这个 `.unitypackage` 给其他项目，会缺内置 runtime data，后续 `hotc233/Generate/All` 可能失败。
 - 完整给其他项目使用时，应给完整目录或 UPM/local package，而不是只给 `.unitypackage`。
@@ -311,7 +312,8 @@ hotc233/Export/Export unitypackage to Build/Packages
 | 目录 | 体积 | 说明 |
 |------|------|------|
 | `Data~` | 约 8.23 MB | 内置 `Libil2cpp` runtime 源码、模板和基准文件，是编辑器生成阶段的主要体积来源。 |
-| `Plugins` | 约 1.16 MB | 编辑器分析依赖，例如 dnlib / LZ4。 |
+| `Plugin_dnlib` | 约 1.12 MB | dnlib 编辑器分析依赖。 |
+| `Plugin_LZ4` | 约 0.04 MB | LZ4 编辑器分析依赖。 |
 | `Editor` | 约 0.73 MB | 生成命令、构建处理、设置窗口、导出工具。 |
 | `Runtime` | 约 0.05 MB | Player 运行时 API、二进制加载器和诊断。 |
 

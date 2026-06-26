@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 
 namespace Hotc233.Editor.Commands
@@ -137,11 +138,14 @@ namespace Hotc233.Editor.Commands
                 };
 
                 var report = BuildPipeline.BuildPlayer(buildPlayerOptions);
-
+                if (report == null)
+                {
+                    throw new BuildFailedException($"GenerateStripedAOTDlls failed for {target}: BuildPipeline returned no report.");
+                }
 
                 if (report.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded)
                 {
-                    throw new Exception(
+                    throw new BuildFailedException(
                         $"GenerateStripedAOTDlls failed for {target}: result={report.summary.result}, errors={report.summary.totalErrors}, warnings={report.summary.totalWarnings}. " +
                         "Check Console for Unity BuildPipeline details, including missing IL2CPP platform support modules.");
                 }

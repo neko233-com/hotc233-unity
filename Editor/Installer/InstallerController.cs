@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using UnityEditor;
@@ -30,6 +31,8 @@ namespace Hotc233.Editor.Installer
         private string LocalRuntimeMarkerDir => $"{SettingsUtil.LocalIl2CppDir}/{RuntimeMarkerRelativePath}";
 
         private string BundledRuntimeMarkerDir => $"{BundledLibil2cppDir}/hotc233";
+
+        private string LocalGeneratedDir => $"{LocalRuntimeMarkerDir}/generated";
 
         public InstallerController()
         {
@@ -162,10 +165,12 @@ namespace Hotc233.Editor.Installer
             string localIl2CppDir = SettingsUtil.LocalIl2CppDir;
             Directory.CreateDirectory(localIl2CppDir);
 
+            List<PreservedGeneratedFile> generatedFiles = CaptureGeneratedRuntimeFiles();
             bool editorFilesChanged = BashUtil.SyncDirIncremental(editorIl2cppPath, localIl2CppDir, true);
 
             string dstLibil2cppDir = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp";
             bool runtimeFilesChanged = BashUtil.SyncDirIncremental(libil2cppSourceDir, dstLibil2cppDir, true);
+            runtimeFilesChanged = RestoreGeneratedRuntimeFiles(generatedFiles) || runtimeFilesChanged;
 
             if (editorFilesChanged || runtimeFilesChanged)
             {
@@ -190,6 +195,104 @@ namespace Hotc233.Editor.Installer
         public bool HasInstalledHotc233()
         {
             return Directory.Exists(LocalRuntimeMarkerDir);
+        }
+
+        public bool HasGeneratedIl2CppDefinitions()
+        {
+            string unityVersionFile = $"{LocalGeneratedDir}/UnityVersion.h";
+            string assemblyManifestFile = $"{LocalGeneratedDir}/AssemblyManifest.cpp";
+            return FileContains(unityVersionFile, "#define HOTC233_UNITY_VERSION ")
+                && Regex.IsMatch(ReadFileIfExists(assemblyManifestFile), "\"[^\"]+\"\\s*,");
+        }
+
+        private List<PreservedGeneratedFile> CaptureGeneratedRuntimeFiles()
+        {
+            var files = new List<PreservedGeneratedFile>();
+            if (!HasGeneratedIl2CppDefinitions() || !Directory.Exists(LocalGeneratedDir))
+            {
+                return files;
+            }
+
+            foreach (string file in Directory.GetFiles(LocalGeneratedDir, "*", SearchOption.TopDirectoryOnly))
+            {
+                if (Path.GetFileName(file).Equals("libil2cpp-version.txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                files.Add(new PreservedGeneratedFile
+                {
+                    RelativePath = Path.GetFileName(file),
+                    Bytes = File.ReadAllBytes(file),
+                    LastWriteTimeUtc = File.GetLastWriteTimeUtc(file),
+                });
+            }
+
+            return files;
+        }
+
+        private bool RestoreGeneratedRuntimeFiles(List<PreservedGeneratedFile> files)
+        {
+            if (files == null || files.Count == 0)
+            {
+                return false;
+            }
+
+            bool changed = false;
+            Directory.CreateDirectory(LocalGeneratedDir);
+            foreach (PreservedGeneratedFile file in files)
+            {
+                string targetPath = Path.Combine(LocalGeneratedDir, file.RelativePath);
+                if (!File.Exists(targetPath) || !BytesEqual(File.ReadAllBytes(targetPath), file.Bytes))
+                {
+                    File.WriteAllBytes(targetPath, file.Bytes);
+                    changed = true;
+                }
+
+                File.SetLastWriteTimeUtc(targetPath, file.LastWriteTimeUtc);
+            }
+
+            if (changed)
+            {
+                Debug.Log($"Hotc233 保留并恢复本地 generated 输出: {files.Count} files.");
+            }
+
+            return changed;
+        }
+
+        private static bool FileContains(string path, string value)
+        {
+            return File.Exists(path) && File.ReadAllText(path).Contains(value);
+        }
+
+        private static string ReadFileIfExists(string path)
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+        }
+
+        private static bool BytesEqual(byte[] lhs, byte[] rhs)
+        {
+            if (lhs == null || rhs == null || lhs.Length != rhs.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < lhs.Length; i++)
+            {
+                if (lhs[i] != rhs[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private sealed class PreservedGeneratedFile
+        {
+            public string RelativePath;
+            public byte[] Bytes;
+            public DateTime LastWriteTimeUtc;
         }
 
         /// <summary>检查包内是否已经包含可安装的 libil2cpp。</summary>

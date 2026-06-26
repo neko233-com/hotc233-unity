@@ -349,8 +349,8 @@ namespace Hotc233.Editor.Commands
                 yield return Path.Combine(hotUpdateDir, assemblyName + ".dll");
             }
 
-            yield return Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "UnityVersion.h");
-            yield return Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "AssemblyManifest.cpp");
+            yield return Path.Combine(SettingsUtil.GeneratedCppDir, "UnityVersion.h");
+            yield return Path.Combine(SettingsUtil.GeneratedCppDir, "AssemblyManifest.cpp");
             yield return Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputLinkFile);
             yield return Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputAOTGenericReferenceFile);
             yield return Path.Combine(SettingsUtil.GeneratedCppDir, "MethodBridge.cpp");
@@ -373,8 +373,8 @@ namespace Hotc233.Editor.Commands
 
         private static bool HasIl2CppDefOutputs(PipelineContext context)
         {
-            string unityVersionFile = Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "UnityVersion.h");
-            string assemblyManifestFile = Path.Combine(SettingsUtil.LocalIl2CppDir, "libil2cpp", "hotc233", "Generated", "AssemblyManifest.cpp");
+            string unityVersionFile = Path.Combine(SettingsUtil.GeneratedCppDir, "UnityVersion.h");
+            string assemblyManifestFile = Path.Combine(SettingsUtil.GeneratedCppDir, "AssemblyManifest.cpp");
             return FileContains(unityVersionFile, "#define HOTC233_UNITY_VERSION ")
                 && SettingsUtil.HotUpdateAssemblyNamesIncludePreserved.All(assemblyName => FileContains(assemblyManifestFile, $"\"{assemblyName}\""));
         }

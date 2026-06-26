@@ -279,6 +279,8 @@ namespace transform
 
 		void AddInst(IRCommon* ir);
 
+		void OptimizeBasicBlocks();
+
 		void AddInst_ldarg(int32_t argIdx);
 
 		bool IsCreateNotNullObjectInstrument(IRCommon* ir);

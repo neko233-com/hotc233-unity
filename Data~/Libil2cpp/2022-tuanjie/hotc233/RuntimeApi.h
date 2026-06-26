@@ -17,5 +17,9 @@ namespace hotc233
 
 		static int32_t PreJitClass(Il2CppReflectionType* type);
 		static int32_t PreJitMethod(Il2CppReflectionMethod* method);
+		static Il2CppString* GetMethodOpcodeProfile(Il2CppReflectionMethod* method, int32_t maxRows);
+		static void ResetOpcodeProfiler();
+		static void SetOpcodeProfilerEnabled(int32_t enabled);
+		static Il2CppString* GetOpcodeProfilerSnapshot(int32_t maxRows);
 	};
 }

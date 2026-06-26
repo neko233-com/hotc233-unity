@@ -19,6 +19,18 @@ namespace interpreter
 	};
 
 	extern uint16_t g_instructionSizes[];
+	constexpr uint32_t kDynamicOpcodeProfileCapacity = 2048;
+	constexpr uint32_t kDynamicOpcodePairProfileCapacity = 8192;
+	constexpr uint32_t kDynamicOpcodeProfileInvalidOpcode = 0xffffffffu;
+	extern bool g_opcodeProfilerEnabled;
+	extern uint64_t g_opcodeProfilerCounts[kDynamicOpcodeProfileCapacity];
+	extern uint64_t g_opcodeProfilerTotal;
+	extern uint32_t g_opcodeProfilerPairKeys[kDynamicOpcodePairProfileCapacity];
+	extern uint64_t g_opcodeProfilerPairCounts[kDynamicOpcodePairProfileCapacity];
+	extern uint64_t g_opcodeProfilerPairTotal;
+	void ResetOpcodeProfiler();
+	void SetOpcodeProfilerEnabled(bool enabled);
+	void RecordOpcodeProfilePair(uint32_t previousOpcode, uint32_t opcode);
 
 	enum class HiOpcodeEnum : uint16_t
 	{
@@ -929,6 +941,80 @@ namespace interpreter
 		SetArrayElementVarVar_size_24,
 		SetArrayElementVarVar_size_28,
 		SetArrayElementVarVar_size_32,
+		LdlocVarVar_LdlocVarVar,
+		LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24,
+		LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_i4,
+		LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4,
+		LdlocVarVar_LdcVarConst_4,
+		LdlocVarVar_BranchVarVar_CneUn_i4,
+		LdlocVarVar_LdcVarConst_4_BranchVarVar_Clt_i4,
+		LdlocVarVar_LdcVarConst_4_BinOpRem_i4,
+		LdlocVarVar_LdcVarConst_4_BinOpAdd_i4,
+		LdlocVarVar_LdcVarConst_4_BinOpMul_i4,
+		BinOpVarVarVar_Add_i4_LdlocVarVar,
+		BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar,
+		LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar,
+		LdfldValueTypeVarVar_i4_LdcVarConst_4,
+		LdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4,
+		LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4,
+		LdfldValueTypeVarVar_i4_BinOpAdd_i4,
+		LdfldValueTypeVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4,
+		LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4,
+		LdfldVarVar_u1_BranchFalseVar_i4,
+		LdlocVarVar_LdlocVarVar_LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4,
+		LdlocVarAddress_LdcVarConst_4,
+		LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar,
+		LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4,
+		LdlocVarVar_LdindVarVar_i4,
+		LdfldaVarVar_LdlocVarVar,
+		LdfldaVarVar_LdlocVarVar_LdindVarVar_i4,
+		LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4,
+		LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4,
+		BinOpVarVarVar_Add_i4_LdcVarConst_4,
+		BinOpVarVarVar_Add_i4_StfldVarVar_i4,
+		BinOpVarVarVar_Add_i4_StfldVarVar_i4_LdlocVarAddress_LdcVarConst_4,
+		BinOpVarVarVar_Sub_i4_StindVarVar_i4,
+		BinOpVarVarVar_Rem_i4_BranchTrueVar_i4,
+		LdlocVarVar_LdlocVarVar_LdlocVarVar,
+		SetArrayElementVarVar_size_28_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar,
+		LdlocVarVar_LdfldValueTypeVarVar_i4,
+		LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4,
+		BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4,
+		LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4,
+		BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4,
+		BinOpVarVarVar_Div_i4_MathMinVarVarVar_i4,
+		BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4,
+		LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4,
+		LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4,
+		LdlocVarVar_LdcVarConst_4_BinOpRem_i4_LdcVarConst_4_CompOpCeq_i4,
+		LdlocVarVar_LdcVarConst_4_BinOpRem_i4_LdcVarConst_4_CompOpCeq_i4_RetVar_ret_1,
+		LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24_LdlocVarVarSize,
+		LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize,
+		BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize,
+		LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize,
+		LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4,
+		LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar,
+		LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4,
+		StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4,
+		BinOpVarVarVar_Add_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4,
+		LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpSub_i4_MathMaxVarVarVar_i4,
+		LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar,
+		LdlocVarAddress_LdcVarConst_4_LdfldValueTypeVarVar_i4_LdcVarConst_4,
+		BinOpVarVarVar_Add_i4_LdcVarConst_4_BinOpAnd_i4_GetArrayElementVarVar_i4,
+		LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4,
+		BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4,
+		BinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4,
+		BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4,
+		BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar,
+		LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4,
+		LdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize,
+		LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4,
+		LdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize_LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4,
+		LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar,
+		BinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4,
+		LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4,
+		LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar,
+		BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4,
 
 		//!!!}}OPCODE
 	};
@@ -3945,7 +4031,7 @@ namespace interpreter
 		uint8_t __pad6;
 		uint8_t __pad7;
 		uint32_t methodInfo;
-		uint8_t __pad12;
+		uint8_t isInstanceMethod;
 		uint8_t __pad13;
 		uint8_t __pad14;
 		uint8_t __pad15;
@@ -10558,6 +10644,1344 @@ namespace interpreter
 		uint8_t __pad7;
 	};
 
+	struct IRLdlocVarVar_LdlocVarVar : IRCommon
+	{
+		uint16_t dst1;
+		uint16_t src1;
+		uint16_t dst2;
+		uint16_t src2;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24 : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_i4 : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t constDst;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		uint32_t constant;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdlocVarVar_BranchVarVar_CneUn_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t branchOp1;
+		uint16_t branchOp2;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		int32_t offset;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BranchVarVar_Clt_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t branchOp1;
+		uint16_t branchOp2;
+		int32_t offset;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t remRet;
+		uint16_t remOp1;
+		uint16_t remOp2;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BinOpMul_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t mulRet;
+		uint16_t mulOp1;
+		uint16_t mulOp2;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRBinOpVarVarVar_Add_i4_LdlocVarVar : IRCommon
+	{
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar : IRCommon
+	{
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t copyDst3;
+		uint16_t copySrc3;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint8_t __pad22;
+		uint8_t __pad23;
+		uint8_t __pad24;
+		uint8_t __pad25;
+		uint8_t __pad26;
+		uint8_t __pad27;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint32_t constant;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BranchVarVar_Cle_i4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint32_t constant;
+		uint16_t branchOp1;
+		uint16_t branchOp2;
+		int32_t offsetBranch;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint32_t constant;
+		uint16_t divRet;
+		uint16_t divOp1;
+		uint16_t divOp2;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_BinOpAdd_i4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t branchOp1;
+		uint16_t branchOp2;
+		uint8_t __pad16;
+		uint8_t __pad17;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		int32_t offsetBranch;
+	};
+
+	struct IRLdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t branchOp1;
+		uint16_t branchOp2;
+		uint8_t __pad16;
+		uint8_t __pad17;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		int32_t offsetBranch;
+	};
+
+	struct IRLdfldVarVar_u1_BranchFalseVar_i4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t branchOp;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		int32_t offsetBranch;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_LdfldVarVar_i4_LdlocVarVar_BranchVarVar_CneUn_i4 : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t fieldOffset;
+		uint16_t copyDst3;
+		uint16_t copySrc3;
+		uint16_t branchOp1;
+		uint16_t branchOp2;
+		int32_t offsetBranch;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRLdlocVarAddress_LdcVarConst_4 : IRCommon
+	{
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_GetArrayLengthVarVar : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t lengthDst;
+		uint16_t arraySrc;
+		uint8_t __pad14;
+		uint8_t __pad15;
+		uint8_t __pad16;
+		uint8_t __pad17;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4 : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t lengthDst;
+		uint16_t arraySrc;
+		uint16_t branchOp1;
+		uint16_t branchOp2;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		int32_t offset;
+	};
+
+	struct IRLdlocVarVar_LdindVarVar_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t indDst;
+		uint16_t indSrc;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdfldaVarVar_LdlocVarVar : IRCommon
+	{
+		uint16_t fieldAddressDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdfldaVarVar_LdlocVarVar_LdindVarVar_i4 : IRCommon
+	{
+		uint16_t fieldAddressDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t indDst;
+		uint16_t indSrc;
+	};
+
+	struct IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4 : IRCommon
+	{
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t fieldAddressDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t indDst;
+		uint16_t indSrc;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t fieldAddressDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t indDst;
+		uint16_t indSrc;
+		uint16_t constDst;
+		uint8_t __pad22;
+		uint8_t __pad23;
+		uint32_t constant;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRBinOpVarVarVar_Add_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t constDst;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint32_t constant;
+	};
+
+	struct IRBinOpVarVarVar_Add_i4_StfldVarVar_i4 : IRCommon
+	{
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t storeObj;
+		uint16_t storeOffset;
+		uint16_t storeData;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRBinOpVarVarVar_Add_i4_StfldVarVar_i4_LdlocVarAddress_LdcVarConst_4 : IRCommon
+	{
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t storeObj;
+		uint16_t storeOffset;
+		uint16_t storeData;
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t constDst;
+		uint32_t constant;
+	};
+
+	struct IRBinOpVarVarVar_Sub_i4_StindVarVar_i4 : IRCommon
+	{
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t storeAddress;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRBinOpVarVarVar_Rem_i4_BranchTrueVar_i4 : IRCommon
+	{
+		uint16_t remRet;
+		uint16_t remOp1;
+		uint16_t remOp2;
+		uint16_t branchOp;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		int32_t offsetBranch;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_LdlocVarVar : IRCommon
+	{
+		uint16_t dst1;
+		uint16_t src1;
+		uint16_t dst2;
+		uint16_t src2;
+		uint16_t dst3;
+		uint16_t src3;
+		uint8_t __pad14;
+		uint8_t __pad15;
+		uint8_t __pad16;
+		uint8_t __pad17;
+		uint8_t __pad18;
+		uint8_t __pad19;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRSetArrayElementVarVar_size_28_LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar : IRCommon
+	{
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint16_t elementSrc;
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t constDst;
+		uint8_t __pad14;
+		uint8_t __pad15;
+		uint32_t constant;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRLdlocVarVar_LdfldValueTypeVarVar_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint8_t __pad12;
+		uint8_t __pad13;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4 : IRCommon
+	{
+		uint16_t fieldDst1;
+		uint16_t obj1;
+		uint16_t offset1;
+		uint16_t addRet1;
+		uint16_t addOp11;
+		uint16_t addOp21;
+		uint16_t fieldDst2;
+		uint16_t obj2;
+		uint16_t offset2;
+		uint16_t addRet2;
+		uint16_t addOp12;
+		uint16_t addOp22;
+		uint8_t __pad26;
+		uint8_t __pad27;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4 : IRCommon
+	{
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t maxRet;
+		uint16_t maxOp1;
+		uint16_t maxOp2;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t storeAddress;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4 : IRCommon
+	{
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t divRet;
+		uint16_t divOp1;
+		uint16_t divOp2;
+		uint8_t __pad26;
+		uint8_t __pad27;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRBinOpVarVarVar_Div_i4_MathMinVarVarVar_i4 : IRCommon
+	{
+		uint16_t divRet;
+		uint16_t divOp1;
+		uint16_t divOp2;
+		uint16_t minRet;
+		uint16_t minOp1;
+		uint16_t minOp2;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4 : IRCommon
+	{
+		uint16_t andRet;
+		uint16_t andOp1;
+		uint16_t andOp2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint8_t __pad14;
+		uint8_t __pad15;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t constDst;
+		uint8_t __pad14;
+		uint8_t __pad15;
+		uint32_t constant;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4 : IRCommon
+	{
+		uint16_t fieldDst0;
+		uint16_t obj0;
+		uint16_t offset0;
+		uint16_t fieldDst1;
+		uint16_t obj1;
+		uint16_t offset1;
+		uint16_t addRet1;
+		uint16_t addOp11;
+		uint16_t addOp21;
+		uint16_t fieldDst2;
+		uint16_t obj2;
+		uint16_t offset2;
+		uint16_t addRet2;
+		uint16_t addOp12;
+		uint16_t addOp22;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4_LdcVarConst_4_CompOpCeq_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t remConstDst;
+		uint32_t remConstant;
+		uint16_t remRet;
+		uint16_t remOp1;
+		uint16_t remOp2;
+		uint16_t compareConstDst;
+		uint32_t compareConstant;
+		uint16_t compareRet;
+		uint16_t compareOp1;
+		uint16_t compareOp2;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4_LdcVarConst_4_CompOpCeq_i4_RetVar_ret_1 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t remConstDst;
+		uint32_t remConstant;
+		uint16_t remRet;
+		uint16_t remOp1;
+		uint16_t remOp2;
+		uint16_t compareConstDst;
+		uint32_t compareConstant;
+		uint16_t compareRet;
+		uint16_t compareOp1;
+		uint16_t compareOp2;
+		uint16_t ret;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_24_LdlocVarVarSize : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint16_t sizedCopyDst;
+		uint16_t sizedCopySrc;
+		uint16_t sizedCopySize;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint16_t sizedCopyDst;
+		uint16_t sizedCopySrc;
+		uint16_t sizedCopySize;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize : IRCommon
+	{
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t copyDst3;
+		uint16_t copySrc3;
+		uint16_t sizedCopyDst;
+		uint16_t sizedCopySrc;
+		uint16_t sizedCopySize;
+		uint8_t __pad26;
+		uint8_t __pad27;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t fieldAddRet;
+		uint16_t fieldAddOp1;
+		uint16_t fieldAddOp2;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t copyDst3;
+		uint16_t copySrc3;
+		uint16_t sizedCopyDst;
+		uint16_t sizedCopySrc;
+		uint16_t sizedCopySize;
+		uint8_t __pad38;
+		uint8_t __pad39;
+	};
+
+	struct IRLdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4 : IRCommon
+	{
+		uint16_t leadingCopyDst;
+		uint16_t leadingCopySrc;
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t fieldAddressDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t indDst;
+		uint16_t indSrc;
+	};
+
+	struct IRLdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar : IRCommon
+	{
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t fieldAddressDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t indDst;
+		uint16_t indSrc;
+		uint16_t constDst;
+		uint8_t __pad22;
+		uint8_t __pad23;
+		uint32_t constant;
+		uint16_t tailCopyDst1;
+		uint16_t tailCopySrc1;
+		uint16_t tailCopyDst2;
+		uint16_t tailCopySrc2;
+		uint8_t __pad36;
+		uint8_t __pad37;
+		uint8_t __pad38;
+		uint8_t __pad39;
+	};
+
+	struct IRLdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t fieldDst0;
+		uint16_t obj0;
+		uint16_t offset0;
+		uint16_t fieldDst1;
+		uint16_t obj1;
+		uint16_t offset1;
+		uint16_t addRet1;
+		uint16_t addOp11;
+		uint16_t addOp21;
+		uint16_t fieldDst2;
+		uint16_t obj2;
+		uint16_t offset2;
+		uint16_t addRet2;
+		uint16_t addOp12;
+		uint16_t addOp22;
+		uint8_t __pad36;
+		uint8_t __pad37;
+		uint8_t __pad38;
+		uint8_t __pad39;
+	};
+
+	struct IRStfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t storeObj;
+		uint16_t storeOffset;
+		uint16_t storeData;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint32_t constant;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4 : IRCommon
+	{
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t fieldCopyDst;
+		uint16_t fieldCopySrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpSub_i4_MathMaxVarVarVar_i4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint32_t constant;
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t maxRet;
+		uint16_t maxOp1;
+		uint16_t maxOp2;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint32_t constant;
+		uint16_t divRet;
+		uint16_t divOp1;
+		uint16_t divOp2;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst;
+		uint16_t copySrc;
+	};
+
+	struct IRLdlocVarAddress_LdcVarConst_4_LdfldValueTypeVarVar_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t addressConstDst;
+		uint32_t addressConstant;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t fieldConstDst;
+		uint32_t fieldConstant;
+	};
+
+	struct IRBinOpVarVarVar_Add_i4_LdcVarConst_4_BinOpAnd_i4_GetArrayElementVarVar_i4 : IRCommon
+	{
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t constDst;
+		uint8_t __pad10;
+		uint8_t __pad11;
+		uint32_t constant;
+		uint16_t andRet;
+		uint16_t andOp1;
+		uint16_t andOp2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t copyDst1;
+		uint16_t copySrc1;
+		uint16_t copyDst2;
+		uint16_t copySrc2;
+		uint16_t copyDst3;
+		uint16_t copySrc3;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t constDst;
+		uint8_t __pad22;
+		uint8_t __pad23;
+		uint32_t constant;
+		uint8_t __pad28;
+		uint8_t __pad29;
+		uint8_t __pad30;
+		uint8_t __pad31;
+	};
+
+	struct IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4 : IRCommon
+	{
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t maxRet;
+		uint16_t maxOp1;
+		uint16_t maxOp2;
+		uint16_t tailSubRet;
+		uint16_t tailSubOp1;
+		uint16_t tailSubOp2;
+		uint16_t storeAddress;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRBinOpVarVarVar_Sub_i4_MathMaxVarVarVar_i4_StfldVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t maxRet;
+		uint16_t maxOp1;
+		uint16_t maxOp2;
+		uint16_t storeObj;
+		uint16_t storeOffset;
+		uint16_t storeData;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint32_t constant;
+	};
+
+	struct IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4 : IRCommon
+	{
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t divRet;
+		uint16_t divOp1;
+		uint16_t divOp2;
+		uint16_t tailSubRet;
+		uint16_t tailSubOp1;
+		uint16_t tailSubOp2;
+		uint16_t maxRet;
+		uint16_t maxOp1;
+		uint16_t maxOp2;
+		uint8_t __pad38;
+		uint8_t __pad39;
+	};
+
+	struct IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar : IRCommon
+	{
+		uint16_t andRet;
+		uint16_t andOp1;
+		uint16_t andOp2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint8_t __pad22;
+		uint8_t __pad23;
+		uint32_t constant;
+		uint16_t divRet;
+		uint16_t divOp1;
+		uint16_t divOp2;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint8_t __pad44;
+		uint8_t __pad45;
+		uint8_t __pad46;
+		uint8_t __pad47;
+	};
+
+	struct IRLdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4 : IRCommon
+	{
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t constDst;
+		uint8_t __pad14;
+		uint8_t __pad15;
+		uint32_t constant;
+		uint16_t divRet;
+		uint16_t divOp1;
+		uint16_t divOp2;
+		uint16_t minRet;
+		uint16_t minOp1;
+		uint16_t minOp2;
+	};
+
+	struct IRLdlocVarVar_LdfldValueTypeVarVar_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_LdfldValueTypeVarVar_i4_BinOpAdd_i4_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t fieldDst0;
+		uint16_t obj0;
+		uint16_t offset0;
+		uint16_t fieldDst1;
+		uint16_t obj1;
+		uint16_t offset1;
+		uint16_t addRet1;
+		uint16_t addOp11;
+		uint16_t addOp21;
+		uint16_t fieldDst2;
+		uint16_t obj2;
+		uint16_t offset2;
+		uint16_t addRet2;
+		uint16_t addOp12;
+		uint16_t addOp22;
+		uint16_t tailFieldDst;
+		uint16_t tailObj;
+		uint16_t tailOffset;
+		uint16_t tailFieldAddRet;
+		uint16_t tailFieldAddOp1;
+		uint16_t tailFieldAddOp2;
+		uint16_t tailAddRet;
+		uint16_t tailAddOp1;
+		uint16_t tailAddOp2;
+		uint16_t tailCopyDst1;
+		uint16_t tailCopySrc1;
+		uint16_t tailCopyDst2;
+		uint16_t tailCopySrc2;
+		uint16_t tailCopyDst3;
+		uint16_t tailCopySrc3;
+		uint16_t tailSizedCopyDst;
+		uint16_t tailSizedCopySrc;
+		uint16_t tailSizedCopySize;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_GetArrayLengthVarVar_BranchVarVar_Clt_i4 : IRCommon
+	{
+		uint16_t headCopyDst1;
+		uint16_t headCopySrc1;
+		uint16_t headConstDst;
+		uint32_t headConstant;
+		uint16_t headAddRet;
+		uint16_t headAddOp1;
+		uint16_t headAddOp2;
+		uint16_t headCopyDst2;
+		uint16_t headCopySrc2;
+		uint16_t lengthCopyDst1;
+		uint16_t lengthCopySrc1;
+		uint16_t lengthCopyDst2;
+		uint16_t lengthCopySrc2;
+		uint16_t lengthDst;
+		uint16_t arraySrc;
+		uint16_t branchOp1;
+		uint16_t branchOp2;
+		int32_t offset;
+		uint8_t __pad42;
+		uint8_t __pad43;
+		uint8_t __pad44;
+		uint8_t __pad45;
+		uint8_t __pad46;
+		uint8_t __pad47;
+	};
+
+	struct IRLdlocVarVar_LdlocVarVar_GetArrayElementVarVar_size_28_LdlocVarVarSize_LdlocVarVar_LdlocVarVar_LdlocVarVar_BinOpAdd_i4_LdcVarConst_4 : IRCommon
+	{
+		uint16_t elementCopyDst1;
+		uint16_t elementCopySrc1;
+		uint16_t elementCopyDst2;
+		uint16_t elementCopySrc2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint16_t sizedCopyDst;
+		uint16_t sizedCopySrc;
+		uint16_t sizedCopySize;
+		uint16_t tailCopyDst1;
+		uint16_t tailCopySrc1;
+		uint16_t tailCopyDst2;
+		uint16_t tailCopySrc2;
+		uint16_t tailCopyDst3;
+		uint16_t tailCopySrc3;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t constDst;
+		uint8_t __pad42;
+		uint8_t __pad43;
+		uint32_t constant;
+	};
+
+	struct IRLdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t storeAddress;
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t fieldAddressDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t addressCopyDst;
+		uint16_t addressCopySrc;
+		uint16_t indDst;
+		uint16_t indSrc;
+		uint16_t constDst;
+		uint8_t __pad34;
+		uint8_t __pad35;
+		uint32_t constant;
+		uint16_t tailCopyDst1;
+		uint16_t tailCopySrc1;
+		uint16_t tailCopyDst2;
+		uint16_t tailCopySrc2;
+	};
+
+	struct IRBinOpVarVarVar_Sub_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpSub_i4_MathMaxVarVarVar_i4_BinOpSub_i4_StindVarVar_i4 : IRCommon
+	{
+		uint16_t headSubRet;
+		uint16_t headSubOp1;
+		uint16_t headSubOp2;
+		uint16_t fieldDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t divRet;
+		uint16_t divOp1;
+		uint16_t divOp2;
+		uint16_t chainSubRet;
+		uint16_t chainSubOp1;
+		uint16_t chainSubOp2;
+		uint16_t maxRet;
+		uint16_t maxOp1;
+		uint16_t maxOp2;
+		uint16_t tailSubRet;
+		uint16_t tailSubOp1;
+		uint16_t tailSubOp2;
+		uint16_t storeAddress;
+		uint8_t __pad46;
+		uint8_t __pad47;
+	};
+
+	struct IRLdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4 : IRCommon
+	{
+		uint16_t leadingCopyDst;
+		uint16_t leadingCopySrc;
+		uint16_t addressDst;
+		uint16_t addressSrc;
+		uint16_t fieldAddressDst;
+		uint16_t obj;
+		uint16_t offset;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t indDst;
+		uint16_t indSrc;
+		uint16_t tailCopyDst;
+		uint16_t tailCopySrc;
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t storeAddress;
+		uint8_t __pad36;
+		uint8_t __pad37;
+		uint8_t __pad38;
+		uint8_t __pad39;
+	};
+
+	struct IRLdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar : IRCommon
+	{
+		uint16_t leadingCopyDst;
+		uint16_t leadingCopySrc;
+		uint16_t firstAddressDst;
+		uint16_t firstAddressSrc;
+		uint16_t firstFieldAddressDst;
+		uint16_t firstObj;
+		uint16_t firstOffset;
+		uint16_t firstCopyDst;
+		uint16_t firstCopySrc;
+		uint16_t firstIndDst;
+		uint16_t firstIndSrc;
+		uint16_t tailCopyDst;
+		uint16_t tailCopySrc;
+		uint16_t subRet;
+		uint16_t subOp1;
+		uint16_t subOp2;
+		uint16_t storeAddress;
+		uint16_t secondAddressDst;
+		uint16_t secondAddressSrc;
+		uint16_t secondFieldAddressDst;
+		uint16_t secondObj;
+		uint16_t secondOffset;
+		uint16_t secondCopyDst;
+		uint16_t secondCopySrc;
+		uint16_t secondIndDst;
+		uint16_t secondIndSrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t secondTailCopyDst1;
+		uint16_t secondTailCopySrc1;
+		uint16_t secondTailCopyDst2;
+		uint16_t secondTailCopySrc2;
+		uint8_t __pad68;
+		uint8_t __pad69;
+		uint8_t __pad70;
+		uint8_t __pad71;
+	};
+
+	struct IRBinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4 : IRCommon
+	{
+		uint16_t andRet;
+		uint16_t andOp1;
+		uint16_t andOp2;
+		uint16_t elementDst;
+		uint16_t arraySrc;
+		uint16_t indexSrc;
+		uint16_t firstFieldDst;
+		uint16_t firstObj;
+		uint16_t firstOffset;
+		uint16_t firstConstDst;
+		uint8_t __pad22;
+		uint8_t __pad23;
+		uint32_t firstConstant;
+		uint16_t firstDivRet;
+		uint16_t firstDivOp1;
+		uint16_t firstDivOp2;
+		uint16_t addRet;
+		uint16_t addOp1;
+		uint16_t addOp2;
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t secondFieldDst;
+		uint16_t secondObj;
+		uint16_t secondOffset;
+		uint16_t secondCopyDst;
+		uint16_t secondCopySrc;
+		uint16_t secondConstDst;
+		uint32_t secondConstant;
+		uint16_t secondDivRet;
+		uint16_t secondDivOp1;
+		uint16_t secondDivOp2;
+		uint16_t minRet;
+		uint16_t minOp1;
+		uint16_t minOp2;
+	};
 
 	//!!!}}INST
 #pragma pack(pop)

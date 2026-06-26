@@ -44,7 +44,7 @@ namespace Hotc233.Editor
 
         public static string LocalIl2CppDir => $"{LocalUnityDataDir}/il2cpp";
 
-        public static string GeneratedCppDir => $"{LocalIl2CppDir}/libil2cpp/hotc233/Generated";
+        public static string GeneratedCppDir => $"{LocalIl2CppDir}/libil2cpp/hotc233/generated";
 
         public static string Il2CppBuildCacheDir { get; } = $"{ProjectDir}/Library/Il2cppBuildCache";
 

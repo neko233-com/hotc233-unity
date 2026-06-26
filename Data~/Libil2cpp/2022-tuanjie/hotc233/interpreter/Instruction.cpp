@@ -1,9 +1,53 @@
 #include "Instruction.h"
 
+#include <cstring>
+
 namespace hotc233
 {
 namespace interpreter
 {
+	bool g_opcodeProfilerEnabled = false;
+	uint64_t g_opcodeProfilerCounts[kDynamicOpcodeProfileCapacity] = {};
+	uint64_t g_opcodeProfilerTotal = 0;
+	uint32_t g_opcodeProfilerPairKeys[kDynamicOpcodePairProfileCapacity] = {};
+	uint64_t g_opcodeProfilerPairCounts[kDynamicOpcodePairProfileCapacity] = {};
+	uint64_t g_opcodeProfilerPairTotal = 0;
+
+	void ResetOpcodeProfiler()
+	{
+		std::memset(g_opcodeProfilerCounts, 0, sizeof(g_opcodeProfilerCounts));
+		std::memset(g_opcodeProfilerPairCounts, 0, sizeof(g_opcodeProfilerPairCounts));
+		g_opcodeProfilerTotal = 0;
+		g_opcodeProfilerPairTotal = 0;
+	}
+
+	void SetOpcodeProfilerEnabled(bool enabled)
+	{
+		g_opcodeProfilerEnabled = enabled;
+	}
+
+	void RecordOpcodeProfilePair(uint32_t previousOpcode, uint32_t opcode)
+	{
+		uint32_t key = (previousOpcode << 16) | opcode;
+		uint32_t slot = ((previousOpcode * 1315423911u) ^ opcode) & (kDynamicOpcodePairProfileCapacity - 1);
+		g_opcodeProfilerPairTotal++;
+		for (uint32_t probe = 0; probe < kDynamicOpcodePairProfileCapacity; probe++)
+		{
+			if (g_opcodeProfilerPairCounts[slot] == 0)
+			{
+				g_opcodeProfilerPairKeys[slot] = key;
+				g_opcodeProfilerPairCounts[slot] = 1;
+				return;
+			}
+			if (g_opcodeProfilerPairKeys[slot] == key)
+			{
+				g_opcodeProfilerPairCounts[slot]++;
+				return;
+			}
+			slot = (slot + 1) & (kDynamicOpcodePairProfileCapacity - 1);
+		}
+	}
+
     uint16_t g_instructionSizes[] =
     {
 		0,
@@ -913,6 +957,80 @@ namespace interpreter
 		8,
 		8,
 		8,
+		16,
+		16,
+		16,
+		24,
+		16,
+		16,
+		24,
+		24,
+		24,
+		24,
+		16,
+		24,
+		32,
+		16,
+		24,
+		24,
+		16,
+		24,
+		24,
+		16,
+		32,
+		16,
+		24,
+		24,
+		16,
+		16,
+		16,
+		24,
+		32,
+		16,
+		16,
+		24,
+		16,
+		16,
+		24,
+		32,
+		16,
+		32,
+		16,
+		16,
+		32,
+		16,
+		16,
+		24,
+		32,
+		32,
+		32,
+		24,
+		24,
+		32,
+		40,
+		24,
+		40,
+		40,
+		24,
+		32,
+		32,
+		32,
+		24,
+		32,
+		32,
+		24,
+		32,
+		40,
+		48,
+		32,
+		72,
+		48,
+		48,
+		48,
+		48,
+		40,
+		72,
+		72,
 
         //!!!}}INST_SIZE
     };
