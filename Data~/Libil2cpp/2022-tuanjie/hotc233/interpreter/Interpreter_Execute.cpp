@@ -1350,6 +1350,17 @@ namespace interpreter
 
 #pragma region delegate
 
+inline StackObject* TryPrepareClosedInstanceInterpDelegate(uint16_t invokeParamCount, const MethodInfo* method, Il2CppObject* target, StackObject* argBasePtr)
+{
+	if ((int32_t)invokeParamCount != (int32_t)method->parameters_count || !hotc233::metadata::IsInstanceMethod(method))
+	{
+		return nullptr;
+	}
+	CHECK_NOT_NULL_THROW(target);
+	argBasePtr->obj = target + IS_CLASS_VALUE_TYPE(method->klass);
+	return argBasePtr;
+}
+
 inline void InvokeSingleDelegate(uint16_t invokeParamCount, const MethodInfo * method, Il2CppObject * obj, Managed2NativeCallMethod staticM2NMethod, Managed2NativeCallMethod instanceM2NMethod, uint16_t * argIdxs, StackObject * localVarBase, void* ret)
 {
 	if (!InitAndGetInterpreterDirectlyCallMethodPointer(method))
@@ -6693,6 +6704,13 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					CALL_INTERP_VOID((ip + 8), __methodInfo, (StackObject*)(void*)(localVarBase + __argBase));
 				    continue;
 				}
+				case HiOpcodeEnum::CallInterpStatic_void:
+				{
+					MethodInfo* __methodInfo = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 4)]);
+					uint16_t __argBase = *(uint16_t*)(ip + 2);
+					CALL_INTERP_VOID((ip + 8), __methodInfo, (StackObject*)(void*)(localVarBase + __argBase));
+				    continue;
+				}
 				case HiOpcodeEnum::CallInterp_ret:
 				{
 					MethodInfo* __methodInfo = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
@@ -7040,6 +7058,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						Il2CppObject* target = _del->delegate.target;
 						if (hotc233::metadata::IsInterpreterImplement(method))
 						{
+							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
+							{
+								CALL_INTERP_RET((ip + 16), method, fastArgBase, _ret);
+								continue;
+							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
 							{
 							case 0:
@@ -7122,6 +7145,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						Il2CppObject* target = _del->delegate.target;
 						if (hotc233::metadata::IsInterpreterImplement(method))
 						{
+							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
+							{
+								CALL_INTERP_RET((ip + 24), method, fastArgBase, _ret);
+								continue;
+							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
 							{
 							case 0:
@@ -7204,6 +7232,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						Il2CppObject* target = _del->delegate.target;
 						if (hotc233::metadata::IsInterpreterImplement(method))
 						{
+							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
+							{
+								CALL_INTERP_RET((ip + 24), method, fastArgBase, _ret);
+								continue;
+							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
 							{
 							case 0:

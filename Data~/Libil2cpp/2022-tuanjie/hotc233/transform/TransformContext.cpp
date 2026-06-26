@@ -5789,7 +5789,14 @@ else \
 					{
 						if (IsReturnVoidMethod(shareMethod))
 						{
-							CreateAddIR(ir, CallInterp_void);
+							if (resolvedIsInstanceMethod)
+							{
+								CreateAddIR(ir, CallInterp_void);
+							}
+							else
+							{
+								CreateAddIR(ir, CallInterpStatic_void);
+							}
 							ir->methodInfo = methodDataIndex;
 							ir->argBase = argBaseOffset;
 						}

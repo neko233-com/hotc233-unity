@@ -375,6 +375,7 @@ loader.LoadRuntimeMetadata(metadataBytes, HomologousImageMode.SuperSet);</code><
       <section id="interpreter">
         <h2>标准解释优化与离线指令优化</h2>
         <p>性能测试必须使用 RuntimeFast。当前 PC IL2CPP 报告包含 18 个 benchmark，其中 10 个是游戏业务热循环；低 GC 帧循环会输出 `gc0=0,gc1=0,gc2=0`。解释器侧继续优先做稳定快路径、delegate 调用、序列化写入和结构体数组循环优化。</p>
+        <p>专业版能力完成度、社区版粗推区间和逐项差距见 <a href="hybridclr-gap-analysis.md">HybridCLR 差距说明</a>。</p>
         <pre><code>go run ./tools/hotc233ctl headless -project . -loader-profile RuntimeFast
 go run ./tools/hotc233ctl perf -project . -loader-profile RuntimeFast
 go run ./tools/hotc233ctl webgl -project . -loader-profile RuntimeFast</code></pre>

@@ -350,6 +350,7 @@ namespace interpreter
 		CallNativeStatic_ret,
 		CallNativeStatic_ret_expand,
 		CallInterp_void,
+		CallInterpStatic_void,
 		CallInterp_ret,
 		CallVirtual_void,
 		CallVirtual_ret,
@@ -4019,6 +4020,12 @@ namespace interpreter
 
 
 	struct IRCallInterp_void : IRCommon
+	{
+		uint16_t argBase;
+		uint32_t methodInfo;
+	};
+
+	struct IRCallInterpStatic_void : IRCommon
 	{
 		uint16_t argBase;
 		uint32_t methodInfo;

@@ -428,6 +428,8 @@ hotc233/EditorForBuild/Run Performance Comparison Baselines
 
 HybridCLR 专业版列不是本地官方包实测，而是按 HybridCLR 官方性能页换算的目标区间：专业/商业版纯解释器约为原生 AOT 的 `7.8% ~ 76.9%`。该目标不依赖 DHE，也不允许通过把大量热更逻辑预置进首包 AOT 来换性能。
 
+专业版能力完成度、社区版粗推区间和逐项差距见 `docs/hybridclr-gap-analysis.md`。
+
 输出：
 
 ```text

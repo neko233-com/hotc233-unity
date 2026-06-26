@@ -366,6 +366,7 @@ namespace interpreter
 		16,
 		24,
 		8,
+		8,
 		16,
 		16,
 		16,
