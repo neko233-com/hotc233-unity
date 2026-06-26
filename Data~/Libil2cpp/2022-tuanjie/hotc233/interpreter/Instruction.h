@@ -1038,6 +1038,11 @@ namespace interpreter
 		RunRegI32NumericTrace,
 		RunRegI32AddCopyTrace,
 		RunArrayI4IncrementTrace,
+		RunRegI32AddTrace,
+		RegVector3Copy,
+		RegVector3Add,
+		RunRegVector3AddTrace,
+		RegVector3SqrMag,
 
 		//!!!}}OPCODE
 	};
@@ -12247,6 +12252,42 @@ namespace interpreter
 	{
 		uint16_t stepCount;
 		uint32_t traceData;
+	};
+
+
+	struct IRRunRegI32AddTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint32_t traceData;
+	};
+
+
+	struct IRRegVector3Copy : IRCommon
+	{
+		uint16_t dst;
+		uint16_t src;
+	};
+
+
+	struct IRRegVector3Add : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+
+	struct IRRunRegVector3AddTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint32_t traceData;
+	};
+
+
+	struct IRRegVector3SqrMag : IRCommon
+	{
+		uint16_t ret;
+		uint16_t src;
 	};
 
 	//!!!}}INST

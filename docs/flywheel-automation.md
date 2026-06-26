@@ -42,6 +42,16 @@ go run ./tools/hotc233ctl webgl -project . -skip-unity
 go run ./tools/hotc233ctl webgl -project . -parallel-captures=true
 ```
 
+**WebGL 探针口径（不用 Playwright / CDP 轮询）**
+
+1. Tuanjie 构建 WebGL IL2CPP Player（`BuildWebGLHotcPerformanceShell`）
+2. headless Chrome/Edge 仅负责加载 WASM（`HOTC233_BROWSER_PATH` 可覆盖）
+3. `Hotc233PlayerAbVerifier` + `Hotc233WebGLReport.jslib` 分块输出 JSON
+4. 页面内 `__hotc233_probe__/bridge.js` 组装后 **HTTP POST** 到本地静态服
+5. `hotc233ctl` 在 Go 侧等待 marker，**不在 benchmark 热路径上注入 Runtime.evaluate**
+
+PC 性能仍走 `player` / `perf`（Standalone Windows IL2CPP Player，无浏览器）。
+
 ---
 
 ## 增量策略（digest 缓存）
@@ -63,10 +73,31 @@ go run ./tools/hotc233ctl webgl -project . -parallel-captures=true
 |---|---|
 | `CI_BuildPlayerProbe` 先跑完整 AB/YooAsset 验证 | WebGL 性能路径改用 `BuildWebGLHotcPerformanceShell` |
 | hotc WebGL 与 native WebGL 两次 `-batchmode` | 合并为 `CI_FlywheelWebGLPrepare` |
-| 三个浏览器 URL 串行 CDP | 默认 `-parallel-captures` 并行 |
-| 无「零 Unity」路径 | `-skip-unity` digest 全命中时只跑浏览器 |
+| 三个浏览器 URL 串行 CDP | 默认 `-parallel-captures` 并行 **Unity jslib HTTP POST** |
+| Node.js CDP `Runtime.evaluate` 轮询 | **已移除**；主线程跑 benchmark 时不再被 CDP 打断 |
+| 无「零 Unity」路径 | `-skip-unity` digest 全命中时只跑 WebGL 探针 |
 
 PC 完整功能验证仍用 `build` / `all`（含 AB 链路），不与性能飞轮混用。
+
+---
+
+## 产出与自动化统计
+
+每次 `webgl` / `flywheel` 成功后会写入：
+
+| 产出 | 统计字段 |
+|---|---|
+| `performance-webgl-local-il2cpp.json` | 每行 `hotc233ElapsedMs`、`hotc233OpsPerSecond`、`hotc233RatioToHybridClrCommunity` |
+| 同上 `.md` | 列：**hotc233 (ms / ops/s / ×社区版)** \| **HybridCLR 社区版** \| **专业版目标** \| **WebGL IL2CPP** |
+| `performance-webgl-base-il2cpp.json` | 仅 `benchmarkGroup=base` 官方基准 |
+| `hybridclr-webgl-player-report.json` | 社区版实测（`hybridclr-webgl` 命令） |
+| `hotc233ctl-*-result.json` | 命令 success、elapsedMs、failurePhase |
+| `Hotc233Data/flywheel-cache.json` | 上次 L0/L3 耗时、digest 命中层 |
+| `webgl-hotc233-opcode-profile.json` | 热方法 opcode 分布（诊断 trace 命中） |
+
+**社区版列**：当 `hybridclr-webgl-player-report.json` 存在且 benchmark 名称匹配时，`hotc233ctl` 自动合并社区 ms/ops/s 并计算 ×社区版；否则显示 `-`（需先跑 `hybridclr-webgl`）。
+
+**hybridclr-benchmark-demo 飞轮**：`hybridclr-webgl -skip-unity` 在 digest 命中时 **~20s** 仅浏览器；stamp 位于 `HybridCLRData/.hybridclr-benchmark-webgl-stamp.json`。
 
 ---
 

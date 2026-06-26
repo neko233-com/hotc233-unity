@@ -41,5 +41,6 @@ namespace transform
 	bool IsTypedRegisterEligibleI32(const interpreter::IRCommon* ir);
 	Hotc233TypedRegisterCoverage AnalyzeTypedRegisterCoverage(const std::vector<interpreter::IRCommon*>& insts);
 	void LowerTypedRegisterI32(std::vector<interpreter::IRCommon*>& insts, TemporaryMemoryArena& pool);
+	void LowerTypedRegisterVector3(std::vector<interpreter::IRCommon*>& insts, TemporaryMemoryArena& pool);
 }
 }

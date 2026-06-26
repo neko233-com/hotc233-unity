@@ -2471,6 +2471,7 @@ namespace transform
 		for (IRBasicBlock* bb : irbbs)
 		{
 			std::vector<IRCommon*>& insts = bb->insts;
+			FoldBinOpI4AddChainTrace(insts);
 			size_t writeIdx = 0;
 			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
 			{
@@ -5128,52 +5129,7 @@ namespace transform
 			}
 			insts.resize(writeIdx);
 			FoldRunArrayI4IncrementTrace(insts);
-			std::vector<IRCommon*> traceOutput;
-			traceOutput.reserve(insts.size());
-			for (size_t readIdx = 0; readIdx < insts.size();)
-			{
-				IRCommon* ir = insts[readIdx];
-				if (ir->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
-				{
-					size_t runLength = 1;
-					while (readIdx + runLength < insts.size()
-						&& runLength < 0xffff
-						&& insts[readIdx + runLength]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
-					{
-						runLength++;
-					}
-					if (runLength >= 3)
-					{
-						int32_t traceDataIndex = 0;
-						uint64_t* traceData = nullptr;
-						AllocResolvedData(resolveDatas, (int32_t)runLength * 3, traceDataIndex, traceData);
-						for (size_t step = 0; step < runLength; step++)
-						{
-							IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar* addCopies = (IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar*)insts[readIdx + step];
-							traceData[step * 3] =
-								((uint64_t)addCopies->addRet) |
-								((uint64_t)addCopies->addOp1 << 16) |
-								((uint64_t)addCopies->addOp2 << 32) |
-								((uint64_t)addCopies->copyDst1 << 48);
-							traceData[step * 3 + 1] =
-								((uint64_t)addCopies->copySrc1) |
-								((uint64_t)addCopies->copyDst2 << 16) |
-								((uint64_t)addCopies->copySrc2 << 32) |
-								((uint64_t)addCopies->copyDst3 << 48);
-							traceData[step * 3 + 2] = addCopies->copySrc3;
-						}
-						CreateIR(trace, RunI4AddCopyTrace);
-						trace->stepCount = (uint16_t)runLength;
-						trace->traceData = (uint32_t)traceDataIndex;
-						traceOutput.push_back(trace);
-						readIdx += runLength;
-						continue;
-					}
-				}
-				traceOutput.push_back(ir);
-				readIdx++;
-			}
-			insts.swap(traceOutput);
+			FoldFused920I4AddCopyTrace(insts);
 			std::vector<IRCommon*> staticF4CallTraceOutput;
 			staticF4CallTraceOutput.reserve(insts.size());
 			for (size_t readIdx = 0; readIdx < insts.size();)
@@ -5318,10 +5274,13 @@ namespace transform
 				readIdx++;
 			}
 			insts.swap(staticI4CallTraceOutput);
+			FoldBinOpI4AddChainTrace(insts);
 			RecordTypedRegisterCoverage(insts);
 			LowerTypedRegisterI32(insts);
 			FoldRegI32NumericTrace(insts);
 			FoldRegI32AddCopyTrace(insts);
+			LowerTypedRegisterVector3(insts);
+			FoldRegVector3AddTrace(insts);
 		}
 	}
 
@@ -5368,6 +5327,158 @@ namespace transform
 				traceData[step * 2 + 1] = fused->storeIndexSrc;
 			}
 			CreateIR(trace, RunArrayI4IncrementTrace);
+			trace->stepCount = (uint16_t)runLength;
+			trace->traceData = (uint32_t)traceDataIndex;
+			folded.push_back(trace);
+			readIdx = scanIdx;
+		}
+		insts.swap(folded);
+	}
+
+	void TransformContext::FoldFused920I4AddCopyTrace(std::vector<IRCommon*>& insts)
+	{
+		const size_t kMinRunLength = 2;
+		std::vector<IRCommon*> folded;
+		folded.reserve(insts.size());
+		for (size_t readIdx = 0; readIdx < insts.size();)
+		{
+			IRCommon* ir = insts[readIdx];
+			if (ir->type != HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+			size_t scanIdx = readIdx;
+			size_t runLength = 0;
+			while (scanIdx < insts.size()
+				&& insts[scanIdx]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
+			{
+				runLength++;
+				scanIdx++;
+			}
+			if (runLength < kMinRunLength)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+			int32_t traceDataIndex = 0;
+			uint64_t* traceData = nullptr;
+			AllocResolvedData(resolveDatas, (int32_t)runLength * 3, traceDataIndex, traceData);
+			for (size_t step = 0; step < runLength; step++)
+			{
+				IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar* addCopies =
+					(IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar*)insts[readIdx + step];
+				uint16_t copyDst1 = addCopies->copyDst1;
+				uint16_t copySrc1 = addCopies->copySrc1;
+				uint16_t copyDst2 = addCopies->copyDst2;
+				uint16_t copySrc2 = addCopies->copySrc2;
+				uint16_t copyDst3 = addCopies->copyDst3;
+				uint16_t copySrc3 = addCopies->copySrc3;
+				if (copyDst1 == copySrc1)
+				{
+					copyDst1 = 0xffff;
+				}
+				if (copyDst2 == copySrc2)
+				{
+					copyDst2 = 0xffff;
+				}
+				if (copyDst3 == copySrc3)
+				{
+					copyDst3 = 0xffff;
+				}
+				traceData[step * 3] =
+					((uint64_t)addCopies->addRet) |
+					((uint64_t)addCopies->addOp1 << 16) |
+					((uint64_t)addCopies->addOp2 << 32) |
+					((uint64_t)copyDst1 << 48);
+				traceData[step * 3 + 1] =
+					((uint64_t)copySrc1) |
+					((uint64_t)copyDst2 << 16) |
+					((uint64_t)copySrc2 << 32) |
+					((uint64_t)copyDst3 << 48);
+				traceData[step * 3 + 2] = copySrc3;
+			}
+			bool allAddOnly = true;
+			for (size_t step = 0; step < runLength; step++)
+			{
+				uint64_t word0 = traceData[step * 3];
+				uint64_t word1 = traceData[step * 3 + 1];
+				uint64_t word2 = traceData[step * 3 + 2];
+				if ((uint16_t)(word0 >> 48) != 0xffff
+					|| (uint16_t)(word1 >> 16) != 0xffff
+					|| (uint16_t)(word1 >> 32) != 0xffff
+					|| (uint16_t)word2 != 0)
+				{
+					allAddOnly = false;
+					break;
+				}
+			}
+			if (allAddOnly && runLength >= 4)
+			{
+				int32_t addTraceDataIndex = 0;
+				uint64_t* addTraceData = nullptr;
+				AllocResolvedData(resolveDatas, (int32_t)runLength, addTraceDataIndex, addTraceData);
+				for (size_t step = 0; step < runLength; step++)
+				{
+					IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar* addCopies =
+						(IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar*)insts[readIdx + step];
+					addTraceData[step] = ((uint64_t)addCopies->addRet) | ((uint64_t)addCopies->addOp1 << 16) | ((uint64_t)addCopies->addOp2 << 32);
+				}
+				CreateIR(addTrace, RunRegI32AddTrace);
+				addTrace->stepCount = (uint16_t)runLength;
+				addTrace->traceData = (uint32_t)addTraceDataIndex;
+				folded.push_back(addTrace);
+			}
+			else
+			{
+				CreateIR(copyTrace, RunRegI32AddCopyTrace);
+				copyTrace->stepCount = (uint16_t)runLength;
+				copyTrace->traceData = (uint32_t)traceDataIndex;
+				folded.push_back(copyTrace);
+			}
+			readIdx = scanIdx;
+		}
+		insts.swap(folded);
+	}
+
+	void TransformContext::FoldBinOpI4AddChainTrace(std::vector<IRCommon*>& insts)
+	{
+		const size_t kMinRunLength = 3;
+		std::vector<IRCommon*> folded;
+		folded.reserve(insts.size());
+		for (size_t readIdx = 0; readIdx < insts.size();)
+		{
+			IRCommon* ir = insts[readIdx];
+			if (ir->type != HiOpcodeEnum::BinOpVarVarVar_Add_i4)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+			size_t scanIdx = readIdx;
+			size_t runLength = 0;
+			while (scanIdx < insts.size() && insts[scanIdx]->type == HiOpcodeEnum::BinOpVarVarVar_Add_i4)
+			{
+				runLength++;
+				scanIdx++;
+			}
+			if (runLength < kMinRunLength)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+			int32_t traceDataIndex = 0;
+			uint64_t* traceData = nullptr;
+			AllocResolvedData(resolveDatas, (int32_t)runLength, traceDataIndex, traceData);
+			for (size_t step = 0; step < runLength; step++)
+			{
+				IRBinOpVarVarVar_Add_i4* add = (IRBinOpVarVarVar_Add_i4*)insts[readIdx + step];
+				traceData[step] = ((uint64_t)add->ret) | ((uint64_t)add->op1 << 16) | ((uint64_t)add->op2 << 32);
+			}
+			CreateIR(trace, RunRegI32AddTrace);
 			trace->stepCount = (uint16_t)runLength;
 			trace->traceData = (uint32_t)traceDataIndex;
 			folded.push_back(trace);
@@ -5493,6 +5604,7 @@ namespace transform
 	void TransformContext::FoldRegI32NumericTrace(std::vector<IRCommon*>& insts)
 	{
 		const size_t kMinRunLength = 3;
+		const size_t kAddOnlyTraceMinRunLength = 4;
 		std::vector<IRCommon*> folded;
 		folded.reserve(insts.size());
 		for (size_t readIdx = 0; readIdx < insts.size();)
@@ -5511,6 +5623,7 @@ namespace transform
 
 			size_t scanIdx = readIdx;
 			size_t runLength = 0;
+			bool allAdds = type == HiOpcodeEnum::RegI32Add;
 			while (scanIdx < insts.size())
 			{
 				HiOpcodeEnum scanType = insts[scanIdx]->type;
@@ -5520,6 +5633,10 @@ namespace transform
 					&& scanType != HiOpcodeEnum::RegI32Ldc)
 				{
 					break;
+				}
+				if (scanType != HiOpcodeEnum::RegI32Add)
+				{
+					allAdds = false;
 				}
 				runLength++;
 				scanIdx++;
@@ -5584,7 +5701,61 @@ namespace transform
 				}
 				traceData[step] = ((uint64_t)ret) | ((uint64_t)op1 << 16) | ((uint64_t)op2 << 32) | (kind << 48);
 			}
-			CreateIR(trace, RunRegI32NumericTrace);
+			if (allAdds && runLength >= kAddOnlyTraceMinRunLength)
+			{
+				CreateIR(trace, RunRegI32AddTrace);
+				trace->stepCount = (uint16_t)runLength;
+				trace->traceData = (uint32_t)traceDataIndex;
+				folded.push_back(trace);
+			}
+			else
+			{
+				CreateIR(trace, RunRegI32NumericTrace);
+				trace->stepCount = (uint16_t)runLength;
+				trace->traceData = (uint32_t)traceDataIndex;
+				folded.push_back(trace);
+			}
+			readIdx = scanIdx;
+		}
+		insts.swap(folded);
+	}
+
+	void TransformContext::FoldRegVector3AddTrace(std::vector<IRCommon*>& insts)
+	{
+		const size_t kMinRunLength = 3;
+		std::vector<IRCommon*> folded;
+		folded.reserve(insts.size());
+		for (size_t readIdx = 0; readIdx < insts.size();)
+		{
+			IRCommon* ir = insts[readIdx];
+			if (ir->type != HiOpcodeEnum::RegVector3Add)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+			size_t scanIdx = readIdx;
+			size_t runLength = 0;
+			while (scanIdx < insts.size() && insts[scanIdx]->type == HiOpcodeEnum::RegVector3Add)
+			{
+				runLength++;
+				scanIdx++;
+			}
+			if (runLength < kMinRunLength)
+			{
+				folded.push_back(ir);
+				readIdx++;
+				continue;
+			}
+			int32_t traceDataIndex = 0;
+			uint64_t* traceData = nullptr;
+			AllocResolvedData(resolveDatas, (int32_t)runLength, traceDataIndex, traceData);
+			for (size_t step = 0; step < runLength; step++)
+			{
+				IRRegVector3Add* add = (IRRegVector3Add*)insts[readIdx + step];
+				traceData[step] = ((uint64_t)add->ret) | ((uint64_t)add->op1 << 16) | ((uint64_t)add->op2 << 32);
+			}
+			CreateIR(trace, RunRegVector3AddTrace);
 			trace->stepCount = (uint16_t)runLength;
 			trace->traceData = (uint32_t)traceDataIndex;
 			folded.push_back(trace);

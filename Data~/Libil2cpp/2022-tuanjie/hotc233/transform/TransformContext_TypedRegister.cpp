@@ -90,6 +90,35 @@ namespace transform
 		return true;
 	}
 
+	static bool TryLowerFusedCopyConstAddCopy(interpreter::IRCommon* ir, TemporaryMemoryArena& pool, std::vector<interpreter::IRCommon*>& out)
+	{
+		if (ir->type != interpreter::HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar)
+		{
+			return false;
+		}
+		interpreter::IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar* fused =
+			(interpreter::IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar*)ir;
+		if (fused->copyDst1 != fused->copySrc1
+			&& fused->copyDst1 != fused->addRet
+			&& fused->copyDst1 != fused->addOp1
+			&& fused->copyDst1 != fused->addOp2
+			&& fused->copyDst1 != fused->constDst)
+		{
+			EmitRegI32Copy(pool, out, fused->copyDst1, fused->copySrc1);
+		}
+		EmitRegI32Ldc(pool, out, fused->constDst, fused->constant);
+		EmitRegI32Add(pool, out, fused->addRet, fused->addOp1, fused->addOp2);
+		if (fused->copyDst2 != fused->copySrc2
+			&& fused->copyDst2 != fused->addRet
+			&& fused->copyDst2 != fused->addOp1
+			&& fused->copyDst2 != fused->addOp2
+			&& fused->copyDst2 != fused->constDst)
+		{
+			EmitRegI32Copy(pool, out, fused->copyDst2, fused->copySrc2);
+		}
+		return true;
+	}
+
 	static bool TryLowerFusedCopyConstMul(interpreter::IRCommon* ir, TemporaryMemoryArena& pool, std::vector<interpreter::IRCommon*>& out)
 	{
 		if (ir->type != interpreter::HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4)
@@ -121,6 +150,30 @@ namespace transform
 		if (fused->copyDst != fused->copySrc)
 		{
 			EmitRegI32Copy(pool, out, fused->copyDst, fused->copySrc);
+		}
+		return true;
+	}
+
+	static bool TryLowerTripleCopyAddFused(interpreter::IRCommon* ir, TemporaryMemoryArena& pool, std::vector<interpreter::IRCommon*>& out)
+	{
+		if (ir->type != interpreter::HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
+		{
+			return false;
+		}
+		interpreter::IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar* fused =
+			(interpreter::IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar*)ir;
+		EmitRegI32Add(pool, out, fused->addRet, fused->addOp1, fused->addOp2);
+		if (fused->copyDst1 != fused->copySrc1)
+		{
+			EmitRegI32Copy(pool, out, fused->copyDst1, fused->copySrc1);
+		}
+		if (fused->copyDst2 != fused->copySrc2)
+		{
+			EmitRegI32Copy(pool, out, fused->copyDst2, fused->copySrc2);
+		}
+		if (fused->copyDst3 != fused->copySrc3)
+		{
+			EmitRegI32Copy(pool, out, fused->copyDst3, fused->copySrc3);
 		}
 		return true;
 	}
@@ -214,8 +267,10 @@ namespace transform
 		{
 			interpreter::IRCommon* ir = insts[readIdx];
 			if (TryLowerFusedCopyConstAdd(ir, pool, lowered)
+				|| TryLowerFusedCopyConstAddCopy(ir, pool, lowered)
 				|| TryLowerFusedCopyConstMul(ir, pool, lowered)
-				|| TryLowerAddCopyFused(ir, pool, lowered))
+				|| TryLowerAddCopyFused(ir, pool, lowered)
+				|| TryLowerTripleCopyAddFused(ir, pool, lowered))
 			{
 				readIdx++;
 				continue;
@@ -399,8 +454,9 @@ namespace transform
 		case interpreter::HiOpcodeEnum::BitShiftBinOpVarVarVar_Shr_i4_i4:
 		case interpreter::HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar:
 		case interpreter::HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4:
-		case interpreter::HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4:
 		case interpreter::HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar:
+		case interpreter::HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar:
+		case interpreter::HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4:
 		case interpreter::HiOpcodeEnum::RegI32Copy:
 		case interpreter::HiOpcodeEnum::RegI32Ldc:
 		case interpreter::HiOpcodeEnum::RegI32Add:
@@ -459,6 +515,43 @@ namespace transform
 	void TransformContext::LowerTypedRegisterI32(std::vector<interpreter::IRCommon*>& insts)
 	{
 		transform::LowerTypedRegisterI32(insts, pool);
+	}
+
+	static void EmitRegVector3Copy(TemporaryMemoryArena& pool, std::vector<interpreter::IRCommon*>& out, uint16_t dst, uint16_t src)
+	{
+		if (dst == src)
+		{
+			return;
+		}
+		CreateIR(ir, RegVector3Copy);
+		ir->dst = dst;
+		ir->src = src;
+		out.push_back(ir);
+	}
+
+	void LowerTypedRegisterVector3(std::vector<interpreter::IRCommon*>& insts, TemporaryMemoryArena& pool)
+	{
+		std::vector<interpreter::IRCommon*> lowered;
+		lowered.reserve(insts.size());
+		for (interpreter::IRCommon* ir : insts)
+		{
+			if (ir->type == interpreter::HiOpcodeEnum::LdlocVarVarSize)
+			{
+				interpreter::IRLdlocVarVarSize* copy = (interpreter::IRLdlocVarVarSize*)ir;
+				if (copy->size == 12)
+				{
+					EmitRegVector3Copy(pool, lowered, copy->dst, copy->src);
+					continue;
+				}
+			}
+			lowered.push_back(ir);
+		}
+		insts.swap(lowered);
+	}
+
+	void TransformContext::LowerTypedRegisterVector3(std::vector<interpreter::IRCommon*>& insts)
+	{
+		transform::LowerTypedRegisterVector3(insts, pool);
 	}
 }
 }

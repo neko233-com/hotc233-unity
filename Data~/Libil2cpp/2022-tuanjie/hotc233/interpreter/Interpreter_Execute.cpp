@@ -4817,20 +4817,42 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar:
 				HOTC233_EXEC_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar:
 				{
-					uint16_t __addRet = *(uint16_t*)(ip + 2);
-					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
-					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
-					uint16_t __copyDst1 = *(uint16_t*)(ip + 8);
-					uint16_t __copySrc1 = *(uint16_t*)(ip + 10);
-					uint16_t __copyDst2 = *(uint16_t*)(ip + 12);
-					uint16_t __copySrc2 = *(uint16_t*)(ip + 14);
-					uint16_t __copyDst3 = *(uint16_t*)(ip + 16);
-					uint16_t __copySrc3 = *(uint16_t*)(ip + 18);
-					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
-					(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
-					(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
-					(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
-					ip += 24;
+					const byte* __chainIp = ip;
+					for (uint16_t __chain = 0; __chain < 64; __chain++)
+					{
+						if (*(HiOpcodeEnum*)__chainIp != HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
+						{
+							break;
+						}
+						uint16_t __addRet = *(uint16_t*)(__chainIp + 2);
+						uint16_t __addOp1 = *(uint16_t*)(__chainIp + 4);
+						uint16_t __addOp2 = *(uint16_t*)(__chainIp + 6);
+						uint16_t __copyDst1 = *(uint16_t*)(__chainIp + 8);
+						uint16_t __copySrc1 = *(uint16_t*)(__chainIp + 10);
+						uint16_t __copyDst2 = *(uint16_t*)(__chainIp + 12);
+						uint16_t __copySrc2 = *(uint16_t*)(__chainIp + 14);
+						uint16_t __copyDst3 = *(uint16_t*)(__chainIp + 16);
+						uint16_t __copySrc3 = *(uint16_t*)(__chainIp + 18);
+						(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+						if (__copyDst1 != __copySrc1)
+						{
+							(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+						}
+						if (__copyDst2 != __copySrc2)
+						{
+							(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+						}
+						if (__copyDst3 != __copySrc3)
+						{
+							(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+						}
+						__chainIp += 24;
+					}
+					if (g_opcodeProfilerEnabled && __chainIp != ip + 24)
+					{
+						opcodeProfilerLastOpcode = kDynamicOpcodeProfileInvalidOpcode;
+					}
+					ip = __chainIp;
 				    continue;
 				}
 				case HiOpcodeEnum::RunI4AddCopyTrace:
@@ -9945,6 +9967,45 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::RunRegI32AddTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
+					uint16_t __step = 0;
+					for (; __step + 3 < __stepCount; __step += 4)
+					{
+						uint64_t __word0 = __trace[__step];
+						uint64_t __word1 = __trace[__step + 1];
+						uint64_t __word2 = __trace[__step + 2];
+						uint64_t __word3 = __trace[__step + 3];
+						uint16_t __ret0 = (uint16_t)__word0;
+						uint16_t __op10 = (uint16_t)(__word0 >> 16);
+						uint16_t __op20 = (uint16_t)(__word0 >> 32);
+						uint16_t __ret1 = (uint16_t)__word1;
+						uint16_t __op11 = (uint16_t)(__word1 >> 16);
+						uint16_t __op21 = (uint16_t)(__word1 >> 32);
+						uint16_t __ret2 = (uint16_t)__word2;
+						uint16_t __op12 = (uint16_t)(__word2 >> 16);
+						uint16_t __op22 = (uint16_t)(__word2 >> 32);
+						uint16_t __ret3 = (uint16_t)__word3;
+						uint16_t __op13 = (uint16_t)(__word3 >> 16);
+						uint16_t __op23 = (uint16_t)(__word3 >> 32);
+						*(int32_t*)(localVarBase + __ret0) = *(int32_t*)(localVarBase + __op10) + *(int32_t*)(localVarBase + __op20);
+						*(int32_t*)(localVarBase + __ret1) = *(int32_t*)(localVarBase + __op11) + *(int32_t*)(localVarBase + __op21);
+						*(int32_t*)(localVarBase + __ret2) = *(int32_t*)(localVarBase + __op12) + *(int32_t*)(localVarBase + __op22);
+						*(int32_t*)(localVarBase + __ret3) = *(int32_t*)(localVarBase + __op13) + *(int32_t*)(localVarBase + __op23);
+					}
+					for (; __step < __stepCount; __step++)
+					{
+						uint64_t __word = __trace[__step];
+						uint16_t __ret = (uint16_t)__word;
+						uint16_t __op1 = (uint16_t)(__word >> 16);
+						uint16_t __op2 = (uint16_t)(__word >> 32);
+						*(int32_t*)(localVarBase + __ret) = *(int32_t*)(localVarBase + __op1) + *(int32_t*)(localVarBase + __op2);
+					}
+				    ip += 8;
+				    continue;
+				}
 				case HiOpcodeEnum::RunRegI32AddCopyTrace:
 				{
 					uint16_t __stepCount = *(uint16_t*)(ip + 2);
@@ -10000,6 +10061,64 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						int32_t storeIndex = (*(int32_t*)(localVarBase + __storeIndex));
 						SetArrayElementFast<int32_t>(storeArr, storeIndex, value + (*(int32_t*)(localVarBase + __addValue)));
 					}
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::RegVector3Copy:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+					float* __dstPtr = (float*)(localVarBase + __dst);
+					float* __srcPtr = (float*)(localVarBase + __src);
+					__dstPtr[0] = __srcPtr[0];
+					__dstPtr[1] = __srcPtr[1];
+					__dstPtr[2] = __srcPtr[2];
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::RegVector3Add:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __op1 = *(uint16_t*)(ip + 4);
+					uint16_t __op2 = *(uint16_t*)(ip + 6);
+					float* __retPtr = (float*)(localVarBase + __ret);
+					float* __op1Ptr = (float*)(localVarBase + __op1);
+					float* __op2Ptr = (float*)(localVarBase + __op2);
+					__retPtr[0] = __op1Ptr[0] + __op2Ptr[0];
+					__retPtr[1] = __op1Ptr[1] + __op2Ptr[1];
+					__retPtr[2] = __op1Ptr[2] + __op2Ptr[2];
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::RunRegVector3AddTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
+					for (uint16_t __step = 0; __step < __stepCount; __step++)
+					{
+						uint64_t __word = __trace[__step];
+						uint16_t __ret = (uint16_t)__word;
+						uint16_t __op1 = (uint16_t)(__word >> 16);
+						uint16_t __op2 = (uint16_t)(__word >> 32);
+						float* __retPtr = (float*)(localVarBase + __ret);
+						float* __op1Ptr = (float*)(localVarBase + __op1);
+						float* __op2Ptr = (float*)(localVarBase + __op2);
+						__retPtr[0] = __op1Ptr[0] + __op2Ptr[0];
+						__retPtr[1] = __op1Ptr[1] + __op2Ptr[1];
+						__retPtr[2] = __op1Ptr[2] + __op2Ptr[2];
+					}
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::RegVector3SqrMag:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+					float* __srcPtr = (float*)(localVarBase + __src);
+					float __x = __srcPtr[0];
+					float __y = __srcPtr[1];
+					float __z = __srcPtr[2];
+					*(float*)(localVarBase + __ret) = __x * __x + __y * __y + __z * __z;
 				    ip += 8;
 				    continue;
 				}

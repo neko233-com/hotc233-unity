@@ -174,7 +174,15 @@ namespace transform
 
 		void FoldRegI32AddCopyTrace(std::vector<interpreter::IRCommon*>& insts);
 
+		void FoldBinOpI4AddChainTrace(std::vector<interpreter::IRCommon*>& insts);
+
+		void FoldFused920I4AddCopyTrace(std::vector<interpreter::IRCommon*>& insts);
+
+		void FoldRegVector3AddTrace(std::vector<interpreter::IRCommon*>& insts);
+
 		void FoldRunArrayI4IncrementTrace(std::vector<interpreter::IRCommon*>& insts);
+
+		void LowerTypedRegisterVector3(std::vector<interpreter::IRCommon*>& insts);
 
 		uint32_t AllocResolveCacheSlot();
 

@@ -1,4 +1,4 @@
-#include "TransformContext.h"
+﻿#include "TransformContext.h"
 
 #include "utils/Il2CppHashMap.h"
 #include "utils/HashUtils.h"
@@ -405,6 +405,40 @@ namespace transform
 		}
 	}
 
+	static bool IH_UnityEngine_Vector3_op_Addition(TransformContext& ctx, const MethodInfo* method)
+	{
+		if (method->parameters_count != 2)
+		{
+			return false;
+		}
+		IL2CPP_ASSERT(ctx.GetEvalStackTop() >= 2);
+		uint16_t op1 = ctx.GetEvalStackOffset_2();
+		uint16_t op2 = ctx.GetEvalStackOffset_1();
+		ctx.PopStackN(2);
+		ctx.PushStackByType(method->return_type);
+		IHCreateAddIR(ir, RegVector3Add);
+		ir->ret = ctx.GetEvalStackTopOffset();
+		ir->op1 = op1;
+		ir->op2 = op2;
+		return true;
+	}
+
+	static bool IH_UnityEngine_Vector3_get_sqrMagnitude(TransformContext& ctx, const MethodInfo* method)
+	{
+		if (method->parameters_count != 0)
+		{
+			return false;
+		}
+		IL2CPP_ASSERT(ctx.GetEvalStackTop() >= 1);
+		uint16_t src = ctx.GetEvalStackTopOffset();
+		ctx.PopStack();
+		ctx.PushStackByReduceType(EvalStackReduceDataType::R4);
+		IHCreateAddIR(ir, RegVector3SqrMag);
+		ir->ret = ctx.GetEvalStackTopOffset();
+		ir->src = src;
+		return true;
+	}
+
 	static bool IH_UnityEngine_Vector4_ctor(TransformContext& ctx, const MethodInfo* method)
 	{
 		switch (method->parameters_count)
@@ -602,6 +636,8 @@ namespace transform
 		{"System.Reflection", "MethodBase", "GetCurrentMethod", IH_MethodBase_GetCurrentMethod},
 		{"UnityEngine", "Vector2", ".ctor", IH_UnityEngine_Vector2_ctor},
 		{"UnityEngine", "Vector3", ".ctor", IH_UnityEngine_Vector3_ctor},
+		{"UnityEngine", "Vector3", "op_Addition", IH_UnityEngine_Vector3_op_Addition},
+		{"UnityEngine", "Vector3", "get_sqrMagnitude", IH_UnityEngine_Vector3_get_sqrMagnitude},
 		{"UnityEngine", "Vector4", ".ctor", IH_UnityEngine_Vector4_ctor},
 		{"System", "ByReference`1", "get_Value", IH_ByReference_get_Value},
 		{"System", "Activator", "CreateInstance", IH_Activator_CreateInstance},
