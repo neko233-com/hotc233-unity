@@ -72,7 +72,7 @@ var loader = new HotUpdateBinaryLoader()
 
 RuntimeFast 运行时包含面向业务热循环的解释器快路径：`System.Math.Min/Max(int,int)`、`System.Math.Min/Max(long,long)` 直接降为 hotc233 IR，不再走 native call-common；20/24/28/32 字节无引用结构体数组写回使用固定大小 copy，覆盖常见战斗、背包等 struct hot loop。
 
-如果迁移项目里已有 `HybridCLR.RuntimeApi` 调用，可以直接保留调用代码。hotc233 默认提供 `HybridCLR.RuntimeApi` facade，把常见元数据加载、PreJIT 和 runtime option 调用转发到 `Hotc233.RuntimeApi`。
+如果迁移项目里已有 `HybridCLR.RuntimeApi` 调用，可以直接保留调用代码。hotc233 默认提供 `HybridCLR.RuntimeApi` facade，把常见元数据加载、PreJIT 和 runtime option 调用转发到 `Hotc233.RuntimeApi`。新接入旧 HybridCLR 打包生态时，优先把原来的 `HybridCLR.RuntimeApi` 调用点替换为 `HybridCLR.Hotc233_HybridclrAdapt`；这个独立适配类承载 API 兼容，便于只改 class name 接入。
 
 不要在同一工程同时安装官方 `com.code-philosophy.hybridclr` 包；两个包都会定义 `HybridCLR` API。需要对标 HybridCLR 8.11.0 时，使用本仓库性能表里的官方专业版纯解释目标区间。
 
@@ -396,8 +396,10 @@ Assets/EditorForBuild/Generated/performance-hotc233-player.json
 Assets/EditorForBuild/Generated/native-performance-mono.json
 Assets/EditorForBuild/Generated/native-performance-il2cpp.json
 Assets/EditorForBuild/Generated/performance-comparison-report.md
+Assets/EditorForBuild/Generated/performance-comparison-report.html
 Assets/EditorForBuild/Generated/performance-comparison-report.json
 Assets/EditorForBuild/Generated/performance-minigame-local-il2cpp.md
+Assets/EditorForBuild/Generated/performance-minigame-local-il2cpp.html
 Assets/EditorForBuild/Generated/minigame-runtimefast-health.md
 ```
 
@@ -410,6 +412,7 @@ Assets/EditorForBuild/Generated/minigame-runtimefast-health.md
 ```powershell
 cd D:\Code\neko233-Projects\unity-hotc233-demo\tools
 go test ./hotc233ctl/... ./server_hotupdate/...
+go run ./hotc233ctl headless -project D:\Code\neko233-Projects\unity-hotc233-demo -loader-profile RuntimeFast
 go run ./hotc233ctl all -project D:\Code\neko233-Projects\unity-hotc233-demo -target StandaloneWindows64 -version dev
 go run ./hotc233ctl validate-reports -project D:\Code\neko233-Projects\unity-hotc233-demo
 ```
@@ -425,6 +428,7 @@ go run ./hotc233ctl validate-reports -project D:\Code\neko233-Projects\unity-hot
 - `apply-health`: 一键设置 RuntimeFast + minigame 热更安全选项。
 - `minigame`: 生成 AssetLib233 + minigame(WebGL2) 本地 IL2CPP 性能对比表。
 - `validate-reports`: 不启动 Unity，只读校验 RuntimeFast 性能表、minigame 健康报告、manifest/lock 和 slim 设置。
+- `headless`: 不启动 Unity/Tuanjie，先跑 Go 编译/测试、报告结构、指令表、RuntimeFast/minigame、HybridCLR 适配层和 benchmark 覆盖门禁，输出 `headless-performance-gate.json/.md/.html`。
 - `import-hybridclr-settings`: 从旧 `ProjectSettings/HybridCLRSettings.asset` 导入配置。
 - `all`: 先 `build`，再 `player`，最后 `device`。
 

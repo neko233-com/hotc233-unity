@@ -2808,6 +2808,23 @@ namespace transform
 						readIdx++;
 						continue;
 					}
+					if (ir->type == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4 && next->type == HiOpcodeEnum::RetVar_ret_4)
+					{
+						IRLdlocVarVar_LdcVarConst_4_BinOpMul_i4* mul = (IRLdlocVarVar_LdcVarConst_4_BinOpMul_i4*)ir;
+						IRRetVar_ret_4* ret = (IRRetVar_ret_4*)next;
+						CreateIR(fused, LdlocVarVar_LdcVarConst_4_BinOpMul_i4_RetVar_ret_4);
+						fused->copyDst = mul->copyDst;
+						fused->copySrc = mul->copySrc;
+						fused->constDst = mul->constDst;
+						fused->constant = mul->constant;
+						fused->mulRet = mul->mulRet;
+						fused->mulOp1 = mul->mulOp1;
+						fused->mulOp2 = mul->mulOp2;
+						fused->ret = ret->ret;
+						insts[writeIdx++] = fused;
+						readIdx++;
+						continue;
+					}
 					if (readIdx + 3 < insts.size() && ir->type == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpRem_i4 && next->type == HiOpcodeEnum::LdcVarConst_4 && insts[readIdx + 2]->type == HiOpcodeEnum::CompOpVarVarVar_Ceq_i4 && insts[readIdx + 3]->type == HiOpcodeEnum::RetVar_ret_1)
 					{
 						IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4* rem = (IRLdlocVarVar_LdcVarConst_4_BinOpRem_i4*)ir;

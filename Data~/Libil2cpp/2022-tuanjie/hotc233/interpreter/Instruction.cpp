@@ -1031,6 +1031,7 @@ namespace interpreter
 		40,
 		72,
 		72,
+		24,
 
         //!!!}}INST_SIZE
     };

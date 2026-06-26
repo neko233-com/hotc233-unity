@@ -1015,6 +1015,7 @@ namespace interpreter
 		LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4,
 		LdlocVarVar_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdlocVarVar_BinOpVarVarVar_Sub_i4_StindVarVar_i4_LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4_LdlocVarVar_LdlocVarVar,
 		BinOpVarVarVar_And_i4_GetArrayElementVarVar_i4_LdfldValueTypeVarVar_i4_LdcVarConst_4_BinOpDiv_i4_BinOpAdd_i4_LdlocVarVar_LdfldValueTypeVarVar_i4_LdlocVarVar_LdcVarConst_4_BinOpDiv_i4_MathMinVarVarVar_i4,
+		LdlocVarVar_LdcVarConst_4_BinOpMul_i4_RetVar_ret_4,
 
 		//!!!}}OPCODE
 	};
@@ -10778,6 +10779,22 @@ namespace interpreter
 		uint16_t mulOp2;
 		uint8_t __pad18;
 		uint8_t __pad19;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
+	};
+
+	struct IRLdlocVarVar_LdcVarConst_4_BinOpMul_i4_RetVar_ret_4 : IRCommon
+	{
+		uint16_t copyDst;
+		uint16_t copySrc;
+		uint16_t constDst;
+		uint32_t constant;
+		uint16_t mulRet;
+		uint16_t mulOp1;
+		uint16_t mulOp2;
+		uint16_t ret;
 		uint8_t __pad20;
 		uint8_t __pad21;
 		uint8_t __pad22;
