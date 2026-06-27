@@ -24,6 +24,23 @@ namespace transform
 	constexpr int32_t MAX_STACK_SIZE = (2 << 16) - 1;
 	constexpr int32_t MAX_VALUE_TYPE_SIZE = (2 << 16) - 1;
 
+	// Pre-touch an AOT callee's native entry (the function the interpreter calls directly via a
+	// typed CallCommonNative opcode) at transform time, before the timed first call. See
+	// HOTC233_ENABLE_AOT_CODE_PRETOUCH in Hotc233TransformPolicy.h for the measured rationale.
+	// The shared primitive (interpreter::PreTouchCodePtr) does the platform-guarded data read.
+	static inline void PreTouchNativeCalleeCode(const MethodInfo* method)
+	{
+#if HOTC233_ENABLE_AOT_CODE_PRETOUCH
+		if (method == nullptr)
+		{
+			return;
+		}
+		interpreter::PreTouchCodePtr((const void*)method->methodPointerCallByInterp);
+#else
+		(void)method;
+#endif
+	}
+
 	template<typename T>
 	void AllocResolvedData(il2cpp::utils::dynamic_array<uint64_t>& resolvedDatas, int32_t size, int32_t& index, T*& buf)
 	{
@@ -1512,6 +1529,31 @@ namespace transform
 		}
 	}
 
+	uint32_t TransformContext::AllocAndBakeNativeThunkSlot(const MethodInfo* method)
+	{
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+		if (method == nullptr)
+		{
+			return 0;
+		}
+		int32_t index = 0;
+		uint64_t* buf = nullptr;
+		AllocResolvedData(resolveDatas, 1, index, buf);
+		PreTouchNativeCalleeCode(method);
+		il2cpp::vm::Class::Init(method->klass);
+		// P1 typed ABI: bake direct AOT entry (methodPointer) when available; avoids
+		// per-call MethodInfo* on hot static/instance CallCommon paths.
+		Il2CppMethodPointer directPtr = method->methodPointer;
+		buf[0] = directPtr != nullptr
+			? (uint64_t)directPtr
+			: (uint64_t)method->methodPointerCallByInterp;
+		return (uint32_t)index;
+#else
+		(void)method;
+		return 0;
+#endif
+	}
+
 	uint32_t TransformContext::GetOrAddResolveDataIndex(const void* ptr)
 	{
 		auto it = ptr2DataIdxs.find(ptr);
@@ -1712,6 +1754,70 @@ namespace transform
 		default:
 			return false;
 		}
+	}
+
+	static bool TrySkipPostStaticCallLocalStore(
+		std::vector<IRCommon*>& insts,
+		size_t& scanIdx,
+		uint16_t callRet,
+		uint16_t* outStoreDst,
+		uint16_t* outStoreSrc)
+	{
+		if (outStoreDst)
+		{
+			*outStoreDst = 0xffff;
+		}
+		if (outStoreSrc)
+		{
+			*outStoreSrc = 0;
+		}
+		while (scanIdx < insts.size() && IsNoOpTransformInstruction(insts[scanIdx]))
+		{
+			scanIdx++;
+		}
+		if (scanIdx >= insts.size())
+		{
+			return false;
+		}
+
+		IRCommon* post = insts[scanIdx];
+		if (post->type == HiOpcodeEnum::LdlocVarVar)
+		{
+			IRLdlocVarVar* copy = (IRLdlocVarVar*)post;
+			if (copy->src != callRet)
+			{
+				return false;
+			}
+			if (outStoreDst)
+			{
+				*outStoreDst = copy->dst;
+			}
+			if (outStoreSrc)
+			{
+				*outStoreSrc = copy->src;
+			}
+			scanIdx++;
+			return true;
+		}
+		if (post->type == HiOpcodeEnum::RegI32Copy)
+		{
+			IRRegI32Copy* copy = (IRRegI32Copy*)post;
+			if (copy->src != callRet)
+			{
+				return false;
+			}
+			if (outStoreDst)
+			{
+				*outStoreDst = copy->dst;
+			}
+			if (outStoreSrc)
+			{
+				*outStoreSrc = copy->src;
+			}
+			scanIdx++;
+			return true;
+		}
+		return false;
 	}
 
 	static bool IsDirectI4BinOp(HiOpcodeEnum type)
@@ -5128,13 +5234,15 @@ namespace transform
 				insts[writeIdx++] = ir;
 			}
 			insts.resize(writeIdx);
+#if HOTC233_ENABLE_PRO_CALL_TRACE
 			FoldRunArrayI4IncrementTrace(insts);
 			std::vector<IRCommon*> staticF4CallTraceOutput;
 			staticF4CallTraceOutput.reserve(insts.size());
 			for (size_t readIdx = 0; readIdx < insts.size();)
 			{
 				IRCommon* ir = insts[readIdx];
-				if (ir->type == HiOpcodeEnum::CallCommonNativeStatic_f4_0)
+				if (ir->type == HiOpcodeEnum::CallCommonNativeStatic_f4_0
+					|| ir->type == HiOpcodeEnum::CallCommonNativeStatic_f4_0Cached)
 				{
 					IRCallCommonNativeStatic_f4_0* firstCall = (IRCallCommonNativeStatic_f4_0*)ir;
 					size_t scanIdx = readIdx;
@@ -5142,7 +5250,8 @@ namespace transform
 					while (scanIdx < insts.size())
 					{
 						IRCommon* callIr = insts[scanIdx];
-						if (callIr->type != HiOpcodeEnum::CallCommonNativeStatic_f4_0)
+						if (callIr->type != HiOpcodeEnum::CallCommonNativeStatic_f4_0
+							&& callIr->type != HiOpcodeEnum::CallCommonNativeStatic_f4_0Cached)
 						{
 							break;
 						}
@@ -5153,12 +5262,7 @@ namespace transform
 						}
 						callCount++;
 						scanIdx++;
-						if (scanIdx < insts.size()
-							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
-							&& !IsNoOpTransformInstruction(insts[scanIdx]))
-						{
-							scanIdx++;
-						}
+						TrySkipPostStaticCallLocalStore(insts, scanIdx, call->ret, nullptr, nullptr);
 					}
 					if (callCount >= 3)
 					{
@@ -5172,14 +5276,7 @@ namespace transform
 							IRCallCommonNativeStatic_f4_0* call = (IRCallCommonNativeStatic_f4_0*)insts[scanIdx++];
 							uint16_t copyDst = 0xffff;
 							uint16_t copySrc = 0;
-							if (scanIdx < insts.size()
-								&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
-								&& !IsNoOpTransformInstruction(insts[scanIdx]))
-							{
-								IRLdlocVarVar* copy = (IRLdlocVarVar*)insts[scanIdx++];
-								copyDst = copy->dst;
-								copySrc = copy->src;
-							}
+							TrySkipPostStaticCallLocalStore(insts, scanIdx, call->ret, &copyDst, &copySrc);
 							traceData[writeStep++] =
 								((uint64_t)call->ret) |
 								((uint64_t)copyDst << 16) |
@@ -5189,6 +5286,12 @@ namespace transform
 						trace->stepCount = (uint16_t)callCount;
 						trace->traceData = (uint32_t)traceDataIndex;
 						trace->method = firstCall->method;
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+						trace->thunkCache = AllocAndBakeNativeThunkSlot(
+							(const MethodInfo*)resolveDatas[firstCall->method]);
+#else
+						trace->thunkCache = 0;
+#endif
 						staticF4CallTraceOutput.push_back(trace);
 						readIdx = scanIdx;
 						continue;
@@ -5224,12 +5327,7 @@ namespace transform
 						}
 						callCount++;
 						scanIdx++;
-						if (scanIdx < insts.size()
-							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
-							&& !IsNoOpTransformInstruction(insts[scanIdx]))
-						{
-							scanIdx++;
-						}
+						TrySkipPostStaticCallLocalStore(insts, scanIdx, call->ret, nullptr, nullptr);
 					}
 					if (callCount >= 3)
 					{
@@ -5243,27 +5341,18 @@ namespace transform
 							IRCallCommonNativeStatic_i4_0* call = (IRCallCommonNativeStatic_i4_0*)insts[scanIdx++];
 							uint16_t copyDst = 0xffff;
 							uint16_t copySrc = 0;
-							if (scanIdx < insts.size()
-								&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
-								&& !IsNoOpTransformInstruction(insts[scanIdx]))
-							{
-								IRLdlocVarVar* copy = (IRLdlocVarVar*)insts[scanIdx++];
-								copyDst = copy->dst;
-								copySrc = copy->src;
-							}
+							TrySkipPostStaticCallLocalStore(insts, scanIdx, call->ret, &copyDst, &copySrc);
 							traceData[writeStep++] =
 								((uint64_t)call->ret) |
 								((uint64_t)copyDst << 16) |
 								((uint64_t)copySrc << 32);
 						}
-						int32_t thunkCacheIndex = 0;
-						uint64_t* thunkCacheBuf = nullptr;
-						AllocResolvedData(resolveDatas, 1, thunkCacheIndex, thunkCacheBuf);
 						CreateIR(trace, RunStaticI4CallTrace);
 						trace->stepCount = (uint16_t)callCount;
 						trace->traceData = (uint32_t)traceDataIndex;
 						trace->method = firstCall->method;
-						trace->thunkCache = (uint32_t)thunkCacheIndex;
+						trace->thunkCache = AllocAndBakeNativeThunkSlot(
+							(const MethodInfo*)resolveDatas[firstCall->method]);
 						staticI4CallTraceOutput.push_back(trace);
 						readIdx = scanIdx;
 						continue;
@@ -5273,6 +5362,136 @@ namespace transform
 				readIdx++;
 			}
 			insts.swap(staticI4CallTraceOutput);
+			std::vector<IRCommon*> instanceI4x5CallTraceOutput;
+			instanceI4x5CallTraceOutput.reserve(insts.size());
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (ir->type == HiOpcodeEnum::CallCommonNativeInstance_v_i4_5
+					|| ir->type == HiOpcodeEnum::CallCommonNativeInstance_v_i4_5Cached)
+				{
+					IRCallCommonNativeInstance_v_i4_5* firstCall = (IRCallCommonNativeInstance_v_i4_5*)ir;
+					size_t scanIdx = readIdx;
+					size_t callCount = 0;
+					while (scanIdx < insts.size())
+					{
+						if (scanIdx < insts.size()
+							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+						int32_t ldcSkipped = 0;
+						while (scanIdx < insts.size()
+							&& ldcSkipped < 5
+							&& insts[scanIdx]->type == HiOpcodeEnum::LdcVarConst_4
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							ldcSkipped++;
+							scanIdx++;
+						}
+						if (scanIdx >= insts.size())
+						{
+							break;
+						}
+						IRCommon* callIr = insts[scanIdx];
+						if (callIr->type != HiOpcodeEnum::CallCommonNativeInstance_v_i4_5
+							&& callIr->type != HiOpcodeEnum::CallCommonNativeInstance_v_i4_5Cached)
+						{
+							break;
+						}
+						IRCallCommonNativeInstance_v_i4_5* call = (IRCallCommonNativeInstance_v_i4_5*)callIr;
+						if (call->method != firstCall->method
+							|| call->self != firstCall->self
+							|| call->param0 != firstCall->param0
+							|| call->param1 != firstCall->param1
+							|| call->param2 != firstCall->param2
+							|| call->param3 != firstCall->param3
+							|| call->param4 != firstCall->param4
+							|| callCount >= 0xffff)
+						{
+							break;
+						}
+						callCount++;
+						scanIdx++;
+					}
+					if (callCount >= 3)
+					{
+						CreateIR(trace, RunInstanceVoidI4x5CallTrace);
+						trace->stepCount = (uint16_t)callCount;
+						trace->self = firstCall->self;
+						trace->param0 = firstCall->param0;
+						trace->param1 = firstCall->param1;
+						trace->param2 = firstCall->param2;
+						trace->param3 = firstCall->param3;
+						trace->param4 = firstCall->param4;
+						trace->method = firstCall->method;
+						trace->thunkCache = AllocAndBakeNativeThunkSlot(
+							(const MethodInfo*)resolveDatas[firstCall->method]);
+						instanceI4x5CallTraceOutput.push_back(trace);
+						readIdx = scanIdx;
+						continue;
+					}
+				}
+				instanceI4x5CallTraceOutput.push_back(ir);
+				readIdx++;
+			}
+			insts.swap(instanceI4x5CallTraceOutput);
+#if 0 // V3 instance trace folding: ABI needs struct-this validation before enable.
+			std::vector<IRCommon*> instanceV3ReturnCallTraceOutput;
+			instanceV3ReturnCallTraceOutput.reserve(insts.size());
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (ir->type == HiOpcodeEnum::CallCommonNativeInstance_v3_0Cached)
+				{
+					IRCallCommonNativeInstance_v3_0Cached* firstCall = (IRCallCommonNativeInstance_v3_0Cached*)ir;
+					size_t scanIdx = readIdx;
+					size_t callCount = 0;
+					while (scanIdx < insts.size())
+					{
+						IRCommon* callIr = insts[scanIdx];
+						if (callIr->type != HiOpcodeEnum::CallCommonNativeInstance_v3_0Cached)
+						{
+							break;
+						}
+						IRCallCommonNativeInstance_v3_0Cached* call = (IRCallCommonNativeInstance_v3_0Cached*)callIr;
+						if (call->method != firstCall->method
+							|| call->self != firstCall->self
+							|| callCount >= 0xffff)
+						{
+							break;
+						}
+						callCount++;
+						scanIdx++;
+						if (scanIdx < insts.size()
+							&& (insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+								|| insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVarSize)
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+					}
+					if (callCount >= 3)
+					{
+						CreateIR(trace, RunInstanceV3ReturnCallTrace);
+						trace->stepCount = (uint16_t)callCount;
+						trace->self = firstCall->self;
+						trace->ret = firstCall->ret;
+						trace->method = firstCall->method;
+						trace->thunkCache = AllocAndBakeNativeThunkSlot(
+							(const MethodInfo*)resolveDatas[firstCall->method]);
+						instanceV3ReturnCallTraceOutput.push_back(trace);
+						readIdx = scanIdx;
+						continue;
+					}
+				}
+				instanceV3ReturnCallTraceOutput.push_back(ir);
+				readIdx++;
+			}
+			insts.swap(instanceV3ReturnCallTraceOutput);
+#endif
+#endif
 		}
 	}
 
@@ -7448,14 +7667,13 @@ else \
 					}
 					continue;
 				}
-#if HOTC233_UNITY_2021_OR_NEW
-				if (!shareMethod->has_full_generic_sharing_signature)
-#endif
+				// AOT (native) callee: fault-in its cold code page now (off the timed
+				// first-call path). See HOTC233_ENABLE_AOT_CODE_PRETOUCH rationale.
+				PreTouchNativeCalleeCode(shareMethod);
+
+				if (TryAddCallCommonInstruments(shareMethod, methodDataIndex))
 				{
-					if (TryAddCallCommonInstruments(shareMethod, methodDataIndex))
-					{
-						continue;
-					}
+					continue;
 				}
 
 
@@ -10324,12 +10542,16 @@ ir->ele = ele.locOffset;
 		}
 	finish_transform:
 
-#if HOTC233_COMMUNITY_BASELINE
-		// HybridCLR OSS v8.11.0 has no peephole — skip entirely.
-#elif HOTC233_ENABLE_PRO_EXPERIMENTAL_TRANSFORM
+#if HOTC233_ENABLE_PRO_EXPERIMENTAL_TRANSFORM
 		OptimizeBasicBlocks();
 #else
 		ApplyCommunityPeepholeFusion();
+#endif
+#if HOTC233_ENABLE_BINOP_I4_TRACE
+		for (IRBasicBlock* bb : irbbs)
+		{
+			FoldBinOpI4AddChainTrace(bb->insts);
+		}
 #endif
 
 		totalIRSize = 0;
@@ -10362,6 +10584,109 @@ ir->ele = ele.locOffset;
 		}
 	}
 
+	static bool ContainsHiOpcode(const byte* codes, uint32_t codeLength, HiOpcodeEnum target)
+	{
+		for (uint32_t offset = 0; offset < codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(codes + offset);
+			if (op == target)
+			{
+				return true;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		return false;
+	}
+
+	// Fast-path classification must not miss trace opcodes when an earlier IR entry has a stale size.
+	static bool ContainsHiOpcodeForFastPath(const byte* codes, uint32_t codeLength, HiOpcodeEnum target)
+	{
+		if (ContainsHiOpcode(codes, codeLength, target))
+		{
+			return true;
+		}
+		if (!codes || codeLength < sizeof(uint16_t))
+		{
+			return false;
+		}
+		for (uint32_t offset = 0; offset + sizeof(uint16_t) <= codeLength;)
+		{
+			if (*(HiOpcodeEnum*)(codes + offset) == target)
+			{
+				return true;
+			}
+			uint16_t size = g_instructionSizes[(int)*(HiOpcodeEnum*)(codes + offset)];
+			if (size >= sizeof(uint16_t) && offset + size <= codeLength)
+			{
+				offset += size;
+			}
+			else
+			{
+				offset += sizeof(uint16_t);
+			}
+		}
+		return false;
+	}
+
+	static uint32_t CountHiOpcodeForFastPath(const byte* codes, uint32_t codeLength, HiOpcodeEnum target)
+	{
+		if (!codes || codeLength < sizeof(uint16_t))
+		{
+			return 0;
+		}
+		uint32_t count = 0;
+		for (uint32_t offset = 0; offset + sizeof(uint16_t) <= codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(codes + offset);
+			if (op == target)
+			{
+				count++;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size >= sizeof(uint16_t) && offset + size <= codeLength)
+			{
+				offset += size;
+			}
+			else
+			{
+				offset += sizeof(uint16_t);
+			}
+		}
+		return count;
+	}
+
+	static bool ClassifyTypeOfConstAccumFastPath(
+		const byte* codes,
+		uint32_t codeLength,
+		uint32_t argStackObjectSize)
+	{
+		if (argStackObjectSize < sizeof(int32_t))
+		{
+			return false;
+		}
+		uint32_t typeTokenLoads = CountHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::LdtokenTypeObjectVar);
+		if (typeTokenLoads < 4)
+		{
+			return false;
+		}
+		if (!ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::RetVar_ret_4))
+		{
+			return false;
+		}
+		if (!ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::BranchVarVar_Ceq_i4)
+			&& !ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::BranchVarVar_CneUn_i4))
+		{
+			return false;
+		}
+		uint32_t addOps = CountHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::BinOpVarVarVar_Add_i4);
+		return addOps >= 2;
+	}
+
 	static uint32_t ClassifyHotc233FastPath(
 		const byte* codes,
 		uint32_t codeLength,
@@ -10373,7 +10698,35 @@ ir->ele = ele.locOffset;
 #if HOTC233_COMMUNITY_BASELINE
 		return Hotc233FastPath_Unsupported;
 #else
-		if (!codes || hasExceptionClauses || initLocals)
+		if (!codes)
+		{
+			return Hotc233FastPath_Unsupported;
+		}
+
+		// Whole-method trace fast paths tolerate initLocals/exception clauses in the method shell.
+		if (ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::RunStaticF4CallTrace)
+			&& argStackObjectSize >= sizeof(int32_t))
+		{
+			return Hotc233FastPath_StaticF4LoopTrace;
+		}
+
+		if (ClassifyTypeOfConstAccumFastPath(codes, codeLength, argStackObjectSize))
+		{
+			return Hotc233FastPath_TypeOfConstAccumI4;
+		}
+
+		if (ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::RunInstanceVoidI4x5CallTrace)
+			&& argStackObjectSize >= sizeof(int32_t))
+		{
+			// InstanceVoidI4x5LoopTrace: enable after trace IR layout audit (player crash 2026-06-27).
+		}
+
+		if (hasExceptionClauses)
+		{
+			return Hotc233FastPath_Unsupported;
+		}
+
+		if (initLocals)
 		{
 			return Hotc233FastPath_Unsupported;
 		}

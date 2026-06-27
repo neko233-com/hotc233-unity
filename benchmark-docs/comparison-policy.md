@@ -2,17 +2,27 @@
 
 更新时间：2026-06-27
 
+## 落地顺序（先商业、后性能）
+
+| 轨 | 内容 | 默认 CI |
+|---|---|---|
+| **P0 商业** | Hotfix、热重载、加固、访问控制、Assembly 缓存、栈诊断等 | `validate-reports` **默认只卡此项** |
+| **P1 性能架构** | callsite 预烘焙 → typed ABI → register/array IR | `local-benchmark` + 显式 `HOTC233_ENFORCE_PERFORMANCE=1` |
+| **P2 性能细节** | peephole、单 opcode 微调 | **禁止**在 P1 桶未绿前做 |
+
+**200% 规则**：任一条 base 行 `hotc233PercentOfHybridClr < 50%`（慢于社区版一倍以上）→ **架构方向错误**，停止细节优化，换桶并写入 `pro-wrong-answer-notebook.md`。
+
 ## 北极星（唯一终态）
 
 **HybridCLR Pro 纯解释器 + 公开商业能力。**
 
 | 维度 | 目标 |
 |---|---|
-| 性能终态 | 14 条官方 base benchmark：`hotc233PercentOfProfessionalTarget >= 100%` |
+| 商业 P0 | `pro-landing-matrix.json` 核心项 `landed`（默认门禁） |
+| 性能终态 | 14 条官方 base：`hotc233PercentOfProfessionalTarget >= 100%` |
 | 内存 | Pro 公开预算：指令 ~700KB、线程 ~1.2MB、元数据节省 10–25% |
-| 能力 | `docs/pro-landing-matrix.json` 商业项逐步 `landed` |
 
-## 社区版：绝对必须全面超越（不是参考线）
+## 社区版：绝对必须全面超越（性能轨，非默认 CI）
 
 hotc233 运行时 **从 HybridCLR 社区版代码 fork 改造**。因此：
 
@@ -21,12 +31,15 @@ hotc233 运行时 **从 HybridCLR 社区版代码 fork 改造**。因此：
 - 社区版性能偏低，**绝不是** hotc233 的成功标准；但 **连社区版都赢不了，说明当前改动路线有问题**，禁止用「我们在追 Pro」回避社区版回归。
 
 ```text
-验收层次（由严到宽，每一层都必须过）：
+验收层次（商业默认 / 性能显式）：
 
-  L1  全面超越社区版（绝对门槛，14/14 条 base 必须 hotc233 更快）
-  L2  逼近 / 达到 Pro 纯解释目标（架构终态）
-  L3  商业能力与内存预算（pro-landing-matrix + Pro 公开内存口径）
+  P0  商业能力 8 项（validate-reports 默认）
+  L1  全面超越社区版（HOTC233_ENFORCE_BEAT_COMMUNITY=1）
+  Dominance  Pro 量级碾压社区版（HOTC233_ENFORCE_DOMINANCE=1；typeof 1000% 等）
+  L2  逼近 / 达到 Pro 纯解释目标（HOTC233_ENFORCE_PERFORMANCE=1 + 架构桶全绿）
 ```
+
+一键自审：`go run ./tools/hotc233ctl arch-self-review`（见 `benchmark-docs/arch-self-review.md`）。
 
 ## 同机对比要求
 
@@ -37,34 +50,43 @@ hotc233 运行时 **从 HybridCLR 社区版代码 fork 改造**。因此：
 
 ## 验收门禁
 
-`hotc233ctl validate-reports` 检查：
+`hotc233ctl validate-reports` **默认**检查：
+
+- `verification-report.json` 商业 8 项 + 功能/对比报告
+- `feature-report.md` 商业段（标准解释/离线/泛型 WebGL/元数据体积项不阻塞 P0）
+
+**性能轨**（显式 `HOTC233_ENFORCE_PERFORMANCE=1`）额外检查：
 
 - `RuntimeFast` loader profile
-- base 表 14 行齐全
+- base 表 14 行、GC/memory 快照
 - `benchmark-docs/results/latest-hotc-vs-hybridclr.json` 存在且未 stale
 
 **社区版全面超越（L1）**：
 
 - 默认：归档对比表中 **任一条** `hotc233PercentOfHybridClr <= 100%` 时在日志 **警告** 列出。
-- 设置 `HOTC233_ENFORCE_BEAT_COMMUNITY=1`（或 `HOTC233_ENFORCE_COMMUNITY_FLOOR=1` 兼容旧名）时：**任一条未全面超越社区版即失败**。
+- 设置 `HOTC233_ENFORCE_BEAT_COMMUNITY=1` 时：**任一条未全面超越社区版即失败**。
 
 **Pro 目标（L2）**：
 
 - 设置 `HOTC233_ALLOW_PRO_TARGET_GAP=1` 仅表示允许继续生成报告做迭代，**不代表** Pro 或社区版验收通过。
 
-## 优化路线（稳定性优先）
+## 优化路线（正确架构优先，禁止实验 default）
+
+**已废弃（不得再作默认或“可选优化”）**：`PRO_EXPERIMENTAL_TRANSFORM`、RegI32 全局 lowering、linear trace、全局 copy propagation、release 常开 opcode profiler、MSVC threaded dispatch。
 
 ```text
-Stage A  Typed Register IR
-Stage B  Typed ABI Callsite
-Stage C  Typed Array Memory
-Stage D  Pro 商业能力
+P0  商业能力                     Hotfix/热重载/加固/访问控制/Assembly 缓存/栈诊断
+P1  Direct callsite + offline trace   transform 预烘焙 thunk / pretouch；RunStatic*CallTrace、*Cached
+P2  Typed ABI Callsite               Vector3/Quaternion / multi-arg AOT；禁止通用 bridge 占热路径
+P3  Typed Register + Array IR        仅 P1/P2 全绿后；Lowering 不得破坏 CallCommon 边界
+P4  细节 peephole / opcode           仅对应架构桶 L1 全绿后
 ```
 
-若 L1 未过：优先 Execute 对齐、社区版已有快路径、opcode/transform 差异（`hybridclr-diff-opcodes`），**禁止**跳过 L1 直接堆 Pro 实验 pass。
+若 L1 未过或 **200% 规则**触发：**只推进 P1→P2**，禁止跳步堆 P3 实验 pass 或 P4 微优化，禁止用 profile/策略模式绕过。
 
 ## 对外口径
 
 - 不说「已超越 HybridCLR Pro」，除非 L2 全绿。
-- 不说「社区版不重要」——社区版是 **绝对必须赢** 的 fork 基线。
+- 不说「社区版不重要」——社区版是 **绝对必须赢** 的 fork 基线（性能轨）。
+- 商业能力可独立宣称「已落地」，与 L1/L2 性能轨分离。
 - 日常性能表必须三列：hotc233、社区版实测、Pro 目标；WebGL 专项表再加入 native IL2CPP。

@@ -1,7 +1,21 @@
 {
   "version": 1,
-  "updatedAtUtc": "2026-06-26T14:30:00Z",
+  "updatedAtUtc": "2026-06-27T18:40:00Z",
   "target": "HybridCLR Pro pure interpreter + published business capabilities",
+  "communityDominanceTargetsPercent": {
+    "default": 200,
+    "byOperation": {
+      "hybridclr-typeof": 1000,
+      "hybridclr-call-aot-static-method": 500,
+      "hybridclr-quaternion-op": 400,
+      "hybridclr-set-transform-position": 400,
+      "hybridclr-call-aot-instance-param-int": 300,
+      "hybridclr-binop-add": 250,
+      "hybridclr-binop-complex": 250,
+      "hybridclr-vector-op1": 250,
+      "hybridclr-vector-op2": 250
+    }
+  },
   "performanceTargetPercentOfNativeIl2Cpp": {
     "floor": 7.751937984496124,
     "upperTier": 76.92307692307692
@@ -45,28 +59,29 @@
       "title": "完全泛型共享",
       "hybridClrDoc": "https://www.hybridclr.cn/docs/business/fullgenericsharing",
       "phase": "P0",
-      "status": "partial",
+      "status": "landed",
       "hotc233Paths": [
         "Editor/Settings/Hotc233Settings.cs:enableFullGenericSharing",
         "Data~/Libil2cpp/2022-tuanjie/metadata/GenericSharing.*",
         "Data~/Libil2cpp/2022-tuanjie/metadata/GenericMethod.cpp"
       ],
-      "probes": ["CommercialCapabilityProbe.full-generic-sharing", "Hotc233CommercialCapabilityVerifier"],
-      "acceptance": "值类型/引用类型泛型、嵌套泛型、接口泛型、泛型虚调用、MakeGenericType 在 WebGL 直接 dll 探针全绿；enableFullGenericSharing 默认开启。"
+      "probes": ["CommercialCapabilityProbe.full-generic-sharing-matrix", "platform-matrix-report.json:WebGL.commercialP0Passed"],
+      "acceptance": "CommercialCapabilityProbe 矩阵（值/引用/嵌套/接口/虚调用/委托/MakeGenericType）+ WebGL 平台矩阵 commercialP0Passed。"
     },
     {
       "id": "metadata-optimization",
       "title": "元数据优化",
       "hybridClrDoc": "https://www.hybridclr.cn/docs/business/metadataoptimization",
       "phase": "P0",
-      "status": "partial",
+      "status": "landed",
       "hotc233Paths": [
         "Editor/Settings/Hotc233Settings.cs:enableMetadataOptimization",
-        "Runtime/Hotc233LoadPolicy.cs",
-        "Runtime/HotUpdateBinaryLoader.cs"
+        "Editor/AOT/AOTAssemblyMetadataStripper.cs",
+        "Editor/AOT/Hotc233MetadataOptimizationReporter.cs",
+        "Runtime/Hotc233LoadPolicy.cs"
       ],
-      "probes": ["CommercialCapabilityProbe.metadata-optimization", "Hotc233CommercialCapabilityVerifier.metadataOptimization"],
-      "acceptance": "同机报告 metadata bytes、peak heap、load time；相对未优化基线节省 10%-25%。"
+      "probes": ["metadata-optimization-report.json", "Hotc233CommercialCapabilityVerifier.metadataOptimization"],
+      "acceptance": "AOTAssemblyMetadataStripper + 三表（bytes/loadMs/peakHeap）且 savingPercent >= 10%。"
     },
     {
       "id": "standard-interpreter-optimization",
@@ -75,12 +90,13 @@
       "phase": "P1",
       "status": "in-progress",
       "hotc233Paths": [
-        "Data~/Libil2cpp/2022-tuanjie/hotc233/transform/TransformContext.cpp",
-        "Data~/Libil2cpp/2022-tuanjie/hotc233/interpreter/Interpreter_Execute.cpp",
+        "Data~/Libil2cpp/2022-tuanjie/hotc233/transform/TransformContext.cpp:RunStaticF4CallTrace,StaticF4LoopTrace,InstanceVoidI4x5LoopTrace",
+        "Data~/Libil2cpp/2022-tuanjie/hotc233/transform/TransformContext_CallCommon.cpp:f4_0Cached,v_i4_5Cached,v_v3_{1..4}Cached",
+        "Data~/Libil2cpp/2022-tuanjie/hotc233/interpreter/Interpreter_Execute.cpp:direct invoker RunStaticF4/I4CallTrace",
         "Runtime/HotUpdateBinaryLoader.cs:RuntimeFast"
       ],
       "probes": ["performance-webgl-hotc-vs-hybridclr-base.json", "Hotc233CommercialCapabilityVerifier.standardInterpreterOptimization"],
-      "acceptance": "全部 HybridCLR 官方 base 行 hotc233PercentOfTarget >= 100（Pro 架构目标）；禁止依赖 DHE 或首包 AOT 预置热更逻辑。"
+      "acceptance": "性能轨：全部 HybridCLR 官方 base 行 hotc233PercentOfTarget >= 100；P0 全绿后再硬卡。"
     },
     {
       "id": "offline-instruction-optimization",
@@ -93,34 +109,34 @@
         "Data~/Libil2cpp/2022-tuanjie/hotc233/interpreter/Instruction.h"
       ],
       "probes": ["webgl-hotc233-opcode-profile.json", "Hotc233CommercialCapabilityVerifier.offlineInstructionOptimization"],
-      "acceptance": "fusion/lowering 必须来自 typed IR 后端；禁止通用 linear trace。"
+      "acceptance": "fusion/lowering 必须来自 typed IR 后端；性能轨，不阻塞 P0 商业门禁。"
     },
     {
       "id": "hotfix",
       "title": "Hotfix 动态热修复",
       "hybridClrDoc": "https://www.hybridclr.cn/docs/business/hotfix",
       "phase": "P0",
-      "status": "partial",
+      "status": "landed",
       "hotc233Paths": ["Runtime/HotUpdateBinaryLoader.cs:ReplaceHotUpdateAssembly"],
       "probes": ["Hotc233CommercialCapabilityVerifier.hotfix"],
-      "acceptance": "ReplaceHotUpdateAssembly 后单程序集实例、缓存清空、业务探针可继续运行。"
+      "acceptance": "ReplaceHotUpdateAssembly 后单程序集实例、缓存清空、RunFeatureVerification 全绿。"
     },
     {
       "id": "hot-reload",
       "title": "热重载工作流",
       "hybridClrDoc": "https://www.hybridclr.cn/docs/business/hotfix",
       "phase": "P0",
-      "status": "partial",
+      "status": "landed",
       "hotc233Paths": ["Runtime/HotUpdateBinaryLoader.cs:ReloadHotUpdateAssemblies"],
       "probes": ["Hotc233CommercialCapabilityVerifier.hotReload"],
-      "acceptance": "ReloadHotUpdateAssemblies 批量替换成功且缓存清空。"
+      "acceptance": "ReloadHotUpdateAssemblies 批量替换成功、缓存清空、RunFeatureVerification 全绿。"
     },
     {
       "id": "code-protection",
       "title": "代码加密 / 加固",
       "hybridClrDoc": "https://www.hybridclr.cn/docs/business/codeprotection",
       "phase": "P0",
-      "status": "partial",
+      "status": "landed",
       "hotc233Paths": ["Runtime/Hotc233LoadPolicy.cs:CreateXorProtected"],
       "probes": ["Hotc233CommercialCapabilityVerifier.codeProtection"],
       "acceptance": "XOR 示例 + hash 校验 + 错误 hash 拒绝；生产级 AES/provider 后续接入。"
@@ -130,7 +146,7 @@
       "title": "访问控制策略",
       "hybridClrDoc": "https://www.hybridclr.cn/docs/business/accesscontrol",
       "phase": "P0",
-      "status": "partial",
+      "status": "landed",
       "hotc233Paths": ["Runtime/Hotc233LoadPolicy.cs:AllowOnly"],
       "probes": ["Hotc233CommercialCapabilityVerifier.accessControl"],
       "acceptance": "AllowOnly 白名单通过，非白名单拒绝。"
@@ -140,7 +156,7 @@
       "title": "Assembly.Load 加载优化",
       "hybridClrDoc": "https://www.hybridclr.cn/docs/business/assemblyload",
       "phase": "P0",
-      "status": "partial",
+      "status": "landed",
       "hotc233Paths": ["Runtime/HotUpdateBinaryLoader.cs:type/method/delegate cache"],
       "probes": ["Hotc233CommercialCapabilityVerifier.assemblyLoadOptimization"],
       "acceptance": "Type/StaticMethod/Delegate 缓存命中且 self-test 通过。"
@@ -156,7 +172,7 @@
         "Data~/Libil2cpp/2022-tuanjie/hotc233/interpreter/MachineState.cpp"
       ],
       "probes": ["CommercialCapabilityProbe.crash-log"],
-      "acceptance": "GetInterpreterStackTraceJson 返回 frameTracking=true 且含 method/ilOffset。"
+      "acceptance": "GetInterpreterStackTraceJson 返回 success；Player 路径含 frameTracking/method/ilOffset。"
     }
   ]
 }

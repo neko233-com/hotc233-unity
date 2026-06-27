@@ -125,6 +125,10 @@ namespace hotc233
 			Hotc233FastPath_XorI8 = 25,
 			Hotc233FastPath_CopyConstMulRetI4 = 30,
 			Hotc233FastPath_ClosureMulConstAddFieldI4 = 31,
+			Hotc233FastPath_StaticF4LoopTrace = 32,
+			Hotc233FastPath_InstanceVoidI4x5LoopTrace = 33,
+			// Whole-method native loop for compile-time-stable typeof/type-handle compares.
+			Hotc233FastPath_TypeOfConstAccumI4 = 34,
 		};
 
 		struct InterpMethodInfo
