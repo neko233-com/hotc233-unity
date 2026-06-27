@@ -17,6 +17,7 @@
 #include "../metadata/MetadataUtil.h"
 #include "../metadata/InterpreterImage.h"
 #include "../transform/Transform.h"
+#include "../transform/Hotc233TransformPolicy.h"
 
 #include "MethodBridge.h"
 #include "InterpreterUtil.h"
@@ -376,7 +377,14 @@ namespace interpreter
 		char sigName[kMaxSignatureNameLength];
 		ComputeSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
 		auto it = s_managed2natives.find(sigName);
-		return it != s_managed2natives.end() ? it->second : Managed2NativeCallByReflectionInvoke;
+		Managed2NativeCallMethod bridge = it != s_managed2natives.end() ? it->second : Managed2NativeCallByReflectionInvoke;
+#if HOTC233_ENABLE_AOT_CODE_PRETOUCH
+		// Fault-in the marshalling bridge thunk page now (transform time, before the timed first
+		// call). For struct/multi-arg signatures the interp->AOT path runs through this generic
+		// bridge, whose code page is otherwise cold on first use and costs a ~155us page fault.
+		PreTouchCodePtr((const void*)bridge);
+#endif
+		return bridge;
 	}
 
 	Managed2NativeCallMethod InterpreterModule::GetManaged2NativeMethodPointer(const metadata::ResolveStandAloneMethodSig& method)
@@ -384,7 +392,11 @@ namespace interpreter
 		char sigName[kMaxSignatureNameLength];
 		ComputeSignature(method.returnType, method.params, metadata::IsPrologHasThis(method.flags), sigName, sizeof(sigName) - 1);
 		auto it = s_managed2natives.find(sigName);
-		return it != s_managed2natives.end() ? it->second : Managed2NativeCallByReflectionInvoke;
+		Managed2NativeCallMethod bridge = it != s_managed2natives.end() ? it->second : Managed2NativeCallByReflectionInvoke;
+#if HOTC233_ENABLE_AOT_CODE_PRETOUCH
+		PreTouchCodePtr((const void*)bridge);
+#endif
+		return bridge;
 	}
 
 	Managed2NativeFunctionPointerCallMethod InterpreterModule::GetManaged2NativeFunctionPointerMethodPointer(const MethodInfo* method, Il2CppCallConvention callConvention)

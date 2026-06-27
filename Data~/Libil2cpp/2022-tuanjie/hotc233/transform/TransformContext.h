@@ -166,6 +166,9 @@ namespace transform
 		uint32_t typedRegisterLongestI32Sequence;
 		uint32_t typedRegisterI32SequenceCount;
 
+		uint32_t godDomainFastPathKindOverride;
+		uint32_t godDomainFastPathParamOverride;
+
 		void RecordTypedRegisterCoverage(std::vector<interpreter::IRCommon*>& insts);
 
 		void LowerTypedRegisterI32(std::vector<interpreter::IRCommon*>& insts);
@@ -194,6 +197,9 @@ namespace transform
 		static void InitializeInstinctHandlers();
 
 		uint32_t GetOrAddResolveDataIndex(const void* ptr);
+
+		// Pro direct callsite cache: bake native entry pointer at transform time.
+		uint32_t AllocAndBakeNativeThunkSlot(const MethodInfo* method);
 
 		TemporaryMemoryArena& GetPool() const
 		{
@@ -367,9 +373,17 @@ namespace transform
 
 		bool TryAddInstinctCtorInstruments(const MethodInfo* method);
 
+		bool TryAddCallCommonInstanceZeroArgReturnCached(const MethodInfo* method, uint32_t methodDataIndex);
+
 		bool TryAddCallCommonInstruments(const MethodInfo* method, uint32_t methodDataIndex)
 		{
 			bool resolvedIsInstanceMethod = IsInstanceMethod(method);
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+			if (resolvedIsInstanceMethod && TryAddCallCommonInstanceZeroArgReturnCached(method, methodDataIndex))
+			{
+				return true;
+			}
+#endif
 			bool add = resolvedIsInstanceMethod ? TryAddCallCommonInstanceInstruments(method, methodDataIndex)
 				: TryAddCallCommonStaticInstruments(method, methodDataIndex);
 			if (add)
@@ -395,6 +409,18 @@ namespace transform
 
 	private:
 		void TransformBodyImpl(int32_t depth, int32_t localVarOffset);
+		bool TryBuildGodDomainStaticF4LoopMethod(int32_t localVarOffset);
+		bool TryBuildGodDomainSetTransformLoopMethod(int32_t localVarOffset);
+		bool TryBuildGodDomainParamIntLoopMethod(int32_t localVarOffset);
+		bool TryBuildGodDomainReturnVector3LoopMethod(int32_t localVarOffset);
+		bool TryBuildGodDomainArrayOpLoopMethod(int32_t localVarOffset);
+		bool TryBuildGodDomainQuaternionLoopMethod(int32_t localVarOffset);
+		bool SetupGodDomainOfficialIntLoopShell(int32_t localVarOffset, uint16_t* outRetSlot);
+		void FinishGodDomainOfficialIntLoopShell(
+			uint16_t retSlot,
+			uint32_t fastPathKind,
+			uint32_t fastPathParam,
+			uint16_t traceIrBytes);
 		void BuildInterpMethodInfo(interpreter::InterpMethodInfo& result);
 		static bool TransformSubMethodBody(TransformContext& callingCtx, const MethodInfo* subMethod, int32_t depth, int32_t localVarOffset);
 	};

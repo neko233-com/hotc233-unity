@@ -6,7 +6,9 @@ namespace hotc233
 {
 namespace interpreter
 {
+#if HOTC233_ENABLE_OPCODE_PROFILER
 	bool g_opcodeProfilerEnabled = false;
+#endif
 	uint64_t g_opcodeProfilerCounts[kDynamicOpcodeProfileCapacity] = {};
 	uint64_t g_opcodeProfilerTotal = 0;
 	uint32_t g_opcodeProfilerPairKeys[kDynamicOpcodePairProfileCapacity] = {};
@@ -23,7 +25,11 @@ namespace interpreter
 
 	void SetOpcodeProfilerEnabled(bool enabled)
 	{
+#if HOTC233_ENABLE_OPCODE_PROFILER
 		g_opcodeProfilerEnabled = enabled;
+#else
+		(void)enabled; // profiler compiled out; see Instruction.h
+#endif
 	}
 
 	void RecordOpcodeProfilePair(uint32_t previousOpcode, uint32_t opcode)
@@ -1041,7 +1047,7 @@ namespace interpreter
 		12,
 		8,
 		8,
-		12,
+		16,
 		8,
 		8,
 		8,
@@ -1061,7 +1067,22 @@ namespace interpreter
 		8,
 		24,
 
-        //!!!}}INST_SIZE
+        
+		12,
+		12,
+		24,
+		24,
+		24,
+		24,
+		24,
+		16,
+		16,
+		24,
+		16,
+		24,
+		24,
+		16,
+//!!!}}INST_SIZE
     };
 }
 }

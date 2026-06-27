@@ -127,8 +127,12 @@ namespace hotc233
 			Hotc233FastPath_ClosureMulConstAddFieldI4 = 31,
 			Hotc233FastPath_StaticF4LoopTrace = 32,
 			Hotc233FastPath_InstanceVoidI4x5LoopTrace = 33,
-			// Whole-method native loop for compile-time-stable typeof/type-handle compares.
 			Hotc233FastPath_TypeOfConstAccumI4 = 34,
+			Hotc233FastPath_InstanceVoidV3x1LoopTrace = 35,
+			Hotc233FastPath_InstanceGetTransformSetV3LoopTrace = 36,
+			Hotc233FastPath_InstanceV3ReturnLoopTrace = 37,
+			Hotc233FastPath_ArrayOpLoopTrace = 38,
+			Hotc233FastPath_QuaternionOpLoopTrace = 39,
 		};
 
 		struct InterpMethodInfo
@@ -148,6 +152,7 @@ namespace hotc233
 			uint32_t evalStackBaseOffset;
 			uint32_t exClauseCount;
 			uint32_t hotc233FastPathKind;
+			uint32_t hotc233FastPathParam;
 		};
 	}
 }

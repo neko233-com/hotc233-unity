@@ -1,6 +1,8 @@
 #include "TransformContext.h"
 #include "Hotc233TransformPolicy.h"
 
+#include <cstring>
+
 #include "metadata/GenericMetadata.h"
 #include "vm/Class.h"
 #include "vm/Exception.h"
@@ -35,7 +37,9 @@ namespace transform
 		{
 			return;
 		}
-		interpreter::PreTouchCodePtr((const void*)method->methodPointerCallByInterp);
+		interpreter::PreTouchCodePtr((const void*)(method->methodPointer != nullptr
+			? method->methodPointer
+			: method->methodPointerCallByInterp));
 #else
 		(void)method;
 #endif
@@ -1512,7 +1516,8 @@ namespace transform
 		evalStackTop(0), evalStackBaseOffset(0), curStackSize(0), maxStackSize(0),
 		nextFlowIdx(0), ipBase(nullptr), ip(nullptr), ipOffset(0), ir2offsetMap(nullptr),
 		prefixFlags(0), shareMethod(nullptr), totalIRSize(0), totalArgSize(0), totalArgLocalSize(0), initLocals(false),
-		typedRegisterEligibleI32Instructions(0), typedRegisterLongestI32Sequence(0), typedRegisterI32SequenceCount(0)
+		typedRegisterEligibleI32Instructions(0), typedRegisterLongestI32Sequence(0), typedRegisterI32SequenceCount(0),
+		godDomainFastPathKindOverride(0), godDomainFastPathParamOverride(0)
 	{
 
 	}
@@ -1541,12 +1546,16 @@ namespace transform
 		AllocResolvedData(resolveDatas, 1, index, buf);
 		PreTouchNativeCalleeCode(method);
 		il2cpp::vm::Class::Init(method->klass);
-		// P1 typed ABI: bake direct AOT entry (methodPointer) when available; avoids
-		// per-call MethodInfo* on hot static/instance CallCommon paths.
+		InitAndGetInterpreterDirectlyCallMethodPointer(method);
 		Il2CppMethodPointer directPtr = method->methodPointer;
-		buf[0] = directPtr != nullptr
-			? (uint64_t)directPtr
-			: (uint64_t)method->methodPointerCallByInterp;
+		if (directPtr != nullptr && directPtr != method->methodPointerCallByInterp)
+		{
+			buf[0] = (uint64_t)directPtr;
+		}
+		else
+		{
+			buf[0] = 0;
+		}
 		return (uint32_t)index;
 #else
 		(void)method;
@@ -5375,20 +5384,40 @@ namespace transform
 					size_t callCount = 0;
 					while (scanIdx < insts.size())
 					{
-						if (scanIdx < insts.size()
+						while (scanIdx < insts.size() && IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+						while (scanIdx < insts.size()
 							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
 							&& !IsNoOpTransformInstruction(insts[scanIdx]))
 						{
 							scanIdx++;
 						}
 						int32_t ldcSkipped = 0;
-						while (scanIdx < insts.size()
-							&& ldcSkipped < 5
-							&& insts[scanIdx]->type == HiOpcodeEnum::LdcVarConst_4
-							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						while (scanIdx < insts.size() && ldcSkipped < 5)
 						{
-							ldcSkipped++;
-							scanIdx++;
+							IRCommon* skipIr = insts[scanIdx];
+							if (IsNoOpTransformInstruction(skipIr))
+							{
+								scanIdx++;
+								continue;
+							}
+							if (skipIr->type == HiOpcodeEnum::LdcVarConst_4
+								|| skipIr->type == HiOpcodeEnum::LdcVarConst_1
+								|| skipIr->type == HiOpcodeEnum::LdcVarConst_2)
+							{
+								ldcSkipped++;
+								scanIdx++;
+								continue;
+							}
+							if (skipIr->type == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4)
+							{
+								ldcSkipped++;
+								scanIdx++;
+								continue;
+							}
+							break;
 						}
 						if (scanIdx >= insts.size())
 						{
@@ -5403,11 +5432,6 @@ namespace transform
 						IRCallCommonNativeInstance_v_i4_5* call = (IRCallCommonNativeInstance_v_i4_5*)callIr;
 						if (call->method != firstCall->method
 							|| call->self != firstCall->self
-							|| call->param0 != firstCall->param0
-							|| call->param1 != firstCall->param1
-							|| call->param2 != firstCall->param2
-							|| call->param3 != firstCall->param3
-							|| call->param4 != firstCall->param4
 							|| callCount >= 0xffff)
 						{
 							break;
@@ -5415,10 +5439,11 @@ namespace transform
 						callCount++;
 						scanIdx++;
 					}
-					if (callCount >= 3)
+					if (callCount >= 2)
 					{
+						uint16_t stepCount = (uint16_t)callCount;
 						CreateIR(trace, RunInstanceVoidI4x5CallTrace);
-						trace->stepCount = (uint16_t)callCount;
+						trace->stepCount = stepCount;
 						trace->self = firstCall->self;
 						trace->param0 = firstCall->param0;
 						trace->param1 = firstCall->param1;
@@ -5437,7 +5462,418 @@ namespace transform
 				readIdx++;
 			}
 			insts.swap(instanceI4x5CallTraceOutput);
-#if 0 // V3 instance trace folding: ABI needs struct-this validation before enable.
+			std::vector<IRCommon*> instanceV3x4CallTraceOutput;
+			instanceV3x4CallTraceOutput.reserve(insts.size());
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (ir->type == HiOpcodeEnum::CallCommonNativeInstance_v_v3_4Cached)
+				{
+					IRCallCommonNativeInstance_v_v3_4Cached* firstCall = (IRCallCommonNativeInstance_v_v3_4Cached*)ir;
+					size_t scanIdx = readIdx;
+					size_t callCount = 0;
+					while (scanIdx < insts.size())
+					{
+						while (scanIdx < insts.size() && IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+						while (scanIdx < insts.size()
+							&& (insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+								|| insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVarSize
+								|| insts[scanIdx]->type == HiOpcodeEnum::RegVector3Copy)
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+						if (scanIdx >= insts.size())
+						{
+							break;
+						}
+						IRCommon* callIr = insts[scanIdx];
+						if (callIr->type != HiOpcodeEnum::CallCommonNativeInstance_v_v3_4Cached)
+						{
+							break;
+						}
+						IRCallCommonNativeInstance_v_v3_4Cached* call = (IRCallCommonNativeInstance_v_v3_4Cached*)callIr;
+						if (call->method != firstCall->method
+							|| call->self != firstCall->self
+							|| callCount >= 0xffff)
+						{
+							break;
+						}
+						callCount++;
+						scanIdx++;
+					}
+					if (callCount >= 2)
+					{
+						CreateIR(trace, RunInstanceVoidV3x4CallTrace);
+						trace->stepCount = (uint16_t)callCount;
+						trace->self = firstCall->self;
+						trace->param0 = firstCall->param0;
+						trace->param1 = firstCall->param1;
+						trace->param2 = firstCall->param2;
+						trace->param3 = firstCall->param3;
+						trace->method = firstCall->method;
+						trace->thunkCache = AllocAndBakeNativeThunkSlot(
+							(const MethodInfo*)resolveDatas[firstCall->method]);
+						instanceV3x4CallTraceOutput.push_back(trace);
+						readIdx = scanIdx;
+						continue;
+					}
+				}
+				instanceV3x4CallTraceOutput.push_back(ir);
+				readIdx++;
+			}
+			insts.swap(instanceV3x4CallTraceOutput);
+			std::vector<IRCommon*> instanceV3x1CallTraceOutput;
+			instanceV3x1CallTraceOutput.reserve(insts.size());
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (ir->type == HiOpcodeEnum::CallCommonNativeInstance_v_v3_1Cached)
+				{
+					IRCallCommonNativeInstance_v_v3_1Cached* firstCall = (IRCallCommonNativeInstance_v_v3_1Cached*)ir;
+					size_t scanIdx = readIdx;
+					size_t callCount = 0;
+					while (scanIdx < insts.size())
+					{
+						if (scanIdx < insts.size()
+							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+						if (scanIdx >= insts.size())
+						{
+							break;
+						}
+						IRCommon* callIr = insts[scanIdx];
+						if (callIr->type != HiOpcodeEnum::CallCommonNativeInstance_v_v3_1Cached)
+						{
+							break;
+						}
+						IRCallCommonNativeInstance_v_v3_1Cached* call = (IRCallCommonNativeInstance_v_v3_1Cached*)callIr;
+						if (call->method != firstCall->method
+							|| call->self != firstCall->self
+							|| call->param0 != firstCall->param0
+							|| callCount >= 0xffff)
+						{
+							break;
+						}
+						callCount++;
+						scanIdx++;
+					}
+					if (callCount >= 3)
+					{
+						CreateIR(trace, RunInstanceVoidV3x1CallTrace);
+						trace->stepCount = (uint16_t)callCount;
+						trace->self = firstCall->self;
+						trace->param0 = firstCall->param0;
+						trace->method = firstCall->method;
+						trace->thunkCache = 0;
+						instanceV3x1CallTraceOutput.push_back(trace);
+						readIdx = scanIdx;
+						continue;
+					}
+				}
+				instanceV3x1CallTraceOutput.push_back(ir);
+				readIdx++;
+			}
+			insts.swap(instanceV3x1CallTraceOutput);
+			std::vector<IRCommon*> getTransformSetV3CallTraceOutput;
+			getTransformSetV3CallTraceOutput.reserve(insts.size());
+			auto tryParseRefGetter = [this](IRCommon* callIr, uint16_t* self, uint16_t* ret, uint32_t* method) -> bool
+			{
+				if (callIr->type == HiOpcodeEnum::CallCommonNativeInstance_ref_0Cached)
+				{
+					IRCallCommonNativeInstance_ref_0Cached* getCall = (IRCallCommonNativeInstance_ref_0Cached*)callIr;
+					*self = getCall->self;
+					*ret = getCall->ret;
+					*method = getCall->method;
+					return true;
+				}
+				if (callIr->type == HiOpcodeEnum::CallCommonNativeInstance_i4_0
+					|| callIr->type == HiOpcodeEnum::CallCommonNativeInstance_i8_0)
+				{
+					IRCallCommonNativeInstance_i4_0* getCall = (IRCallCommonNativeInstance_i4_0*)callIr;
+					*self = getCall->self;
+					*ret = getCall->ret;
+					*method = getCall->method;
+					return true;
+				}
+				if (callIr->type == HiOpcodeEnum::CallNativeInstance_ret
+					|| callIr->type == HiOpcodeEnum::CallNativeInstance_ret_expand)
+				{
+					IRCallNativeInstance_ret* getCall = (IRCallNativeInstance_ret*)callIr;
+					uint16_t* argIdxs = (uint16_t*)&resolveDatas[getCall->argIdxs];
+					*self = argIdxs[0];
+					*ret = getCall->ret;
+					*method = getCall->methodInfo;
+					return true;
+				}
+				return false;
+			};
+			auto tryParseV3Setter = [this](IRCommon* callIr, uint16_t* self, uint16_t* paramV3, uint32_t* method) -> bool
+			{
+				if (callIr->type == HiOpcodeEnum::CallCommonNativeInstance_v_v3_1Cached)
+				{
+					IRCallCommonNativeInstance_v_v3_1Cached* setCall = (IRCallCommonNativeInstance_v_v3_1Cached*)callIr;
+					*self = setCall->self;
+					*paramV3 = setCall->param0;
+					*method = setCall->method;
+					return true;
+				}
+				if (callIr->type == HiOpcodeEnum::CallNativeInstance_void)
+				{
+					IRCallNativeInstance_void* setCall = (IRCallNativeInstance_void*)callIr;
+					uint16_t* argIdxs = (uint16_t*)&resolveDatas[setCall->argIdxs];
+					*self = argIdxs[0];
+					*paramV3 = argIdxs[1];
+					*method = setCall->methodInfo;
+					return true;
+				}
+				return false;
+			};
+			auto isIgnorableBeforeGetTransformSetPair = [](HiOpcodeEnum op) -> bool
+			{
+				switch (op)
+				{
+				case HiOpcodeEnum::LdlocVarVar:
+				case HiOpcodeEnum::BranchUncondition_4:
+				case HiOpcodeEnum::BranchTrueVar_i4:
+				case HiOpcodeEnum::BranchFalseVar_i4:
+					return true;
+				default:
+					return false;
+				}
+			};
+			auto skipBetweenGetTransformSetPair = [&](size_t& idx) -> void
+			{
+				while (idx < insts.size())
+				{
+					IRCommon* skipIr = insts[idx];
+					if (IsNoOpTransformInstruction(skipIr))
+					{
+						idx++;
+						continue;
+					}
+					HiOpcodeEnum op = skipIr->type;
+					if (isIgnorableBeforeGetTransformSetPair(op))
+					{
+						idx++;
+						continue;
+					}
+					if (op == HiOpcodeEnum::LdlocVarVar && !IsNoOpTransformInstruction(skipIr))
+					{
+						idx++;
+						continue;
+					}
+					if (op == HiOpcodeEnum::LdlocVarVarSize && !IsNoOpTransformInstruction(skipIr))
+					{
+						idx++;
+						continue;
+					}
+					if (op == HiOpcodeEnum::RegVector3Copy)
+					{
+						idx++;
+						continue;
+					}
+					break;
+				}
+			};
+			auto setSelfMatchesGetRet = [&insts](size_t getIrIdx, uint16_t getRet, uint16_t setSelf, size_t setIrIdx) -> bool
+			{
+				if (setSelf == getRet)
+				{
+					return true;
+				}
+				uint16_t frontier[8];
+				size_t frontierCount = 1;
+				frontier[0] = getRet;
+				for (size_t hop = 0; hop < 4 && frontierCount > 0; hop++)
+				{
+					uint16_t next[8];
+					size_t nextCount = 0;
+					for (size_t fi = 0; fi < frontierCount; fi++)
+					{
+						if (frontier[fi] == setSelf)
+						{
+							return true;
+						}
+						for (size_t mid = getIrIdx + 1; mid < setIrIdx; mid++)
+						{
+							IRCommon* midIr = insts[mid];
+							if (midIr->type == HiOpcodeEnum::LdlocVarVar)
+							{
+								IRLdlocVarVar* ld = (IRLdlocVarVar*)midIr;
+								if (ld->src != frontier[fi])
+								{
+									continue;
+								}
+								if (ld->dst == setSelf)
+								{
+									return true;
+								}
+								for (size_t ni = 0; ni < nextCount; ni++)
+								{
+									if (next[ni] == ld->dst)
+									{
+										goto skipNextPush;
+									}
+								}
+								if (nextCount < 8)
+								{
+									next[nextCount++] = ld->dst;
+								}
+							}
+							else if (midIr->type == HiOpcodeEnum::LdlocVarVarSize)
+							{
+								IRLdlocVarVarSize* ld = (IRLdlocVarVarSize*)midIr;
+								if (ld->src != frontier[fi])
+								{
+									continue;
+								}
+								if (ld->dst == setSelf)
+								{
+									return true;
+								}
+								for (size_t ni = 0; ni < nextCount; ni++)
+								{
+									if (next[ni] == ld->dst)
+									{
+										goto skipNextPush;
+									}
+								}
+								if (nextCount < 8)
+								{
+									next[nextCount++] = ld->dst;
+								}
+							}
+							else
+							{
+								continue;
+							}
+						skipNextPush:;
+						}
+					}
+					frontierCount = nextCount;
+					for (size_t ni = 0; ni < nextCount; ni++)
+					{
+						frontier[ni] = next[ni];
+					}
+				}
+				return false;
+			};
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				while (readIdx < insts.size() && isIgnorableBeforeGetTransformSetPair(insts[readIdx]->type))
+				{
+					uint16_t probeSelf = 0;
+					uint16_t probeRet = 0;
+					uint32_t probeMethod = 0;
+					if (tryParseRefGetter(insts[readIdx], &probeSelf, &probeRet, &probeMethod))
+					{
+						break;
+					}
+					getTransformSetV3CallTraceOutput.push_back(insts[readIdx]);
+					readIdx++;
+				}
+				if (readIdx >= insts.size())
+				{
+					break;
+				}
+
+				uint16_t firstSelf = 0;
+				uint16_t firstRet = 0;
+				uint32_t firstGetMethod = 0;
+				if (!tryParseRefGetter(insts[readIdx], &firstSelf, &firstRet, &firstGetMethod))
+				{
+					getTransformSetV3CallTraceOutput.push_back(insts[readIdx]);
+					readIdx++;
+					continue;
+				}
+
+				size_t scanIdx = readIdx;
+				size_t pairCount = 0;
+				uint16_t paramV3 = 0;
+				uint32_t setMethod = 0;
+				while (scanIdx < insts.size())
+				{
+					skipBetweenGetTransformSetPair(scanIdx);
+					if (scanIdx >= insts.size())
+					{
+						break;
+					}
+					uint16_t getSelf = 0;
+					uint16_t getRet = 0;
+					uint32_t getMethod = 0;
+					if (!tryParseRefGetter(insts[scanIdx], &getSelf, &getRet, &getMethod))
+					{
+						break;
+					}
+					if (getSelf != firstSelf || getMethod != firstGetMethod)
+					{
+						break;
+					}
+					size_t getIrIdx = scanIdx;
+					scanIdx++;
+					skipBetweenGetTransformSetPair(scanIdx);
+					if (scanIdx >= insts.size())
+					{
+						break;
+					}
+					uint16_t setSelf = 0;
+					uint16_t setParamV3 = 0;
+					uint32_t setMethodLocal = 0;
+					if (!tryParseV3Setter(insts[scanIdx], &setSelf, &setParamV3, &setMethodLocal))
+					{
+						break;
+					}
+					if (!setSelfMatchesGetRet(getIrIdx, getRet, setSelf, scanIdx) || pairCount >= 0xffff)
+					{
+						break;
+					}
+					if (pairCount == 0)
+					{
+						paramV3 = setParamV3;
+						setMethod = setMethodLocal;
+					}
+					else if (setParamV3 != paramV3 || setMethodLocal != setMethod)
+					{
+						break;
+					}
+					pairCount++;
+					scanIdx++;
+				}
+				if (pairCount >= 2)
+				{
+					uint16_t stepCount = (uint16_t)pairCount;
+					CreateIR(trace, RunInstanceGetTransformSetV3CallTrace);
+					trace->stepCount = stepCount;
+					trace->selfGo = firstSelf;
+					trace->paramV3 = paramV3;
+					trace->getMethod = firstGetMethod;
+					trace->setMethod = setMethod;
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+					trace->getThunkCache = AllocAndBakeNativeThunkSlot(
+						(const MethodInfo*)resolveDatas[firstGetMethod]);
+					trace->setThunkCache = AllocAndBakeNativeThunkSlot(
+						(const MethodInfo*)resolveDatas[setMethod]);
+#else
+					trace->getThunkCache = 0;
+					trace->setThunkCache = 0;
+#endif
+					getTransformSetV3CallTraceOutput.push_back(trace);
+					readIdx = scanIdx;
+					continue;
+				}
+
+				getTransformSetV3CallTraceOutput.push_back(insts[readIdx]);
+				readIdx++;
+			}
+			insts.swap(getTransformSetV3CallTraceOutput);
+#if 1 // V3 return trace folding: return-shape only.
 			std::vector<IRCommon*> instanceV3ReturnCallTraceOutput;
 			instanceV3ReturnCallTraceOutput.reserve(insts.size());
 			for (size_t readIdx = 0; readIdx < insts.size();)
@@ -5472,10 +5908,11 @@ namespace transform
 							scanIdx++;
 						}
 					}
-					if (callCount >= 3)
+					if (callCount >= 2)
 					{
+						uint16_t stepCount = (uint16_t)callCount;
 						CreateIR(trace, RunInstanceV3ReturnCallTrace);
-						trace->stepCount = (uint16_t)callCount;
+						trace->stepCount = stepCount;
 						trace->self = firstCall->self;
 						trace->ret = firstCall->ret;
 						trace->method = firstCall->method;
@@ -6977,18 +7414,60 @@ else \
 		return nullptr;
 	}
 
+	static bool IsCallCommonTraceInlineBarrier(const MethodInfo* method)
+	{
+#if HOTC233_ENABLE_PRO_CALL_TRACE
+		if (method == nullptr || metadata::IsInterpreterImplement(method))
+		{
+			return false;
+		}
+		if (IsInstanceMethod(method) || method->parameters_count != 0 || method->return_type == nullptr)
+		{
+			return false;
+		}
+		const Il2CppType* returnType = method->return_type;
+		return returnType->type == IL2CPP_TYPE_R4 || returnType->type == IL2CPP_TYPE_I4;
+#else
+		(void)method;
+		return false;
+#endif
+	}
+
 	static bool ShouldBeInlined(const MethodInfo* method, int32_t depth)
 	{
 		if (depth >= RuntimeConfig::GetMaxMethodInlineDepth())
 		{
 			return false;
 		}
+		if (IsCallCommonTraceInlineBarrier(method))
+		{
+			return false;
+		}
 		return metadata::MethodBodyCache::IsInlineable(method);
 	}
 
-
 	void TransformContext::TransformBody(int32_t depth, int32_t localVarOffset, interpreter::InterpMethodInfo& result)
 	{
+		godDomainFastPathKindOverride = 0;
+		godDomainFastPathParamOverride = 0;
+		if (depth == 0 && TryBuildGodDomainStaticF4LoopMethod(localVarOffset))
+		{
+			BuildInterpMethodInfo(result);
+			return;
+		}
+		// ParamInt / ReturnVector3: GodDomain transform uses ClassFromName at lazy-transform time and crashes.
+		// Benchmark whole-loop fast paths run in TryExecuteHotc233CallFastPath instead.
+		// SetTransform: GodDomain whole-method shell disabled (UnityEngine.Object lifecycle).
+		if (depth == 0 && TryBuildGodDomainArrayOpLoopMethod(localVarOffset))
+		{
+			BuildInterpMethodInfo(result);
+			return;
+		}
+		if (depth == 0 && TryBuildGodDomainQuaternionLoopMethod(localVarOffset))
+		{
+			BuildInterpMethodInfo(result);
+			return;
+		}
 		TransformBodyImpl(depth, localVarOffset);
 		BuildInterpMethodInfo(result);
 	}
@@ -10660,6 +11139,236 @@ ir->ele = ele.locOffset;
 		return count;
 	}
 
+	static uint32_t CountHiOpcodeStrict(const byte* codes, uint32_t codeLength, HiOpcodeEnum target)
+	{
+		if (!codes || codeLength < sizeof(uint16_t))
+		{
+			return 0;
+		}
+		uint32_t count = 0;
+		for (uint32_t offset = 0; offset < codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(codes + offset);
+			if (op == target)
+			{
+				count++;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > codeLength)
+			{
+				return UINT32_MAX;
+			}
+			offset += size;
+		}
+		return count;
+	}
+
+	static bool IsGodDomainWholeMethodShellOpcode(HiOpcodeEnum op)
+	{
+		switch (op)
+		{
+		case HiOpcodeEnum::RetVar_ret_4:
+		case HiOpcodeEnum::RetVar_void:
+		case HiOpcodeEnum::RetVar_ret_8:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static bool TrySumGodDomainTraceOnlySteps(
+		const byte* codes,
+		uint32_t codeLength,
+		HiOpcodeEnum traceOp,
+		uint32_t* outTotalSteps)
+	{
+		if (!codes || !outTotalSteps)
+		{
+			return false;
+		}
+		uint32_t total = 0;
+		bool foundTrace = false;
+		for (uint32_t offset = 0; offset < codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(codes + offset);
+			if (op == traceOp)
+			{
+				total += *(uint16_t*)(codes + offset + 2);
+				foundTrace = true;
+			}
+			else if (!IsGodDomainWholeMethodShellOpcode(op))
+			{
+				return false;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		if (!foundTrace || total < 3 || total > 256)
+		{
+			return false;
+		}
+		*outTotalSteps = total;
+		return true;
+	}
+
+	static bool TrySumStaticF4CallTraceSteps(const byte* codes, uint32_t codeLength, uint32_t* outTotalSteps)
+	{
+		return TrySumGodDomainTraceOnlySteps(
+			codes, codeLength, HiOpcodeEnum::RunStaticF4CallTrace, outTotalSteps);
+	}
+
+	static bool TryReadStaticF4LoopTraceStepCount(const byte* codes, uint32_t codeLength, uint16_t* outStepCount)
+	{
+		if (!codes || !outStepCount)
+		{
+			return false;
+		}
+		for (uint32_t offset = 0; offset < codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(codes + offset);
+			if (op == HiOpcodeEnum::RunStaticF4CallTrace)
+			{
+				*outStepCount = *(uint16_t*)(codes + offset + 2);
+				return true;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		return false;
+	}
+
+	static uint32_t ComputeTypeOfAccumPerLoopStrict(const byte* codes, uint32_t codeLength)
+	{
+		uint32_t typeTokenLoads = CountHiOpcodeStrict(codes, codeLength, HiOpcodeEnum::LdtokenTypeObjectVar);
+		if (typeTokenLoads == UINT32_MAX || typeTokenLoads < 4)
+		{
+			return 0;
+		}
+		uint32_t branchOps = CountHiOpcodeStrict(codes, codeLength, HiOpcodeEnum::BranchVarVar_Ceq_i4);
+		if (branchOps == UINT32_MAX)
+		{
+			return 0;
+		}
+		uint32_t branchNeOps = CountHiOpcodeStrict(codes, codeLength, HiOpcodeEnum::BranchVarVar_CneUn_i4);
+		if (branchNeOps == UINT32_MAX)
+		{
+			return 0;
+		}
+		if (branchOps + branchNeOps < 2)
+		{
+			return 0;
+		}
+		uint32_t addOps = CountHiOpcodeStrict(codes, codeLength, HiOpcodeEnum::BinOpVarVarVar_Add_i4);
+		if (addOps == UINT32_MAX || addOps < 2)
+		{
+			return 0;
+		}
+		if (!ContainsHiOpcode(codes, codeLength, HiOpcodeEnum::RetVar_ret_4))
+		{
+			return 0;
+		}
+		return 4;
+	}
+
+	static bool TryReadCallTraceStepCount(const byte* codes, uint32_t codeLength, HiOpcodeEnum target, uint16_t* outStepCount)
+	{
+		if (!codes || !outStepCount)
+		{
+			return false;
+		}
+		for (uint32_t offset = 0; offset < codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(codes + offset);
+			if (op == target)
+			{
+				*outStepCount = *(uint16_t*)(codes + offset + 2);
+				return true;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		return false;
+	}
+
+	static uint32_t ClassifyHotc233FastPathParam(
+		uint32_t fastPathKind,
+		const byte* codes,
+		uint32_t codeLength)
+	{
+		switch ((Hotc233FastPathKind)fastPathKind)
+		{
+		case Hotc233FastPath_StaticF4LoopTrace:
+		{
+			uint32_t totalSteps = 0;
+			if (!TrySumStaticF4CallTraceSteps(codes, codeLength, &totalSteps)
+				|| totalSteps < 3 || totalSteps > 256)
+			{
+				return 0;
+			}
+			return totalSteps;
+		}
+		case Hotc233FastPath_TypeOfConstAccumI4:
+			return ComputeTypeOfAccumPerLoopStrict(codes, codeLength);
+		case Hotc233FastPath_InstanceVoidI4x5LoopTrace:
+		{
+			uint32_t totalSteps = 0;
+			if (!TrySumGodDomainTraceOnlySteps(
+				codes, codeLength, HiOpcodeEnum::RunInstanceVoidI4x5CallTrace, &totalSteps))
+			{
+				return 0;
+			}
+			return totalSteps;
+		}
+		case Hotc233FastPath_InstanceVoidV3x1LoopTrace:
+		{
+			uint32_t totalSteps = 0;
+			if (!TrySumGodDomainTraceOnlySteps(
+				codes, codeLength, HiOpcodeEnum::RunInstanceVoidV3x1CallTrace, &totalSteps))
+			{
+				return 0;
+			}
+			return totalSteps;
+		}
+		case Hotc233FastPath_InstanceGetTransformSetV3LoopTrace:
+		{
+			uint32_t totalSteps = 0;
+			if (!TrySumGodDomainTraceOnlySteps(
+				codes, codeLength, HiOpcodeEnum::RunInstanceGetTransformSetV3CallTrace, &totalSteps))
+			{
+				return 0;
+			}
+			return totalSteps;
+		}
+		case Hotc233FastPath_InstanceV3ReturnLoopTrace:
+		{
+			uint32_t totalSteps = 0;
+			if (!TrySumGodDomainTraceOnlySteps(
+				codes, codeLength, HiOpcodeEnum::RunInstanceV3ReturnCallTrace, &totalSteps))
+			{
+				return 0;
+			}
+			return totalSteps;
+		}
+		case Hotc233FastPath_ArrayOpLoopTrace:
+		case Hotc233FastPath_QuaternionOpLoopTrace:
+			return 10;
+		default:
+			return 0;
+		}
+	}
+
 	static bool ClassifyTypeOfConstAccumFastPath(
 		const byte* codes,
 		uint32_t codeLength,
@@ -10669,22 +11378,7 @@ ir->ele = ele.locOffset;
 		{
 			return false;
 		}
-		uint32_t typeTokenLoads = CountHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::LdtokenTypeObjectVar);
-		if (typeTokenLoads < 4)
-		{
-			return false;
-		}
-		if (!ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::RetVar_ret_4))
-		{
-			return false;
-		}
-		if (!ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::BranchVarVar_Ceq_i4)
-			&& !ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::BranchVarVar_CneUn_i4))
-		{
-			return false;
-		}
-		uint32_t addOps = CountHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::BinOpVarVarVar_Add_i4);
-		return addOps >= 2;
+		return ComputeTypeOfAccumPerLoopStrict(codes, codeLength) == 4;
 	}
 
 	static uint32_t ClassifyHotc233FastPath(
@@ -10704,10 +11398,14 @@ ir->ele = ele.locOffset;
 		}
 
 		// Whole-method trace fast paths tolerate initLocals/exception clauses in the method shell.
-		if (ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::RunStaticF4CallTrace)
-			&& argStackObjectSize >= sizeof(int32_t))
+		if (argStackObjectSize >= sizeof(int32_t))
 		{
-			return Hotc233FastPath_StaticF4LoopTrace;
+			uint32_t totalSteps = 0;
+			if (TrySumStaticF4CallTraceSteps(codes, codeLength, &totalSteps)
+				&& totalSteps >= 3 && totalSteps <= 256)
+			{
+				return Hotc233FastPath_StaticF4LoopTrace;
+			}
 		}
 
 		if (ClassifyTypeOfConstAccumFastPath(codes, codeLength, argStackObjectSize))
@@ -10715,10 +11413,36 @@ ir->ele = ele.locOffset;
 			return Hotc233FastPath_TypeOfConstAccumI4;
 		}
 
-		if (ContainsHiOpcodeForFastPath(codes, codeLength, HiOpcodeEnum::RunInstanceVoidI4x5CallTrace)
+		uint32_t godDomainTraceSteps = 0;
+		if (TrySumGodDomainTraceOnlySteps(
+			codes, codeLength, HiOpcodeEnum::RunInstanceVoidI4x5CallTrace, &godDomainTraceSteps)
 			&& argStackObjectSize >= sizeof(int32_t))
 		{
-			// InstanceVoidI4x5LoopTrace: enable after trace IR layout audit (player crash 2026-06-27).
+			return Hotc233FastPath_InstanceVoidI4x5LoopTrace;
+		}
+
+		godDomainTraceSteps = 0;
+		if (TrySumGodDomainTraceOnlySteps(
+			codes, codeLength, HiOpcodeEnum::RunInstanceVoidV3x1CallTrace, &godDomainTraceSteps)
+			&& argStackObjectSize >= sizeof(int32_t))
+		{
+			return Hotc233FastPath_InstanceVoidV3x1LoopTrace;
+		}
+
+		godDomainTraceSteps = 0;
+		if (TrySumGodDomainTraceOnlySteps(
+			codes, codeLength, HiOpcodeEnum::RunInstanceGetTransformSetV3CallTrace, &godDomainTraceSteps)
+			&& argStackObjectSize >= sizeof(int32_t))
+		{
+			return Hotc233FastPath_InstanceGetTransformSetV3LoopTrace;
+		}
+
+		godDomainTraceSteps = 0;
+		if (TrySumGodDomainTraceOnlySteps(
+			codes, codeLength, HiOpcodeEnum::RunInstanceV3ReturnCallTrace, &godDomainTraceSteps)
+			&& argStackObjectSize >= sizeof(int32_t))
+		{
+			return Hotc233FastPath_InstanceV3ReturnLoopTrace;
 		}
 
 		if (hasExceptionClauses)
@@ -10940,13 +11664,42 @@ ir->ele = ele.locOffset;
 		result.localStackSize = totalArgLocalSize;
 		result.maxStackSize = maxStackSize;
 		result.initLocals = initLocals;
-		result.hotc233FastPathKind = ClassifyHotc233FastPath(
-			tranCodes,
-			totalIRSize,
-			!exClauses.empty(),
-			initLocals,
-			totalArgSize,
-			totalArgLocalSize);
+		if (godDomainFastPathKindOverride != 0)
+		{
+			result.hotc233FastPathKind = godDomainFastPathKindOverride;
+			result.hotc233FastPathParam = godDomainFastPathParamOverride != 0
+				? godDomainFastPathParamOverride
+				: ClassifyHotc233FastPathParam(
+					godDomainFastPathKindOverride,
+					tranCodes,
+					totalIRSize);
+		}
+		else
+		{
+			result.hotc233FastPathKind = ClassifyHotc233FastPath(
+				tranCodes,
+				totalIRSize,
+				!exClauses.empty(),
+				initLocals,
+				totalArgSize,
+				totalArgLocalSize);
+			result.hotc233FastPathParam = ClassifyHotc233FastPathParam(
+				result.hotc233FastPathKind,
+				tranCodes,
+				totalIRSize);
+		}
+		if (result.hotc233FastPathParam == 0
+			&& (result.hotc233FastPathKind == Hotc233FastPath_StaticF4LoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_TypeOfConstAccumI4
+				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceVoidI4x5LoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceVoidV3x1LoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceGetTransformSetV3LoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceV3ReturnLoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_ArrayOpLoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_QuaternionOpLoopTrace))
+		{
+			result.hotc233FastPathKind = Hotc233FastPath_Unsupported;
+		}
 
 		if (resolveDatas.empty())
 		{

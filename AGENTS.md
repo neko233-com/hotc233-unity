@@ -9,6 +9,87 @@
 - 项目侧不要求像 HybridCLR 一样执行外部 install 流程；只允许“同步内置运行时到本地工作目录”。
 - 用户可见文案使用“内置运行时”“同步”“就绪”，避免使用“安装 HybridCLR”“Install HybridCLR”等语义。
 
+## 落地顺序（2026-06-27 起）
+
+**先商业、后性能。** Pro 对标分两条轨：
+
+1. **商业轨（P0）**：`pro-landing-matrix.json` 中 Hotfix/热重载/加固/访问控制/Assembly 缓存/栈诊断等 — 有/无能力，默认 CI 必须绿。
+2. **性能轨（P1+）**：**专用 transform + whole-method bypass**（见 `benchmark-docs/god-domain-architecture.md`）；**禁止** dispatch/M2N 桥接微优化替代专用 IR。
+
+**200% 规则**：同机 14 条 base 任一行 `hotc233PercentOfHybridClr < 50%` → 架构方向错误，换桶，禁止继续细节优化。
+
+## 架构与性能（商业 P0 落地后再推进，2026-06-27 起）
+
+**GodDomain（专用架构）**：性能主路径不是「把通用 opcode dispatch 做快」，而是 **识别热形状 → 专用 transform → whole-method bypass → 不进 14k 行 switch 循环**。权威说明：`benchmark-docs/god-domain-architecture.md`。旧 dispatch/M2N 桥接路线已归档：`benchmark-docs/archive/generic-dispatch-bridge-retired.md`。
+
+**死而后立**：通用 dispatch 微优化、M2N 桥接热路径、在错误 IR 上修 interp fallback，**永久不得**作为 P1 工作。RegI32 lowering、`PRO_EXPERIMENTAL_TRANSFORM`、threaded dispatch、全局 copy propagation 等同理 **永久废弃**。
+
+### 唯一目标
+
+- Unity/Tuanjie 热更必须能跑、必须稳定；在此前提下 **14 条官方 base 每一行都必须有专用 transform + 专用 execute 入口**（或 Instinct/trace 等价物），全面领先社区版并追平 Pro 纯解释器。
+- **专用验收铁律**：同方法专用路径必须 **快于** 通用 dispatch；否则删除该专用实现（假专用）。
+- 性能是架构取舍的第一约束。禁止「先通用 lowering 跑通，再在 Execute 里桥接优化」。
+
+### 唯一生产路径
+
+| 层级 | 要求 |
+|---|---|
+| Loader | 仅 `RuntimeFast`；其它 profile 只作兼容别名 |
+| Transform | **`TryBuildGodDomain*` 优先** → Instinct / CallCommon*Cached / trace fold → 最后才 `TransformBodyImpl`（冷路径） |
+| Execute | **`TryExecuteHotc233FastPath` 优先** → 仅未识别方法进通用解释循环（**不作 P1 优化对象**） |
+| Callsite | transform 期 `AllocAndBakeNativeThunkSlot(methodPointer)`；禁止 M2N `argIdxs` 占 14 base 热路径 |
+| 元数据 | FGS + 元数据优化 + Assembly 缓存 |
+| 竞品 | 只对标 HybridCLR Pro **纯解释器**；**禁止 DHE** |
+
+### 架构实施顺序（不得跳步）
+
+0. **商业 P0**：Hotfix、热重载、加固等 — `validate-reports` 默认门禁。
+1. **14 base 专用 builder**：每行 opcode profile 必须出现 trace/instinct/fastPathKind，不得满屏通用 dispatch opcode。
+2. **Instinct 表完整移植**：`TransformContext_Instinct.cpp` 对齐 HybridCLR 社区注册表并扩展 Unity API。
+3. **Typed ABI（V3/Quaternion）**：struct-by-value direct invoker，禁止 SetTransform/ParamVector3 走 M2N。
+4. **冷路径维护**：通用解释循环仅保正确性；**禁止** threaded dispatch / profiler / 单 case 微优化堆在 switch 上。
+
+### 禁止项（代理/CI/人工均不得引入）
+
+- 以优化 `Interpreter_Execute` 通用 switch 当作 Pro 路线（含 threaded dispatch、热路径 profiler）。
+- 在无 `RunStatic*CallTrace` / 无 `fastPathKind` 时提交 execute 层 Cached/thunk/fallback「优化」。
+- M2N `CallNativeStatic_ret` / `CallNativeInstance_void` 出现在 CallAOTStatic / SetTransform / ParamInt 等 profile。
+- 实验 transform 默认开启；demo business 探针、flywheel 充当性能结论。
+- 专用比通用 dispatch 还慢仍保留。
+
+细则：`benchmark-docs/god-domain-architecture.md`、`benchmark-docs/comparison-policy.md`、`benchmark-docs/pro-mechanism-landing.md`、`docs/pro-wrong-answer-notebook.md`（WA-009）。
+
+## HybridCLR Pro 优化参考（权威，勿改）
+
+本节是 **HybridCLR Pro 纯解释器** 的已验证落地 playbook（作者在同路线做出 Pro 的机制归纳）。后续代理 **只许按此实施**，不得再改写成「通用 dispatch 微优化」路线。
+
+**L1 未全绿前禁止 Pro 宣传**；L1 全绿后再按 `docs/pro-landing-matrix.json` 的 Dominance 目标压 Pro 估算。
+
+### 六域机制（对应 `benchmark-docs/pro-mechanism-landing.md`）
+
+| 章 | Pro 机制 | hotc233 等价 | 禁止替代 |
+|---|---|---|---|
+| §一 | 栈式→寄存器 IR / 超级指令 | GodDomain trace opcode + whole-method bypass | 全局 RegI32 / threaded dispatch |
+| §二 | 热更→AOT 直调 / ref-getter / typed struct ABI | `CallCommon*Cached` + `AllocAndBakeNativeThunkSlot` + `TryExecuteHotc233FastPath` | M2N `CallNativeInstance_*` 占热路径 |
+| §三 | FGS / 元数据裁剪 / token 缓存 | 内置 il2cpp + `enableFullGenericSharing` + stripper | 外部 HybridCLR install |
+| §四 | DHE 差分混合 | **非目标**（纯解释器对标） | 首包 AOT 预置热更代码 |
+| §五 | Transform 常量折叠 / peephole | `ApplyCommunityPeepholeFusion` + GodDomain IL 扫描 | 无专用 IR 的 execute 补丁 |
+| §六 | EH / async / 静态字段直址 | 沿用 HybridCLR 形态 + Instinct 扩展 | — |
+
+### 超越 Pro 的落地顺序（L1 弱项优先）
+
+1. **SetTransform（2.8%）** — `RunInstanceGetTransformSetV3CallTrace` 必须 fire；ref-getter **Cached ABI + 双 thunk**（§二）。
+2. **Quaternion（15.4%）** — Q4 struct return **typed trace**（§二）；ret-only shell + native Unity 调用链 bypass。
+3. **ParamInt（84%）** — 循环内 `RunInstanceVoidI4x5CallTrace` + **direct thunk**（§二）；GodDomain shell `selfOff=0`。
+4. **ArrayOp / ReturnVector3（91–97%）** — typed array / v3 return trace（§一/§五）。
+5. **L1 全绿后** — 按 `pro-landing-matrix.json` Dominance（`typeof` 1000%、`CallAOTStatic` 500% 等）逐项压 Pro 估算。
+
+### 诊断口径
+
+- 弱项先 **opcode profile（profiler ON，仅诊断）** 确认 transform 是否生成目标 trace / `fastPathKind`。
+- **L1 验收表** 必须 profiler **OFF**（见 `benchmark-docs/reporting-requirements.md`）。
+- 假专用（专用比通用 dispatch 慢）必须删除，不得保留。
+
 ## 内置运行时规范
 
 - 包内运行时目录：`Assets/neko233/hotc233-unity/Data~/Libil2cpp/2022-tuanjie`。
@@ -60,9 +141,10 @@
 - `comparison-report.json`：本项目 HybridCLR 基线矩阵对比。
 - `feature-report.md`：中文功能矩阵。
 - `platform-matrix-report.json`：平台构建/验证矩阵。
-- **性能对标归档（权威）**：`benchmark-docs/results/latest-hotc-vs-hybridclr.json` / `.md`。
-- 宿主 `Assets/EditorForBuild/Generated/` 仅作当次运行临时产物；结论必须同步到 `benchmark-docs/results/`。
+- **性能对标归档（权威）**：`benchmark-docs/性能报告.md`（人类可读全量 14 行表）；`benchmark-docs/results/latest-hotc-vs-hybridclr.json`（机器可读）。
+- 宿主 `Assets/EditorForBuild/Generated/` 仅作当次运行临时产物；结论必须同步到 `benchmark-docs/性能报告.md` 与 `benchmark-docs/results/`。
 - 所有菜单、MCP 工具、日志需要输出报告绝对路径或 `benchmark-docs/README.md`。
+- **性能汇报**：每次 benchmark 后必须输出 **14 条 base 全量三列对比表**（hotc / 社区 / Pro 估算），并声明 **opcode profiler 开/关**（默认关；见 `benchmark-docs/reporting-requirements.md`）。
 
 ## 性能对标规范（2026-06-27 起）
 
@@ -87,13 +169,13 @@
 
 ## RuntimeFast 与 minigame 健康检查
 
-- `HotUpdateBinaryLoader` 默认 profile 必须是 `RuntimeFast`；`RuntimeOptions` 只作为兼容别名。
+- `HotUpdateBinaryLoader` 默认且唯一生产 profile 为 `RuntimeFast`；`RuntimeOptions` 与其它 profile 名只作兼容别名，**不得**在热路径增加更慢分支。
 - **WebGL 性能验收**走 `benchmark-docs/methodology.md` 中的 `hotc233ctl benchmark`；必须生成并归档 `benchmark-docs/results/latest-hotc-vs-hybridclr.*`。
 - 微信小游戏/minigame(WebGL2) 热更必须关闭 `weixinMiniGameUseSlimMetaFileFormat` 和全部 `m_SlimFeaturesWeixinMiniGame`。
 - 只读报告守门：`go run ./hotc233ctl validate-reports -project <demo>`；`HOTC233_ENFORCE_BEAT_COMMUNITY=1` 启用 L1（全面超越社区版）。
-- 修改解释器 opcode 时，必须同步 `Instruction.h`、`Instruction.cpp`、`Interpreter_Execute.cpp`、transform 选择逻辑和宿主 `hotc233ctl validate-reports` 的指令表守门；RuntimeFast 热路径至少覆盖 `System.Math.Min/Max` signed int/long intrinsic 和 20/24/28/32 字节无引用 struct array store。
-- 超越 HybridCLR 专业版纯解释器的路线必须按稳定性优先推进：SSA、常量折叠、热路径 profiling、多核增量编译、低/无 GC 生成都需要先通过 WebGL/PC 回归和性能表，再扩大平台范围。
-- 修改 loader、性能菜单、AssetLib233/minigame 对接、报告字段或配置导入器时，同步更新 README、宿主 demo 文档、AGENTS 和 CI 守门。
+- 修改解释器 opcode 时，必须同步 `Instruction.h`、`Instruction.cpp`、`Interpreter_Execute.cpp`、transform 选择逻辑和宿主 `hotc233ctl validate-reports` 的指令表守门；**P1 只允许改专用 transform / `TryExecuteHotc233FastPath`**，禁止以优化通用 dispatch switch 充当性能工作。
+- **禁止**为开发便利在 release 解释器保留 profiler、多 dispatch 模式或实验 opcode；SSA/多核编译等仅能在 L1 全绿且 callsite 架构落地后再立项。
+- 修改 loader、解释器、transform 策略、报告字段或配置导入器时，同步更新 `benchmark-docs/`、两份 `AGENTS.md` 和 CI 守门。
 
 ## 包结构与复制接入
 

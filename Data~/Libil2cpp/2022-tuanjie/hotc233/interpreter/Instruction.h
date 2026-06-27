@@ -22,7 +22,22 @@ namespace interpreter
 	constexpr uint32_t kDynamicOpcodeProfileCapacity = 2048;
 	constexpr uint32_t kDynamicOpcodePairProfileCapacity = 8192;
 	constexpr uint32_t kDynamicOpcodeProfileInvalidOpcode = 0xffffffffu;
+
+	// Opcode profiler is a diagnostics-only tool (WebGL `-hotc233-opcode-profile`).
+	// It is OFF by default so the hottest interpreter dispatch loop carries zero
+	// per-opcode instrumentation: when disabled g_opcodeProfilerEnabled is a
+	// compile-time `false`, so every `if (g_opcodeProfilerEnabled)` site (main loop +
+	// threaded-dispatch chains) is dead-code-eliminated and the dispatch keeps ip/
+	// localVarBase/imi in registers. Build with -DHOTC233_ENABLE_OPCODE_PROFILER=1
+	// (or define it before this header) only for profiling builds.
+#ifndef HOTC233_ENABLE_OPCODE_PROFILER
+#define HOTC233_ENABLE_OPCODE_PROFILER 0
+#endif
+#if HOTC233_ENABLE_OPCODE_PROFILER
 	extern bool g_opcodeProfilerEnabled;
+#else
+	constexpr bool g_opcodeProfilerEnabled = false;
+#endif
 	extern uint64_t g_opcodeProfilerCounts[kDynamicOpcodeProfileCapacity];
 	extern uint64_t g_opcodeProfilerTotal;
 	extern uint32_t g_opcodeProfilerPairKeys[kDynamicOpcodePairProfileCapacity];
@@ -1044,6 +1059,20 @@ namespace interpreter
 		RunRegVector3AddTrace,
 		RegVector3SqrMag,
 		CallCommonNativeInstance_v_i4_5,
+		CallCommonNativeStatic_f4_0Cached,
+		CallCommonNativeStatic_v3_0Cached,
+		CallCommonNativeInstance_v_i4_5Cached,
+		CallCommonNativeInstance_v_v3_1Cached,
+		CallCommonNativeInstance_v_v3_2Cached,
+		CallCommonNativeInstance_v_v3_3Cached,
+		CallCommonNativeInstance_v_v3_4Cached,
+		CallCommonNativeInstance_v3_0Cached,
+		CallCommonNativeInstance_ref_0Cached,
+		RunInstanceVoidI4x5CallTrace,
+		RunInstanceVoidV3x1CallTrace,
+		RunInstanceVoidV3x4CallTrace,
+		RunInstanceGetTransformSetV3CallTrace,
+		RunInstanceV3ReturnCallTrace,
 
 		//!!!}}OPCODE
 	};
@@ -12184,6 +12213,7 @@ namespace interpreter
 		uint16_t stepCount;
 		uint32_t traceData;
 		uint32_t method;
+		uint32_t thunkCache;
 	};
 
 	struct IRRegI32Copy : IRCommon
@@ -12246,6 +12276,151 @@ namespace interpreter
 
 	struct IRCallCommonNativeStatic_i4_0Cached : IRCommon
 	{
+		uint16_t ret;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeStatic_f4_0Cached : IRCommon
+	{
+		uint16_t ret;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeStatic_v3_0Cached : IRCommon
+	{
+		uint16_t ret;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeInstance_v_i4_5Cached : IRCommon
+	{
+		uint16_t self;
+		uint16_t param0;
+		uint16_t param1;
+		uint16_t param2;
+		uint16_t param3;
+		uint16_t param4;
+		uint16_t __pad14;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeInstance_v_v3_1Cached : IRCommon
+	{
+		uint16_t self;
+		uint16_t param0;
+		uint16_t __pad6;
+		uint16_t __pad8;
+		uint16_t __pad10;
+		uint16_t __pad12;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeInstance_v_v3_2Cached : IRCommon
+	{
+		uint16_t self;
+		uint16_t param0;
+		uint16_t param1;
+		uint16_t __pad8;
+		uint16_t __pad10;
+		uint16_t __pad12;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeInstance_v_v3_3Cached : IRCommon
+	{
+		uint16_t self;
+		uint16_t param0;
+		uint16_t param1;
+		uint16_t param2;
+		uint16_t __pad10;
+		uint16_t __pad12;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeInstance_v_v3_4Cached : IRCommon
+	{
+		uint16_t self;
+		uint16_t param0;
+		uint16_t param1;
+		uint16_t param2;
+		uint16_t param3;
+		uint16_t __pad14;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeInstance_v3_0Cached : IRCommon
+	{
+		uint16_t self;
+		uint16_t ret;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRCallCommonNativeInstance_ref_0Cached : IRCommon
+	{
+		uint16_t self;
+		uint16_t ret;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRRunInstanceVoidI4x5CallTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint16_t self;
+		uint16_t param0;
+		uint16_t param1;
+		uint16_t param2;
+		uint16_t param3;
+		uint16_t param4;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRRunInstanceVoidV3x1CallTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint16_t self;
+		uint16_t param0;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRRunInstanceVoidV3x4CallTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint16_t self;
+		uint16_t param0;
+		uint16_t param1;
+		uint16_t param2;
+		uint16_t param3;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRRunInstanceGetTransformSetV3CallTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint16_t selfGo;
+		uint16_t paramV3;
+		uint32_t getMethod;
+		uint32_t setMethod;
+		uint32_t getThunkCache;
+		uint32_t setThunkCache;
+	};
+
+	struct IRRunInstanceV3ReturnCallTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint16_t self;
 		uint16_t ret;
 		uint32_t method;
 		uint32_t thunkCache;

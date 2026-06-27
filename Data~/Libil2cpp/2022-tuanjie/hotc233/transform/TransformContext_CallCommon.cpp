@@ -1,4 +1,5 @@
 #include "TransformContext.h"
+#include "Hotc233TransformPolicy.h"
 
 #include "../interpreter/MethodBridge.h"
 
@@ -19,6 +20,7 @@ namespace transform
 		R8,
 		I,
 		U,
+		V3,
 		STRUCT,
 		NOT_SUPPORT,
 	};
@@ -32,6 +34,15 @@ namespace transform
 
 	static ArgCommonType ComputValueTypeArgCommonType(const Il2CppClass* klass)
 	{
+		if (klass
+			&& klass->namespaze
+			&& klass->name
+			&& std::strcmp(klass->namespaze, "UnityEngine") == 0
+			&& std::strcmp(klass->name, "Vector3") == 0
+			&& il2cpp::vm::Class::GetValueSize(const_cast<Il2CppClass*>(klass), nullptr) == 12)
+		{
+			return ArgCommonType::V3;
+		}
 		return ArgCommonType::STRUCT;
 	}
 
@@ -71,12 +82,14 @@ namespace transform
 		case IL2CPP_TYPE_FNPTR:
 		case IL2CPP_TYPE_PTR:
 		case IL2CPP_TYPE_BYREF:
+			return NATIVE_INT_COMMON_TYPE;
 		case IL2CPP_TYPE_STRING:
 		case IL2CPP_TYPE_ARRAY:
 		case IL2CPP_TYPE_SZARRAY:
 		case IL2CPP_TYPE_OBJECT:
 		case IL2CPP_TYPE_CLASS:
-			return NATIVE_INT_COMMON_TYPE;
+			// Ref/object returns must use CallNativeInstance_ret + invoker, not i4/i8 CallCommon.
+			return ArgCommonType::NOT_SUPPORT;
 		case IL2CPP_TYPE_TYPEDBYREF:
 			return ArgCommonType::NOT_SUPPORT;
 		case IL2CPP_TYPE_VALUETYPE:
@@ -136,6 +149,54 @@ namespace transform
 
 	constexpr int MAX_COMMON_PARAM_NUM = 4;
 
+	bool TransformContext::TryAddCallCommonInstanceZeroArgReturnCached(const MethodInfo* method, uint32_t methodDataIndex)
+	{
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+		if (!IsInstanceMethod(method) || method->parameters_count != 0 || method->return_type == nullptr)
+		{
+			return false;
+		}
+		const Il2CppType* rt = method->return_type;
+		ArgCommonType actRet = ComputArgCommonType(rt);
+		bool isRef = rt->type == IL2CPP_TYPE_CLASS
+			|| rt->type == IL2CPP_TYPE_OBJECT
+			|| rt->type == IL2CPP_TYPE_STRING
+			|| rt->type == IL2CPP_TYPE_ARRAY
+			|| rt->type == IL2CPP_TYPE_SZARRAY;
+		bool isV3 = actRet == ArgCommonType::V3;
+		if (!isRef && !isV3)
+		{
+			return false;
+		}
+		int32_t callArgEvalStackIdxBase = evalStackTop - 1;
+		uint16_t selfOff = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase);
+		PopStackN(1);
+		PushStackByType(method->return_type);
+		uint16_t retOff = (uint16_t)GetEvalStackTopOffset();
+		if (isRef)
+		{
+			CreateAddIR(ir, CallCommonNativeInstance_ref_0Cached);
+			((IRCallCommonNativeInstance_ref_0Cached*)ir)->method = methodDataIndex;
+			((IRCallCommonNativeInstance_ref_0Cached*)ir)->self = selfOff;
+			((IRCallCommonNativeInstance_ref_0Cached*)ir)->ret = retOff;
+			((IRCallCommonNativeInstance_ref_0Cached*)ir)->thunkCache = AllocAndBakeNativeThunkSlot(method);
+		}
+		else
+		{
+			CreateAddIR(ir, CallCommonNativeInstance_v3_0Cached);
+			((IRCallCommonNativeInstance_v3_0Cached*)ir)->method = methodDataIndex;
+			((IRCallCommonNativeInstance_v3_0Cached*)ir)->self = selfOff;
+			((IRCallCommonNativeInstance_v3_0Cached*)ir)->ret = retOff;
+			((IRCallCommonNativeInstance_v3_0Cached*)ir)->thunkCache = AllocAndBakeNativeThunkSlot(method);
+		}
+		return true;
+#else
+		(void)method;
+		(void)methodDataIndex;
+		return false;
+#endif
+	}
+
 	bool TransformContext::TryAddCallCommonInstanceInstruments(const MethodInfo* method, uint32_t methodDataIndex)
 	{
 		const Il2CppType* returnType = method->return_type;
@@ -159,6 +220,13 @@ namespace transform
 				ir->self = argBaseOffset;
 				return true;
 			}
+
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+			if (actRet == ArgCommonType::V3)
+			{
+				return false;
+			}
+#endif
 
 			CreateAddIR(ir, CallCommonNativeInstance_i1_0);
 			ir->method = methodDataIndex;
@@ -278,6 +346,17 @@ default: return false;\
 			{
 				if (paramCount == 5)
 				{
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+					CreateAddIR(ir, CallCommonNativeInstance_v_i4_5Cached);
+					ir->method = methodDataIndex;
+					ir->self = argBaseOffset;
+					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
+					ir->param1 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 2);
+					ir->param2 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 3);
+					ir->param3 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 4);
+					ir->param4 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 5);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+#else
 					CreateAddIR(ir, CallCommonNativeInstance_v_i4_5);
 					ir->method = methodDataIndex;
 					ir->self = argBaseOffset;
@@ -286,6 +365,7 @@ default: return false;\
 					ir->param2 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 3);
 					ir->param3 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 4);
 					ir->param4 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 5);
+#endif
 					return true;
 				}
 				SWITCH_INSTANCE_VOID(i4, paramCount);
@@ -305,6 +385,60 @@ default: return false;\
 			{
 				SWITCH_INSTANCE_VOID(f8, paramCount);
 				break;
+			}
+			case hotc233::transform::ArgCommonType::V3:
+			{
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+				switch (paramCount)
+				{
+				case 1:
+				{
+					CreateAddIR(ir, CallCommonNativeInstance_v_v3_1Cached);
+					ir->method = methodDataIndex;
+					ir->self = argBaseOffset;
+					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					return true;
+				}
+				case 2:
+				{
+					CreateAddIR(ir, CallCommonNativeInstance_v_v3_2Cached);
+					ir->method = methodDataIndex;
+					ir->self = argBaseOffset;
+					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
+					ir->param1 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 2);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					return true;
+				}
+				case 3:
+				{
+					CreateAddIR(ir, CallCommonNativeInstance_v_v3_3Cached);
+					ir->method = methodDataIndex;
+					ir->self = argBaseOffset;
+					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
+					ir->param1 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 2);
+					ir->param2 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 3);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					return true;
+				}
+				case 4:
+				{
+					CreateAddIR(ir, CallCommonNativeInstance_v_v3_4Cached);
+					ir->method = methodDataIndex;
+					ir->self = argBaseOffset;
+					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
+					ir->param1 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 2);
+					ir->param2 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 3);
+					ir->param3 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 4);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					return true;
+				}
+				default:
+					return false;
+				}
+#else
+				return false;
+#endif
 			}
 			default:
 				return false;
@@ -440,6 +574,33 @@ default:\
 				CreateAddIR(ir, CallCommonNativeStatic_v_0);
 				ir->method = methodDataIndex;
 				return true;
+			}
+
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+			if (actRet == ArgCommonType::I4)
+			{
+				CreateAddIR(ir, CallCommonNativeStatic_i4_0Cached);
+				ir->method = methodDataIndex;
+				ir->ret = argBaseOffset;
+				ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+				return true;
+			}
+#endif
+
+#if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
+			if (actRet == ArgCommonType::R4)
+			{
+				CreateAddIR(ir, CallCommonNativeStatic_f4_0Cached);
+				ir->method = methodDataIndex;
+				ir->ret = argBaseOffset;
+				ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+				return true;
+			}
+#endif
+
+			if (actRet == ArgCommonType::V3)
+			{
+				return false;
 			}
 
 			CreateAddIR(ir, CallCommonNativeStatic_i1_0);

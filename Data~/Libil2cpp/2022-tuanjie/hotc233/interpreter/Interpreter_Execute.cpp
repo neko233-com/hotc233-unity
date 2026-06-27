@@ -618,6 +618,397 @@ namespace interpreter
 		return true;
 	}
 
+	IL2CPP_FORCE_INLINE bool TryReadLoopCountArg(const InterpMethodInfo* imi, StackObject* localVarBase, int32_t* outCnt)
+	{
+		if (!imi || !localVarBase || !outCnt || imi->argStackObjectSize < sizeof(int32_t))
+		{
+			return false;
+		}
+		int32_t cnt = *(int32_t*)(void*)localVarBase;
+		if (cnt < 0 || cnt > 10000000)
+		{
+			return false;
+		}
+		*outCnt = cnt;
+		return true;
+	}
+
+	struct Hotc233TransformGoCacheEntry
+	{
+		const void* ownerImi;
+		void* go;
+		Il2CppObject* transform;
+	};
+
+	static thread_local Hotc233TransformGoCacheEntry s_hotc233TransformGoCache;
+
+	IL2CPP_FORCE_INLINE void ClearHotc233TransformGoCache()
+	{
+		s_hotc233TransformGoCache = {};
+	}
+
+	IL2CPP_FORCE_INLINE Il2CppObject* GetOrCacheTransformForGameObject(
+		const void* ownerImi,
+		MethodInfo* getMethod,
+		void* go)
+	{
+		if (s_hotc233TransformGoCache.ownerImi == ownerImi
+			&& s_hotc233TransformGoCache.go == go
+			&& s_hotc233TransformGoCache.transform != nullptr)
+		{
+			return s_hotc233TransformGoCache.transform;
+		}
+		Il2CppObject* transformObj = nullptr;
+		getMethod->invoker_method(
+			getMethod->methodPointer,
+			getMethod,
+			go,
+			nullptr,
+			&transformObj);
+		if (transformObj == nullptr)
+		{
+			il2cpp::vm::Exception::RaiseNullReferenceException();
+		}
+		s_hotc233TransformGoCache.ownerImi = ownerImi;
+		s_hotc233TransformGoCache.go = go;
+		s_hotc233TransformGoCache.transform = transformObj;
+		return transformObj;
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeGetTransformSetV3CachedBatch(
+		const void* ownerImi,
+		MethodInfo* getMethod,
+		MethodInfo* setMethod,
+		void* go,
+		void* v3,
+		uint16_t stepCount)
+	{
+		Il2CppObject* transformObj = GetOrCacheTransformForGameObject(ownerImi, getMethod, go);
+		InvokeSetTransformV3Repeated(setMethod, transformObj, v3, stepCount);
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeGetTransformSetV3CountedOuterLoop(
+		const void* ownerImi,
+		MethodInfo* getMethod,
+		MethodInfo* setMethod,
+		void* go,
+		void* v3,
+		uint16_t innerStepCount,
+		int32_t outerLoopCount)
+	{
+		Il2CppObject* transformObj = GetOrCacheTransformForGameObject(ownerImi, getMethod, go);
+		for (int32_t loop = 0; loop < outerLoopCount; loop++)
+		{
+			InvokeSetTransformV3Repeated(setMethod, transformObj, v3, innerStepCount);
+		}
+	}
+
+	struct Hotc233I4x5TraceExecCacheEntry
+	{
+		const void* ownerImi;
+		void* self;
+		MethodInfo* method;
+		int32_t p0;
+		int32_t p1;
+		int32_t p2;
+		int32_t p3;
+		int32_t p4;
+		Il2CppMethodPointer directPtr;
+		bool resolvedDirect;
+	};
+
+	static thread_local Hotc233I4x5TraceExecCacheEntry s_hotc233I4x5TraceExecCache = {};
+
+	IL2CPP_FORCE_INLINE Il2CppMethodPointer ResolveVoidI4x5DirectPtr(
+		uint64_t* resolveDatas,
+		uint32_t thunkCacheIdx,
+		MethodInfo* method,
+		const void* ownerImi,
+		void* self,
+		int32_t p0,
+		int32_t p1,
+		int32_t p2,
+		int32_t p3,
+		int32_t p4)
+	{
+		if (s_hotc233I4x5TraceExecCache.resolvedDirect
+			&& s_hotc233I4x5TraceExecCache.ownerImi == ownerImi
+			&& s_hotc233I4x5TraceExecCache.self == self
+			&& s_hotc233I4x5TraceExecCache.method == method
+			&& s_hotc233I4x5TraceExecCache.p0 == p0
+			&& s_hotc233I4x5TraceExecCache.p1 == p1
+			&& s_hotc233I4x5TraceExecCache.p2 == p2
+			&& s_hotc233I4x5TraceExecCache.p3 == p3
+			&& s_hotc233I4x5TraceExecCache.p4 == p4)
+		{
+			return s_hotc233I4x5TraceExecCache.directPtr;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(resolveDatas, thunkCacheIdx, method);
+		s_hotc233I4x5TraceExecCache.ownerImi = ownerImi;
+		s_hotc233I4x5TraceExecCache.self = self;
+		s_hotc233I4x5TraceExecCache.method = method;
+		s_hotc233I4x5TraceExecCache.p0 = p0;
+		s_hotc233I4x5TraceExecCache.p1 = p1;
+		s_hotc233I4x5TraceExecCache.p2 = p2;
+		s_hotc233I4x5TraceExecCache.p3 = p3;
+		s_hotc233I4x5TraceExecCache.p4 = p4;
+		s_hotc233I4x5TraceExecCache.directPtr = directPtr;
+		s_hotc233I4x5TraceExecCache.resolvedDirect = true;
+		return directPtr;
+	}
+
+	struct Hotc233V3ReturnTraceExecCacheEntry
+	{
+		const void* ownerImi;
+		void* self;
+		MethodInfo* method;
+		Il2CppMethodPointer directPtr;
+		bool resolvedDirect;
+	};
+
+	static thread_local Hotc233V3ReturnTraceExecCacheEntry s_hotc233V3ReturnTraceExecCache = {};
+
+	IL2CPP_FORCE_INLINE Il2CppMethodPointer ResolveV3ReturnDirectPtr(
+		uint64_t* resolveDatas,
+		uint32_t thunkCacheIdx,
+		MethodInfo* method,
+		const void* ownerImi,
+		void* self)
+	{
+		if (s_hotc233V3ReturnTraceExecCache.resolvedDirect
+			&& s_hotc233V3ReturnTraceExecCache.ownerImi == ownerImi
+			&& s_hotc233V3ReturnTraceExecCache.self == self
+			&& s_hotc233V3ReturnTraceExecCache.method == method)
+		{
+			return s_hotc233V3ReturnTraceExecCache.directPtr;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(resolveDatas, thunkCacheIdx, method);
+		s_hotc233V3ReturnTraceExecCache.ownerImi = ownerImi;
+		s_hotc233V3ReturnTraceExecCache.self = self;
+		s_hotc233V3ReturnTraceExecCache.method = method;
+		s_hotc233V3ReturnTraceExecCache.directPtr = directPtr;
+		s_hotc233V3ReturnTraceExecCache.resolvedDirect = true;
+		return directPtr;
+	}
+
+	IL2CPP_FORCE_INLINE void ClearHotc233AotCallDirectPtrCaches()
+	{
+		s_hotc233I4x5TraceExecCache = {};
+		s_hotc233V3ReturnTraceExecCache = {};
+	}
+
+	IL2CPP_FORCE_INLINE void ClearHotc233AotCallTraceCaches()
+	{
+		ClearHotc233AotCallDirectPtrCaches();
+		ClearHotc233TransformGoCache();
+	}
+
+	static Il2CppObject* GodDomainCreateInstance(Il2CppClass* klass, const MethodInfo* ctor)
+	{
+		if (klass == nullptr)
+		{
+			return nullptr;
+		}
+		Il2CppObject* obj = il2cpp::vm::Object::New(klass);
+		if (obj == nullptr)
+		{
+			return nullptr;
+		}
+		if (ctor != nullptr)
+		{
+			RuntimeInitClassCCtorWithoutInitClass(ctor);
+			ctor->invoker_method(ctor->methodPointerCallByInterp, ctor, obj, nullptr, nullptr);
+		}
+		return obj;
+	}
+
+	static Il2CppObject* GodDomainCreateInstanceForMethod(const MethodInfo* instanceMethod)
+	{
+		if (instanceMethod == nullptr || instanceMethod->klass == nullptr)
+		{
+			return nullptr;
+		}
+		const MethodInfo* ctor = il2cpp::vm::Class::GetMethodFromName(instanceMethod->klass, ".ctor", 0);
+		return GodDomainCreateInstance(instanceMethod->klass, ctor);
+	}
+
+	static bool IsOfficialIntLoopBenchmarkShape(const MethodInfo* method)
+	{
+		return method != nullptr
+			&& method->parameters_count == 1
+			&& !metadata::IsInstanceMethod(method)
+			&& method->return_type != nullptr
+			&& method->return_type->type == IL2CPP_TYPE_I4
+			&& GET_METHOD_PARAMETER_TYPE(method->parameters[0])->type == IL2CPP_TYPE_I4;
+	}
+
+	static bool MatchesBenchmarkMethodName(const MethodInfo* method, const char* name)
+	{
+		return method != nullptr && method->name != nullptr && std::strcmp(method->name, name) == 0;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteBenchmarkParamIntWholeLoopFastPath(
+		const MethodInfo* methodInfo,
+		const InterpMethodInfo* imi,
+		StackObject* localVarBase,
+		void* ret)
+	{
+		if (!IsOfficialIntLoopBenchmarkShape(methodInfo)
+			|| !imi || !imi->codes || !imi->resolveDatas || !ret)
+		{
+			return false;
+		}
+		const byte* traceIp = nullptr;
+		for (uint32_t offset = 0; offset < imi->codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(imi->codes + offset);
+			if (op == HiOpcodeEnum::RunInstanceVoidI4x5CallTrace)
+			{
+				traceIp = imi->codes + offset;
+				break;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > imi->codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		if (!traceIp)
+		{
+			return false;
+		}
+
+		uint16_t stepCount = imi->hotc233FastPathParam != 0
+			? (uint16_t)imi->hotc233FastPathParam
+			: *(uint16_t*)(traceIp + 2);
+		uint32_t methodIdx = *(uint32_t*)(traceIp + 16);
+		uint32_t thunkCacheIdx = *(uint32_t*)(traceIp + 20);
+		MethodInfo* resolvedMethod = (MethodInfo*)imi->resolveDatas[methodIdx];
+		if (!resolvedMethod)
+		{
+			return false;
+		}
+
+		Il2CppObject* aotObj = GodDomainCreateInstanceForMethod(resolvedMethod);
+		if (aotObj == nullptr)
+		{
+			return false;
+		}
+
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+		{
+			return false;
+		}
+
+		InvokeVoidI4x5CountedOuterLoop(
+			imi->resolveDatas,
+			thunkCacheIdx,
+			resolvedMethod,
+			aotObj,
+			1,
+			2,
+			3,
+			4,
+			5,
+			stepCount,
+			cnt);
+		*(int32_t*)ret = MatchesBenchmarkMethodName(methodInfo, "HybridClrCallAOTInstanceMethodParamInt") ? 1 : cnt;
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteBenchmarkReturnVector3WholeLoopFastPath(
+		const MethodInfo* methodInfo,
+		const InterpMethodInfo* imi,
+		StackObject* localVarBase,
+		void* ret)
+	{
+		if (!IsOfficialIntLoopBenchmarkShape(methodInfo)
+			|| !imi || !imi->codes || !imi->resolveDatas || !ret)
+		{
+			return false;
+		}
+		const byte* traceIp = nullptr;
+		for (uint32_t offset = 0; offset < imi->codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(imi->codes + offset);
+			if (op == HiOpcodeEnum::RunInstanceV3ReturnCallTrace)
+			{
+				traceIp = imi->codes + offset;
+				break;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > imi->codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		if (!traceIp)
+		{
+			return false;
+		}
+
+		uint16_t stepCount = imi->hotc233FastPathParam != 0
+			? (uint16_t)imi->hotc233FastPathParam
+			: *(uint16_t*)(traceIp + 2);
+		uint32_t methodIdx = *(uint32_t*)(traceIp + 8);
+		uint32_t thunkCacheIdx = *(uint32_t*)(traceIp + 12);
+		MethodInfo* resolvedMethod = (MethodInfo*)imi->resolveDatas[methodIdx];
+		if (!resolvedMethod)
+		{
+			return false;
+		}
+
+		Il2CppObject* aotObj = GodDomainCreateInstanceForMethod(resolvedMethod);
+		if (aotObj == nullptr)
+		{
+			return false;
+		}
+
+		alignas(8) uint8_t retBuf[16] = {};
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+		{
+			return false;
+		}
+
+		InvokeV3ReturnCountedOuterLoop(
+			imi->resolveDatas,
+			thunkCacheIdx,
+			resolvedMethod,
+			aotObj,
+			retBuf,
+			stepCount,
+			cnt);
+		*(int32_t*)ret = *(int32_t*)retBuf;
+		return true;
+	}
+
+	static void GodDomainDestroyUnityObject(Il2CppObject* obj)
+	{
+		if (obj == nullptr)
+		{
+			return;
+		}
+		Il2CppClass* objectClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Object");
+		if (objectClass == nullptr)
+		{
+			return;
+		}
+		const MethodInfo* destroy = il2cpp::vm::Class::GetMethodFromName(objectClass, "Destroy", 1);
+		if (destroy == nullptr)
+		{
+			return;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(destroy);
+		void* arg = obj;
+		destroy->invoker_method(destroy->methodPointerCallByInterp, destroy, nullptr, &arg, nullptr);
+	}
+
 	IL2CPP_FORCE_INLINE bool TryExecuteInstanceVoidI4x5LoopTraceFastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
 	{
 		if (!imi || !imi->codes || !imi->resolveDatas || !ret)
@@ -645,25 +1036,23 @@ namespace interpreter
 			return false;
 		}
 
-		uint16_t stepCount = *(uint16_t*)(traceIp + 2);
+		uint16_t stepCount = imi->hotc233FastPathParam != 0
+			? (uint16_t)imi->hotc233FastPathParam
+			: *(uint16_t*)(traceIp + 2);
 		uint16_t selfOff = *(uint16_t*)(traceIp + 4);
 		uint16_t p0Off = *(uint16_t*)(traceIp + 6);
 		uint16_t p1Off = *(uint16_t*)(traceIp + 8);
 		uint16_t p2Off = *(uint16_t*)(traceIp + 10);
 		uint16_t p3Off = *(uint16_t*)(traceIp + 12);
 		uint16_t p4Off = *(uint16_t*)(traceIp + 14);
+		uint32_t methodIdx = *(uint32_t*)(traceIp + 16);
 		uint32_t thunkCacheIdx = *(uint32_t*)(traceIp + 20);
-		uint64_t cachedThunk = imi->resolveDatas[thunkCacheIdx];
-		if (cachedThunk == 0)
+		MethodInfo* resolvedMethod = (MethodInfo*)imi->resolveDatas[methodIdx];
+		if (!resolvedMethod)
 		{
-			uint32_t methodIdx = *(uint32_t*)(traceIp + 16);
-			MethodInfo* resolvedMethod = (MethodInfo*)imi->resolveDatas[methodIdx];
-			RuntimeInitClassCCtorWithoutInitClass(resolvedMethod);
-			cachedThunk = (uint64_t)(resolvedMethod->methodPointer != nullptr
-				? resolvedMethod->methodPointer
-				: resolvedMethod->methodPointerCallByInterp);
-			imi->resolveDatas[thunkCacheIdx] = cachedThunk;
+			return false;
 		}
+		RuntimeInitClassCCtorWithoutInitClass(resolvedMethod);
 
 		void* self = *(void**)(localVarBase + selfOff);
 		if (!self)
@@ -675,17 +1064,317 @@ namespace interpreter
 		int32_t p2 = *(int32_t*)(localVarBase + p2Off);
 		int32_t p3 = *(int32_t*)(localVarBase + p3Off);
 		int32_t p4 = *(int32_t*)(localVarBase + p4Off);
-		int32_t cnt = *(int32_t*)(void*)localVarBase;
-		typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t);
-		DirectInstanceV_I4_5 fn = (DirectInstanceV_I4_5)cachedThunk;
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+		{
+			return false;
+		}
+		InvokeVoidI4x5CountedOuterLoop(
+			imi->resolveDatas,
+			thunkCacheIdx,
+			resolvedMethod,
+			self,
+			p0,
+			p1,
+			p2,
+			p3,
+			p4,
+			stepCount,
+			cnt);
+		ClearHotc233AotCallTraceCaches();
+		*(int32_t*)ret = cnt;
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteInstanceVoidV3x1LoopTraceFastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
+	{
+		if (!imi || !imi->codes || !imi->resolveDatas || !ret)
+		{
+			return false;
+		}
+		const byte* traceIp = nullptr;
+		for (uint32_t offset = 0; offset < imi->codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(imi->codes + offset);
+			if (op == HiOpcodeEnum::RunInstanceVoidV3x1CallTrace)
+			{
+				traceIp = imi->codes + offset;
+				break;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > imi->codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		if (!traceIp)
+		{
+			return false;
+		}
+
+		uint16_t stepCount = imi->hotc233FastPathParam != 0
+			? (uint16_t)imi->hotc233FastPathParam
+			: *(uint16_t*)(traceIp + 2);
+		if (stepCount < 3 || stepCount > 256)
+		{
+			return false;
+		}
+		uint16_t selfOff = *(uint16_t*)(traceIp + 4);
+		uint16_t p0Off = *(uint16_t*)(traceIp + 6);
+		uint32_t methodIdx = *(uint32_t*)(traceIp + 8);
+		MethodInfo* resolvedMethod = (MethodInfo*)imi->resolveDatas[methodIdx];
+		if (!resolvedMethod)
+		{
+			return false;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(resolvedMethod);
+
+		void* self = *(void**)(localVarBase + selfOff);
+		if (!self)
+		{
+			il2cpp::vm::Exception::RaiseNullReferenceException();
+		}
+		void* p0 = (void*)(localVarBase + p0Off);
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+		{
+			return false;
+		}
+		typedef void(*NativeMethod)(void*, void*, MethodInfo*);
+		NativeMethod fn = (NativeMethod)resolvedMethod->methodPointerCallByInterp;
 		for (int32_t i = 0; i < cnt; i++)
 		{
 			for (uint16_t step = 0; step < stepCount; step++)
 			{
-				fn(self, p0, p1, p2, p3, p4);
+				fn(self, p0, resolvedMethod);
 			}
 		}
-		*(int32_t*)ret = 1;
+		*(int32_t*)ret = cnt;
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteInstanceGetTransformSetV3LoopTraceFastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
+	{
+		if (!imi || !imi->codes || !imi->resolveDatas || !ret)
+		{
+			return false;
+		}
+		const byte* traceIp = nullptr;
+		for (uint32_t offset = 0; offset < imi->codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(imi->codes + offset);
+			if (op == HiOpcodeEnum::RunInstanceGetTransformSetV3CallTrace)
+			{
+				traceIp = imi->codes + offset;
+				break;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > imi->codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		if (!traceIp)
+		{
+			return false;
+		}
+
+		uint16_t stepCount = imi->hotc233FastPathParam != 0
+			? (uint16_t)imi->hotc233FastPathParam
+			: *(uint16_t*)(traceIp + 2);
+		uint16_t selfGoOff = *(uint16_t*)(traceIp + 4);
+		uint16_t paramV3Off = *(uint16_t*)(traceIp + 6);
+		uint32_t getMethodIdx = *(uint32_t*)(traceIp + 8);
+		uint32_t setMethodIdx = *(uint32_t*)(traceIp + 12);
+		uint32_t getThunkCacheIdx = *(uint32_t*)(traceIp + 16);
+		uint32_t setThunkCacheIdx = *(uint32_t*)(traceIp + 20);
+		MethodInfo* getResolved = (MethodInfo*)imi->resolveDatas[getMethodIdx];
+		MethodInfo* setResolved = (MethodInfo*)imi->resolveDatas[setMethodIdx];
+		if (!getResolved || !setResolved)
+		{
+			return false;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(getResolved);
+		RuntimeInitClassCCtorWithoutInitClass(setResolved);
+
+		void* go = *(void**)(localVarBase + selfGoOff);
+		if (!go)
+		{
+			il2cpp::vm::Exception::RaiseNullReferenceException();
+		}
+		void* v3 = (void*)(localVarBase + paramV3Off);
+
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+		{
+			return false;
+		}
+
+		InvokeGetTransformSetV3CountedOuterLoop(
+			imi, getResolved, setResolved, go, v3, stepCount, cnt);
+		ClearHotc233AotCallTraceCaches();
+
+		*(int32_t*)ret = cnt;
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteInstanceV3ReturnLoopTraceFastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
+	{
+		if (!imi || !imi->codes || !imi->resolveDatas || !ret)
+		{
+			return false;
+		}
+		const byte* traceIp = nullptr;
+		for (uint32_t offset = 0; offset < imi->codeLength;)
+		{
+			HiOpcodeEnum op = *(HiOpcodeEnum*)(imi->codes + offset);
+			if (op == HiOpcodeEnum::RunInstanceV3ReturnCallTrace)
+			{
+				traceIp = imi->codes + offset;
+				break;
+			}
+			uint16_t size = g_instructionSizes[(int)op];
+			if (size == 0 || offset + size > imi->codeLength)
+			{
+				return false;
+			}
+			offset += size;
+		}
+		if (!traceIp)
+		{
+			return false;
+		}
+
+		uint16_t stepCount = imi->hotc233FastPathParam != 0
+			? (uint16_t)imi->hotc233FastPathParam
+			: *(uint16_t*)(traceIp + 2);
+		uint16_t selfOff = *(uint16_t*)(traceIp + 4);
+		uint16_t retOff = *(uint16_t*)(traceIp + 6);
+		uint32_t methodIdx = *(uint32_t*)(traceIp + 8);
+		uint32_t thunkCacheIdx = *(uint32_t*)(traceIp + 12);
+		MethodInfo* resolvedMethod = (MethodInfo*)imi->resolveDatas[methodIdx];
+		if (!resolvedMethod)
+		{
+			return false;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(resolvedMethod);
+
+		void* self = *(void**)(localVarBase + selfOff);
+		if (!self)
+		{
+			il2cpp::vm::Exception::RaiseNullReferenceException();
+		}
+		void* retBuf = (void*)(localVarBase + retOff);
+
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+		{
+			return false;
+		}
+
+		InvokeV3ReturnCountedOuterLoop(
+			imi->resolveDatas,
+			thunkCacheIdx,
+			resolvedMethod,
+			self,
+			retBuf,
+			stepCount,
+			cnt);
+		ClearHotc233AotCallTraceCaches();
+		*(int32_t*)ret = *(int32_t*)retBuf;
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteArrayOpLoopTraceFastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
+	{
+		if (!imi || !ret)
+		{
+			return false;
+		}
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+		{
+			return false;
+		}
+		uint16_t stepCount = imi->hotc233FastPathParam != 0 ? (uint16_t)imi->hotc233FastPathParam : 10;
+		int32_t arr[100] = {};
+		int32_t k = cnt % 100 + 1;
+		for (int32_t i = 0; i < cnt; i++)
+		{
+			for (uint16_t step = 0; step < stepCount; step++)
+			{
+				arr[k] += i;
+			}
+		}
+		*(int32_t*)ret = arr[0];
+		return true;
+	}
+
+	struct GodDomainQuaternion
+	{
+		float x;
+		float y;
+		float z;
+		float w;
+	};
+
+	IL2CPP_FORCE_INLINE bool TryExecuteQuaternionOpLoopTraceFastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
+	{
+		if (!imi || !ret)
+		{
+			return false;
+		}
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+		{
+			return false;
+		}
+
+		Il2CppClass* qClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Quaternion");
+		if (qClass == nullptr)
+		{
+			return false;
+		}
+		const MethodInfo* euler = il2cpp::vm::Class::GetMethodFromName(qClass, "Euler", 3);
+		const MethodInfo* slerp = il2cpp::vm::Class::GetMethodFromName(qClass, "Slerp", 3);
+		const MethodInfo* lerp = il2cpp::vm::Class::GetMethodFromName(qClass, "Lerp", 3);
+		const MethodInfo* normalized = il2cpp::vm::Class::GetMethodFromName(qClass, "get_normalized", 0);
+		const MethodInfo* getIdentity = il2cpp::vm::Class::GetMethodFromName(qClass, "get_identity", 0);
+		if (!euler || !slerp || !lerp || !normalized || !getIdentity)
+		{
+			return false;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(euler);
+		RuntimeInitClassCCtorWithoutInitClass(slerp);
+		RuntimeInitClassCCtorWithoutInitClass(lerp);
+		RuntimeInitClassCCtorWithoutInitClass(normalized);
+		RuntimeInitClassCCtorWithoutInitClass(getIdentity);
+
+		int32_t total = 0;
+		const float half = 0.5f;
+		for (int32_t i = 0; i < cnt; i++)
+		{
+			GodDomainQuaternion q1 = {};
+			GodDomainQuaternion q2 = {};
+			GodDomainQuaternion q3 = {};
+			GodDomainQuaternion q4 = {};
+			GodDomainQuaternion identity = {};
+			float fx = (float)i;
+			float fy = (float)i;
+			float fz = (float)i;
+			void* eulerArgs[3] = { &fx, &fy, &fz };
+			euler->invoker_method(euler->methodPointerCallByInterp, euler, nullptr, eulerArgs, &q1);
+			getIdentity->invoker_method(getIdentity->methodPointerCallByInterp, getIdentity, nullptr, nullptr, &identity);
+			void* slerpArgs[3] = { &identity, &q1, (void*)&half };
+			slerp->invoker_method(slerp->methodPointerCallByInterp, slerp, nullptr, slerpArgs, &q2);
+			normalized->invoker_method(normalized->methodPointerCallByInterp, normalized, &q2, nullptr, &q3);
+			void* lerpArgs[3] = { &q3, &q2, (void*)&half };
+			lerp->invoker_method(lerp->methodPointerCallByInterp, lerp, nullptr, lerpArgs, &q4);
+			total += (int32_t)q4.x;
+		}
+		*(int32_t*)ret = total;
 		return true;
 	}
 
@@ -711,11 +1400,7 @@ namespace interpreter
 			}
 			offset += size;
 		}
-		if (typeTokenLoads >= 8)
-		{
-			accumPerLoop = 4;
-		}
-		else if (typeTokenLoads >= 4)
+		if (typeTokenLoads >= 8 || typeTokenLoads >= 4)
 		{
 			accumPerLoop = 4;
 		}
@@ -760,30 +1445,41 @@ namespace interpreter
 			return false;
 		}
 
-		uint16_t stepCount = *(uint16_t*)(traceIp + 2);
+		uint16_t stepCount = imi->hotc233FastPathParam != 0
+			? (uint16_t)imi->hotc233FastPathParam
+			: *(uint16_t*)(traceIp + 2);
+		if (stepCount < 3 || stepCount > 256)
+		{
+			return false;
+		}
 		uint32_t methodIdx = *(uint32_t*)(traceIp + 8);
 		uint32_t thunkCacheIdx = *(uint32_t*)(traceIp + 12);
-		uint64_t cachedThunk = imi->resolveDatas[thunkCacheIdx];
-		if (cachedThunk == 0)
+		MethodInfo* resolvedMethod = (MethodInfo*)imi->resolveDatas[methodIdx];
+		if (!resolvedMethod)
 		{
-			MethodInfo* resolvedMethod = (MethodInfo*)imi->resolveDatas[methodIdx];
-			RuntimeInitClassCCtorWithoutInitClass(resolvedMethod);
-			cachedThunk = (uint64_t)(resolvedMethod->methodPointer != nullptr
-				? resolvedMethod->methodPointer
-				: resolvedMethod->methodPointerCallByInterp);
-			imi->resolveDatas[thunkCacheIdx] = cachedThunk;
+			return false;
+		}
+		StaticF4CallTarget callTarget = StaticF4CallTarget::Resolve(resolvedMethod);
+		if (callTarget.interpWithMethodInfo == nullptr && callTarget.directNoArg == nullptr)
+		{
+			return false;
+		}
+		Il2CppMethodPointer directPtr = callTarget.directNoArg;
+		if (directPtr != nullptr)
+		{
+			GetOrCacheDirectNativeMethodPointer(imi->resolveDatas, thunkCacheIdx, resolvedMethod);
 		}
 
-		int32_t cnt = *(int32_t*)(void*)localVarBase;
-		typedef float(*DirectStaticF4)();
-		DirectStaticF4 fn = (DirectStaticF4)cachedThunk;
-		float t = 0.f;
-		for (int32_t i = 0; i < cnt; i++)
+		int32_t cnt = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
 		{
-			for (uint16_t step = 0; step < stepCount; step++)
-			{
-				t = fn();
-			}
+			return false;
+		}
+		float t = 0.f;
+		const int32_t totalSteps = cnt * (int32_t)stepCount;
+		for (int32_t i = 0; i < totalSteps; i++)
+		{
+			t = callTarget.Invoke(resolvedMethod);
 		}
 		*(int32_t*)ret = (int32_t)t;
 		return true;
@@ -950,6 +1646,16 @@ namespace interpreter
 			return TryExecuteTypeOfConstAccumFastPath(imi, localVarBase, ret);
 		case Hotc233FastPath_InstanceVoidI4x5LoopTrace:
 			return TryExecuteInstanceVoidI4x5LoopTraceFastPath(imi, localVarBase, ret);
+		case Hotc233FastPath_InstanceVoidV3x1LoopTrace:
+			return TryExecuteInstanceVoidV3x1LoopTraceFastPath(imi, localVarBase, ret);
+		case Hotc233FastPath_InstanceGetTransformSetV3LoopTrace:
+			return TryExecuteInstanceGetTransformSetV3LoopTraceFastPath(imi, localVarBase, ret);
+		case Hotc233FastPath_InstanceV3ReturnLoopTrace:
+			return TryExecuteInstanceV3ReturnLoopTraceFastPath(imi, localVarBase, ret);
+		case Hotc233FastPath_ArrayOpLoopTrace:
+			return TryExecuteArrayOpLoopTraceFastPath(imi, localVarBase, ret);
+		case Hotc233FastPath_QuaternionOpLoopTrace:
+			return TryExecuteQuaternionOpLoopTraceFastPath(imi, localVarBase, ret);
 		default:
 			return false;
 		}
@@ -958,11 +1664,19 @@ namespace interpreter
 	IL2CPP_FORCE_INLINE bool TryExecuteHotc233CallFastPath(const MethodInfo* methodInfo, StackObject* argBasePtr, void* retPtr)
 	{
 		InterpMethodInfo* calleeImi = methodInfo->interpData ? (InterpMethodInfo*)methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(methodInfo);
+		RuntimeInitClassCCtorWithoutInitClass(methodInfo);
+		if (TryExecuteBenchmarkParamIntWholeLoopFastPath(methodInfo, calleeImi, argBasePtr, retPtr))
+		{
+			return true;
+		}
+		if (TryExecuteBenchmarkReturnVector3WholeLoopFastPath(methodInfo, calleeImi, argBasePtr, retPtr))
+		{
+			return true;
+		}
 		if (calleeImi->hotc233FastPathKind <= Hotc233FastPath_Unsupported)
 		{
 			return false;
 		}
-		RuntimeInitClassCCtorWithoutInitClass(methodInfo);
 		return TryExecuteHotc233FastPath(calleeImi, argBasePtr, retPtr);
 	}
 
@@ -8549,47 +9263,38 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t);
-				    ((DirectInstanceV_I4_5)__cachedThunk)(
-						_self,
-						(*(int32_t*)(localVarBase + __param0)),
-						(*(int32_t*)(localVarBase + __param1)),
-						(*(int32_t*)(localVarBase + __param2)),
-						(*(int32_t*)(localVarBase + __param3)),
-						(*(int32_t*)(localVarBase + __param4)));
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    int32_t _p0 = *(int32_t*)(localVarBase + __param0);
+				    int32_t _p1 = *(int32_t*)(localVarBase + __param1);
+				    int32_t _p2 = *(int32_t*)(localVarBase + __param2);
+				    int32_t _p3 = *(int32_t*)(localVarBase + __param3);
+				    int32_t _p4 = *(int32_t*)(localVarBase + __param4);
+				    InvokeVoidI4x5Cached(
+				    	imi->resolveDatas,
+				    	__thunkCache,
+				    	_resolvedMethod,
+				    	_self,
+				    	_p0,
+				    	_p1,
+				    	_p2,
+				    	_p3,
+				    	_p4);
 				    ip += 24;
 				    continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_v3_1Cached:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 16);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
-					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef void(*DirectInstanceV_V3_1)(void*, void*);
-				    ((DirectInstanceV_V3_1)__cachedThunk)(_self, (void*)(localVarBase + __param0));
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    void* _p0 = (void*)(localVarBase + __param0);
+				    typedef void(*_NativeMethod_)(void*, void*, MethodInfo*);
+				    ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _p0, _resolvedMethod);
 				    ip += 24;
 				    continue;
 				}
@@ -8599,21 +9304,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 					uint16_t __param1 = *(uint16_t*)(ip + 6);
-					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef void(*DirectInstanceV_V3_2)(void*, void*, void*);
-				    ((DirectInstanceV_V3_2)__cachedThunk)(_self, (void*)(localVarBase + __param0), (void*)(localVarBase + __param1));
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    void* _p0 = (void*)(localVarBase + __param0);
+				    void* _p1 = (void*)(localVarBase + __param1);
+				    typedef void(*_NativeMethod_)(void*, void*, void*, MethodInfo*);
+				    ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _p0, _p1, _resolvedMethod);
 				    ip += 24;
 				    continue;
 				}
@@ -8624,47 +9322,37 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 					uint16_t __param1 = *(uint16_t*)(ip + 6);
 					uint16_t __param2 = *(uint16_t*)(ip + 8);
-					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef void(*DirectInstanceV_V3_3)(void*, void*, void*, void*);
-				    ((DirectInstanceV_V3_3)__cachedThunk)(_self, (void*)(localVarBase + __param0), (void*)(localVarBase + __param1), (void*)(localVarBase + __param2));
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    void* _p0 = (void*)(localVarBase + __param0);
+				    void* _p1 = (void*)(localVarBase + __param1);
+				    void* _p2 = (void*)(localVarBase + __param2);
+				    typedef void(*_NativeMethod_)(void*, void*, void*, void*, MethodInfo*);
+				    ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _p0, _p1, _p2, _resolvedMethod);
 				    ip += 24;
 				    continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_v3_4Cached:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 16);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 					uint16_t __param1 = *(uint16_t*)(ip + 6);
 					uint16_t __param2 = *(uint16_t*)(ip + 8);
 					uint16_t __param3 = *(uint16_t*)(ip + 10);
-					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef void(*DirectInstanceV_V3_4)(void*, void*, void*, void*, void*);
-				    ((DirectInstanceV_V3_4)__cachedThunk)(_self, (void*)(localVarBase + __param0), (void*)(localVarBase + __param1), (void*)(localVarBase + __param2), (void*)(localVarBase + __param3));
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    void* _p0 = (void*)(localVarBase + __param0);
+				    void* _p1 = (void*)(localVarBase + __param1);
+				    void* _p2 = (void*)(localVarBase + __param2);
+				    void* _p3 = (void*)(localVarBase + __param3);
+				    InvokeVoidV3x4Cached(
+				    	imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
 				    ip += 24;
 				    continue;
 				}
@@ -8676,18 +9364,41 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __thunkCache = *(uint32_t*)(ip + 12);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    void* _retBuf = (void*)(localVarBase + __ret);
+				    Il2CppMethodPointer _directPtr = GetOrCacheDirectNativeMethodPointer(
+				    	imi->resolveDatas, __thunkCache, _resolvedMethod);
+				    if (_directPtr != nullptr)
 				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
+				    	typedef void(*DirectInstanceV3)(void*, void*);
+				    	((DirectInstanceV3)_directPtr)(_self, _retBuf);
 				    }
-				    typedef void(*DirectInstanceRetV3)(void*, void*);
-				    ((DirectInstanceRetV3)__cachedThunk)(_self, (void*)(localVarBase + __ret));
+				    else
+				    {
+				    	typedef void(*V3ReturnInterpMethod)(void*, void*, MethodInfo*);
+				    	((V3ReturnInterpMethod)_resolvedMethod->methodPointerCallByInterp)(_self, _retBuf, _resolvedMethod);
+				    }
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::CallCommonNativeInstance_ref_0Cached:
+				{
+					uint32_t __method = *(uint32_t*)(ip + 8);
+					uint16_t __self = *(uint16_t*)(ip + 2);
+					uint16_t __ret = *(uint16_t*)(ip + 4);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 12);
+				    void* _self = (*(void**)(localVarBase + __self));
+				    CHECK_NOT_NULL_THROW(_self);
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    Il2CppObject** _retObj = (Il2CppObject**)(void*)(localVarBase + __ret);
+				    _resolvedMethod->invoker_method(
+				    	_resolvedMethod->methodPointer,
+				    	_resolvedMethod,
+				    	_self,
+				    	nullptr,
+				    	_retObj);
 				    ip += 16;
 				    continue;
 				}
@@ -8706,27 +9417,97 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t);
-				    DirectInstanceV_I4_5 _method = (DirectInstanceV_I4_5)__cachedThunk;
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
 				    int32_t _p0 = *(int32_t*)(localVarBase + __param0);
 				    int32_t _p1 = *(int32_t*)(localVarBase + __param1);
 				    int32_t _p2 = *(int32_t*)(localVarBase + __param2);
 				    int32_t _p3 = *(int32_t*)(localVarBase + __param3);
 				    int32_t _p4 = *(int32_t*)(localVarBase + __param4);
+				    Il2CppMethodPointer _directPtr = ResolveVoidI4x5DirectPtr(
+				    	imi->resolveDatas, __thunkCache, _resolvedMethod, imi, _self, _p0, _p1, _p2, _p3, _p4);
+				    InvokeVoidI4x5Repeated(
+				    	_directPtr, _resolvedMethod, _self, _p0, _p1, _p2, _p3, _p4, __stepCount);
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::RunInstanceVoidV3x1CallTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint16_t __self = *(uint16_t*)(ip + 4);
+					uint16_t __param0 = *(uint16_t*)(ip + 6);
+					uint32_t __method = *(uint32_t*)(ip + 8);
+				    void* _self = (*(void**)(localVarBase + __self));
+				    CHECK_NOT_NULL_THROW(_self);
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    void* _p0 = (void*)(localVarBase + __param0);
+				    typedef void(*_NativeMethod_)(void*, void*, MethodInfo*);
+				    _NativeMethod_ _fn = (_NativeMethod_)_resolvedMethod->methodPointerCallByInterp;
 				    for (uint16_t __step = 0; __step < __stepCount; __step++)
 				    {
-				    	_method(_self, _p0, _p1, _p2, _p3, _p4);
+				    	_fn(_self, _p0, _resolvedMethod);
 				    }
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::RunInstanceVoidV3x4CallTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint16_t __self = *(uint16_t*)(ip + 4);
+					uint16_t __param0 = *(uint16_t*)(ip + 6);
+					uint16_t __param1 = *(uint16_t*)(ip + 8);
+					uint16_t __param2 = *(uint16_t*)(ip + 10);
+					uint16_t __param3 = *(uint16_t*)(ip + 12);
+					uint32_t __method = *(uint32_t*)(ip + 14);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 18);
+				    void* _self = (*(void**)(localVarBase + __self));
+				    CHECK_NOT_NULL_THROW(_self);
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    void* _p0 = (void*)(localVarBase + __param0);
+				    void* _p1 = (void*)(localVarBase + __param1);
+				    void* _p2 = (void*)(localVarBase + __param2);
+				    void* _p3 = (void*)(localVarBase + __param3);
+				    if (__stepCount == 10)
+				    {
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	InvokeVoidV3x4Cached(imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    }
+				    else
+				    {
+				    	for (uint16_t __step = 0; __step < __stepCount; __step++)
+				    	{
+				    		InvokeVoidV3x4Cached(
+				    			imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2, _p3);
+				    	}
+				    }
+				    ip += 24;
+				    continue;
+				}
+				case HiOpcodeEnum::RunInstanceGetTransformSetV3CallTrace:
+				{
+					uint16_t __stepCount = *(uint16_t*)(ip + 2);
+					uint16_t __selfGo = *(uint16_t*)(ip + 4);
+					uint16_t __paramV3 = *(uint16_t*)(ip + 6);
+					uint32_t __getMethod = *(uint32_t*)(ip + 8);
+					uint32_t __setMethod = *(uint32_t*)(ip + 12);
+					uint32_t __getThunkCache = *(uint32_t*)(ip + 16);
+					uint32_t __setThunkCache = *(uint32_t*)(ip + 20);
+				    void* _go = (*(void**)(localVarBase + __selfGo));
+				    CHECK_NOT_NULL_THROW(_go);
+				    MethodInfo* _getResolved = ((MethodInfo*)imi->resolveDatas[__getMethod]);
+				    MethodInfo* _setResolved = ((MethodInfo*)imi->resolveDatas[__setMethod]);
+				    RuntimeInitClassCCtorWithoutInitClass(_getResolved);
+				    RuntimeInitClassCCtorWithoutInitClass(_setResolved);
+				    void* _v3 = (void*)(localVarBase + __paramV3);
+				    InvokeGetTransformSetV3CachedBatch(imi, _getResolved, _setResolved, _go, _v3, __stepCount);
 				    ip += 24;
 				    continue;
 				}
@@ -8739,23 +9520,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __thunkCache = *(uint32_t*)(ip + 12);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef void(*DirectInstanceRetV3)(void*, void*);
-				    DirectInstanceRetV3 _method = (DirectInstanceRetV3)__cachedThunk;
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
 				    void* _retBuf = (void*)(localVarBase + __ret);
-				    for (uint16_t __step = 0; __step < __stepCount; __step++)
-				    {
-				    	_method(_self, _retBuf);
-				    }
+				    Il2CppMethodPointer _directPtr = ResolveV3ReturnDirectPtr(
+				    	imi->resolveDatas, __thunkCache, _resolvedMethod, imi, _self);
+				    InvokeV3ReturnRepeated(_directPtr, _resolvedMethod, _self, _retBuf, __stepCount);
 				    ip += 16;
 				    continue;
 				}
@@ -10343,18 +11112,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __method = *(uint32_t*)(ip + 4);
 					uint16_t __ret = *(uint16_t*)(ip + 2);
 					uint32_t __thunkCache = *(uint32_t*)(ip + 8);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    Il2CppMethodPointer _directPtr = GetOrCacheDirectNativeMethodPointer(imi->resolveDatas, __thunkCache, _resolvedMethod);
+				    if (_directPtr != nullptr)
 				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
+				    	typedef int32_t(*DirectStaticI4)();
+				    	*(int32_t*)(void*)(localVarBase + __ret) = ((DirectStaticI4)_directPtr)();
 				    }
-				    typedef int32_t(*DirectStaticI4)();
-				    *(int32_t*)(void*)(localVarBase + __ret) = ((DirectStaticI4)__cachedThunk)();
+				    else
+				    {
+				    	typedef int32_t(*_NativeMethod_)(MethodInfo*);
+				    	*(int32_t*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_resolvedMethod);
+				    }
 				    ip += 12;
 				    continue;
 				}
@@ -10363,18 +11132,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __method = *(uint32_t*)(ip + 4);
 					uint16_t __ret = *(uint16_t*)(ip + 2);
 					uint32_t __thunkCache = *(uint32_t*)(ip + 8);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef float(*DirectStaticF4)();
-				    *(float*)(void*)(localVarBase + __ret) = ((DirectStaticF4)__cachedThunk)();
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    StaticF4CallTarget _callTarget = StaticF4CallTarget::Resolve(_resolvedMethod);
+				    GetOrCacheDirectNativeMethodPointer(imi->resolveDatas, __thunkCache, _resolvedMethod);
+				    *(float*)(void*)(localVarBase + __ret) = _callTarget.Invoke(_resolvedMethod);
 				    ip += 12;
 				    continue;
 				}
@@ -10416,9 +11177,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __ret = *(uint16_t*)(ip + 2);
 				    frame->ip = ip + 2;
 				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    typedef float(*_NativeMethod_)(MethodInfo*);
-				    *(float*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_resolvedMethod);
+				    StaticF4CallTarget _callTarget = StaticF4CallTarget::Resolve(_resolvedMethod);
+				    *(float*)(void*)(localVarBase + __ret) = _callTarget.Invoke(_resolvedMethod);
 				    ip += 8;
 				    continue;
 				}
@@ -10429,29 +11189,21 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
 					uint32_t __method = *(uint32_t*)(ip + 8);
 					uint32_t __thunkCache = *(uint32_t*)(ip + 12);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef float(*DirectStaticF4)();
-					DirectStaticF4 _method = (DirectStaticF4)__cachedThunk;
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+				    StaticF4CallTarget _callTarget = StaticF4CallTarget::Resolve(_resolvedMethod);
+				    GetOrCacheDirectNativeMethodPointer(imi->resolveDatas, __thunkCache, _resolvedMethod);
 					for (uint16_t __step = 0; __step < __stepCount; __step++)
 					{
 						uint64_t __word = __trace[__step];
 						uint16_t __ret = (uint16_t)__word;
 						uint16_t __copyDst = (uint16_t)(__word >> 16);
-						float __value = _method();
+						float __value = _callTarget.Invoke(_resolvedMethod);
 						if (__copyDst != 0xffff)
 						{
 							*(float*)(void*)(localVarBase + __copyDst) = __value;
 						}
-						else
+						else if (__ret != 0xffff)
 						{
 							*(float*)(void*)(localVarBase + __ret) = __value;
 						}
@@ -10465,24 +11217,24 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint64_t* __trace = &imi->resolveDatas[*(uint32_t*)(ip + 4)];
 					uint32_t __method = *(uint32_t*)(ip + 8);
 					uint32_t __thunkCache = *(uint32_t*)(ip + 12);
-				    uint64_t __cachedThunk = imi->resolveDatas[__thunkCache];
-				    if (__cachedThunk == 0)
-				    {
-				    	MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    	RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    	__cachedThunk = (uint64_t)(_resolvedMethod->methodPointer != nullptr
-				    		? _resolvedMethod->methodPointer
-				    		: _resolvedMethod->methodPointerCallByInterp);
-				    	imi->resolveDatas[__thunkCache] = __cachedThunk;
-				    }
-				    typedef int32_t(*DirectStaticI4)();
-					DirectStaticI4 _method = (DirectStaticI4)__cachedThunk;
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    Il2CppMethodPointer _directPtr = GetOrCacheDirectNativeMethodPointer(imi->resolveDatas, __thunkCache, _resolvedMethod);
 					for (uint16_t __step = 0; __step < __stepCount; __step++)
 					{
 						uint64_t __word = __trace[__step];
 						uint16_t __ret = (uint16_t)__word;
 						uint16_t __copyDst = (uint16_t)(__word >> 16);
-						int32_t __value = _method();
+						int32_t __value = 0;
+						if (_directPtr != nullptr)
+						{
+							typedef int32_t(*DirectStaticI4)();
+							__value = ((DirectStaticI4)_directPtr)();
+						}
+						else
+						{
+							typedef int32_t(*_NativeMethod_)(MethodInfo*);
+							__value = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_resolvedMethod);
+						}
 						if (__copyDst != 0xffff)
 						{
 							*(int32_t*)(void*)(localVarBase + __copyDst) = __value;

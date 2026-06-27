@@ -14,12 +14,18 @@
 
 **Dominance 规则（Pro 量级）**：相对社区版默认目标 **200%**；typeof **1000%**；CallAOTStatic **500%**。见 `benchmark-docs/arch-self-review.md` 与 `docs/pro-landing-matrix.json` → `communityDominanceTargetsPercent`。
 
+**Pro 机制对照（实现原理 + 落地状态）**：[`benchmark-docs/pro-mechanism-landing.md`](pro-mechanism-landing.md)
+
+**每次对标后必报全量表 + profiler 声明**：[`benchmark-docs/reporting-requirements.md`](reporting-requirements.md)
+
+**GodDomain（唯一 P1 主路径，2026-06-27 起）**：[`benchmark-docs/god-domain-architecture.md`](god-domain-architecture.md)
+
 ## 新版压测循环
 
 1. **先基线**：刷新同机 HybridCLR 社区版 14 条 base；没有社区版实测，不评价 hotc。
 2. **先正确性**：hotc 架构改动先跑 `HOTC233_LOCAL_OFFICIAL_COUNT=1`，只看是否完成、崩溃、超时。
 3. **再正式表**：最小验收过后跑默认 `local-benchmark` 167 口径；只用这份表判断性能方向。
-4. **先架构后 opcode**：弱项只按 P1 callsite → P2 typed ABI → P3 register/array；**禁止**实验 transform 或 profile 策略分支。
+4. **先专用后 opcode**：弱项只按 **专用 transform → whole-method bypass → typed ABI**；**禁止**通用 dispatch / M2N 桥接 / Execute switch 微优化（见 `god-domain-architecture.md`）。
 5. **两次止损**：同一路线连续两次无收益或回退，写入 `pro-wrong-answer-notebook.md` 并换假设；禁止把废弃路线当“可选优化”重新默认开启。
 
 ## P0 商业全绿（进入 P1 前必跑）
@@ -97,13 +103,16 @@ go run ./hotc233ctl benchmark -project .. `
 
 ## 报告位置
 
+- **人类可读唯一入口（必维护）**：[`benchmark-docs/性能报告.md`](性能报告.md) — 全量 14 行表 + L1 结论
 - 临时：`Assets/EditorForBuild/Generated/performance-local-hotc-vs-hybridclr-base.*`
-- 社区版临时：`Assets/EditorForBuild/Generated/hybridclr-local-player-report.json`
-- hotc 临时：`Assets/EditorForBuild/Generated/performance-hotc233-player.json`
-- 权威归档：`benchmark-docs/results/latest-hotc-vs-hybridclr.*`
+- 机器可读归档：`benchmark-docs/results/latest-hotc-vs-hybridclr.json`
+- 归档 Markdown 副本：`benchmark-docs/results/latest-hotc-vs-hybridclr.md`
+
+`local-benchmark` 成功后 `hotc233ctl` 会自动同步 `性能报告.md` 与 `results/latest-*`。
 
 ## 文档规则
 
 - 文档只写口径、命令、当前结论、下一步假设。
 - 不粘贴整份旧表；旧数据放 `results/`。
 - 失败路线只写“失败原因 + 后续动作”。
+- **每次跑完 benchmark 必须按 [`reporting-requirements.md`](reporting-requirements.md) 更新 [`性能报告.md`](性能报告.md) 全量 14 行表**，并声明 opcode profiler 开/关。
