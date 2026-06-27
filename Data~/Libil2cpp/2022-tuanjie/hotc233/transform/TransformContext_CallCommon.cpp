@@ -276,6 +276,18 @@ default: return false;\
 			{
 			case hotc233::transform::ArgCommonType::I4:
 			{
+				if (paramCount == 5)
+				{
+					CreateAddIR(ir, CallCommonNativeInstance_v_i4_5);
+					ir->method = methodDataIndex;
+					ir->self = argBaseOffset;
+					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
+					ir->param1 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 2);
+					ir->param2 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 3);
+					ir->param3 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 4);
+					ir->param4 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 5);
+					return true;
+				}
 				SWITCH_INSTANCE_VOID(i4, paramCount);
 				break;
 			}

@@ -1043,6 +1043,7 @@ namespace interpreter
 		RegVector3Add,
 		RunRegVector3AddTrace,
 		RegVector3SqrMag,
+		CallCommonNativeInstance_v_i4_5,
 
 		//!!!}}OPCODE
 	};
@@ -4477,6 +4478,23 @@ namespace interpreter
 		uint16_t param2;
 		uint16_t param3;
 		uint32_t method;
+	};
+
+
+	struct IRCallCommonNativeInstance_v_i4_5 : IRCommon
+	{
+		uint16_t self;
+		uint16_t param0;
+		uint16_t param1;
+		uint16_t param2;
+		uint16_t param3;
+		uint16_t param4;
+		uint16_t __pad14;
+		uint32_t method;
+		uint8_t __pad20;
+		uint8_t __pad21;
+		uint8_t __pad22;
+		uint8_t __pad23;
 	};
 
 

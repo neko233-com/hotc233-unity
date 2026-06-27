@@ -22,6 +22,7 @@
 
 #include "../metadata/MetadataModule.h"
 
+#include "../transform/Hotc233TransformPolicy.h"
 #include "Instruction.h"
 #include "MethodBridge.h"
 #include "InstrinctDef.h"
@@ -2001,12 +2002,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 
 	void Interpreter::Execute(const MethodInfo* methodInfo, StackObject* args, void* ret)
 	{
+#if !HOTC233_COMMUNITY_BASELINE
 		InterpMethodInfo* directImi = methodInfo->interpData ? (InterpMethodInfo*)methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(methodInfo);
 		RuntimeInitClassCCtorWithoutInitClass(methodInfo);
 		if (directImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(directImi, args, ret))
 		{
 			return;
 		}
+#endif
 
 		MachineState& machine = InterpreterModule::GetCurrentThreadMachineState();
 		InterpFrameGroup interpFrameGroup(machine);
@@ -2029,6 +2032,9 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 		{
 			for (;;)
 			{
+#if HOTC233_COMMUNITY_BASELINE
+				switch (*(HiOpcodeEnum*)ip)
+#else
 				HiOpcodeEnum __opcode = *(HiOpcodeEnum*)ip;
 				if (g_opcodeProfilerEnabled)
 				{
@@ -2049,6 +2055,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					}
 				}
 				switch (__opcode)
+#endif
 				{
 					// avoid decrement *ip when compute jump table,  boosts about 5% performance
 				case HiOpcodeEnum::None:
@@ -2140,6 +2147,13 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::RegI32Copy:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+					(*(int32_t*)(localVarBase + __dst)) = (*(int32_t*)(localVarBase + __src));
+				    ip += 8;
+				    continue;
+				}
 				case HiOpcodeEnum::LdlocVarVar:
 				HOTC233_EXEC_LdlocVarVar:
 				{
@@ -4718,6 +4732,17 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 
 #pragma region ARITH
 		//!!!{{ARITH
+#if HOTC233_COMMUNITY_BASELINE
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __op1 = *(uint16_t*)(ip + 4);
+					uint16_t __op2 = *(uint16_t*)(ip + 6);
+					(*(int32_t*)(localVarBase + __ret)) = (*(int32_t*)(localVarBase + __op1)) + (*(int32_t*)(localVarBase + __op2));
+				    ip += 8;
+				    continue;
+				}
+#else
 				case HiOpcodeEnum::RegI32Add:
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4:
 				HOTC233_EXEC_BinOpVarVarVar_Add_i4:
@@ -4762,6 +4787,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					}
 				    continue;
 				}
+#endif
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar:
 				HOTC233_EXEC_BinOpVarVarVar_Add_i4_LdlocVarVar:
 				{
@@ -4814,10 +4840,39 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 32;
 				    continue;
 				}
+#if HOTC233_COMMUNITY_BASELINE
+				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar:
+				{
+					uint16_t __addRet = *(uint16_t*)(ip + 2);
+					uint16_t __addOp1 = *(uint16_t*)(ip + 4);
+					uint16_t __addOp2 = *(uint16_t*)(ip + 6);
+					uint16_t __copyDst1 = *(uint16_t*)(ip + 8);
+					uint16_t __copySrc1 = *(uint16_t*)(ip + 10);
+					uint16_t __copyDst2 = *(uint16_t*)(ip + 12);
+					uint16_t __copySrc2 = *(uint16_t*)(ip + 14);
+					uint16_t __copyDst3 = *(uint16_t*)(ip + 16);
+					uint16_t __copySrc3 = *(uint16_t*)(ip + 18);
+					(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
+					if (__copyDst1 != __copySrc1)
+					{
+						(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+					}
+					if (__copyDst2 != __copySrc2)
+					{
+						(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+					}
+					if (__copyDst3 != __copySrc3)
+					{
+						(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+					}
+				    ip += 24;
+				    continue;
+				}
+#else
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar:
 				HOTC233_EXEC_BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar:
 				{
-					const byte* __chainIp = ip;
+					byte* __chainIp = ip;
 					for (uint16_t __chain = 0; __chain < 64; __chain++)
 					{
 						if (*(HiOpcodeEnum*)__chainIp != HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar)
@@ -4855,6 +4910,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					ip = __chainIp;
 				    continue;
 				}
+#endif
+#if !HOTC233_COMMUNITY_BASELINE
 				case HiOpcodeEnum::RunI4AddCopyTrace:
 				{
 					uint16_t __stepCount = *(uint16_t*)(ip + 2);
@@ -4878,9 +4935,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
 						(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
 					}
-					ip += 8;
+				    ip += 8;
 				    continue;
 				}
+#endif
 				case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar_LdlocVarVarSize:
 				{
 					uint16_t __addRet = *(uint16_t*)(ip + 2);
@@ -5202,6 +5260,17 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 16;
 				    continue;
 				}
+#if HOTC233_COMMUNITY_BASELINE
+				case HiOpcodeEnum::BinOpVarVarVar_Mul_i4:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __op1 = *(uint16_t*)(ip + 4);
+					uint16_t __op2 = *(uint16_t*)(ip + 6);
+					(*(int32_t*)(localVarBase + __ret)) = (*(int32_t*)(localVarBase + __op1)) * (*(int32_t*)(localVarBase + __op2));
+				    ip += 8;
+				    continue;
+				}
+#else
 				case HiOpcodeEnum::RegI32Mul:
 				case HiOpcodeEnum::BinOpVarVarVar_Mul_i4:
 				HOTC233_EXEC_BinOpVarVarVar_Mul_i4:
@@ -5229,6 +5298,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					}
 				    continue;
 				}
+#endif
 				case HiOpcodeEnum::BinOpVarVarVar_MulUn_i4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -8270,6 +8340,31 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 16;
 				    continue;
 				}
+				case HiOpcodeEnum::CallCommonNativeInstance_v_i4_5:
+				{
+					uint32_t __method = *(uint32_t*)(ip + 16);
+					uint16_t __self = *(uint16_t*)(ip + 2);
+					uint16_t __param0 = *(uint16_t*)(ip + 4);
+					uint16_t __param1 = *(uint16_t*)(ip + 6);
+					uint16_t __param2 = *(uint16_t*)(ip + 8);
+					uint16_t __param3 = *(uint16_t*)(ip + 10);
+					uint16_t __param4 = *(uint16_t*)(ip + 12);
+				    frame->ip = ip + 2;
+				    void* _self = (*(void**)(localVarBase + __self));
+				    CHECK_NOT_NULL_THROW(_self);
+				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+				    typedef void(*_NativeMethod_)(void*, int32_t, int32_t, int32_t, int32_t, int32_t, MethodInfo*);
+				    ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(
+						_self,
+						(*(int32_t*)(localVarBase + __param0)),
+						(*(int32_t*)(localVarBase + __param1)),
+						(*(int32_t*)(localVarBase + __param2)),
+						(*(int32_t*)(localVarBase + __param3)),
+						(*(int32_t*)(localVarBase + __param4)),
+						_resolvedMethod);
+				    ip += 24;
+				    continue;
+				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_i8_1:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 8);
@@ -9847,6 +9942,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+#if !HOTC233_COMMUNITY_BASELINE
 				case HiOpcodeEnum::CallCommonNativeStatic_i4_0Cached:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 4);
@@ -9864,6 +9960,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 12;
 				    continue;
 				}
+#endif
 				case HiOpcodeEnum::CallCommonNativeStatic_i8_0:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 4);
@@ -9888,6 +9985,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+#if !HOTC233_COMMUNITY_BASELINE
 				case HiOpcodeEnum::RunStaticF4CallTrace:
 				{
 					uint16_t __stepCount = *(uint16_t*)(ip + 2);
@@ -10027,15 +10125,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						(*(int32_t*)(localVarBase + __addRet)) = (*(int32_t*)(localVarBase + __addOp1)) + (*(int32_t*)(localVarBase + __addOp2));
 						if (__copyDst1 != 0xffff)
 						{
-							(*(uint64_t*)(localVarBase + __copyDst1)) = (*(uint64_t*)(localVarBase + __copySrc1));
+							(*(int32_t*)(localVarBase + __copyDst1)) = (*(int32_t*)(localVarBase + __copySrc1));
 						}
 						if (__copyDst2 != 0xffff)
 						{
-							(*(uint64_t*)(localVarBase + __copyDst2)) = (*(uint64_t*)(localVarBase + __copySrc2));
+							(*(int32_t*)(localVarBase + __copyDst2)) = (*(int32_t*)(localVarBase + __copySrc2));
 						}
 						if (__copyDst3 != 0xffff)
 						{
-							(*(uint64_t*)(localVarBase + __copyDst3)) = (*(uint64_t*)(localVarBase + __copySrc3));
+							(*(int32_t*)(localVarBase + __copyDst3)) = (*(int32_t*)(localVarBase + __copySrc3));
 						}
 					}
 				    ip += 8;
@@ -10064,6 +10162,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+#endif
 				case HiOpcodeEnum::RegVector3Copy:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
@@ -10090,6 +10189,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+#if !HOTC233_COMMUNITY_BASELINE
 				case HiOpcodeEnum::RunRegVector3AddTrace:
 				{
 					uint16_t __stepCount = *(uint16_t*)(ip + 2);
@@ -10110,6 +10210,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+#endif
 				case HiOpcodeEnum::RegVector3SqrMag:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
@@ -10596,7 +10697,9 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeStatic_i4_i4_2:
+#if !HOTC233_COMMUNITY_BASELINE
 				HOTC233_EXEC_CallCommonNativeStatic_i4_i4_2:
+#endif
 				{
 					uint32_t __method = *(uint32_t*)(ip + 8);
 					uint16_t __param0 = *(uint16_t*)(ip + 2);
@@ -10607,7 +10710,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
 				    typedef int32_t(*_NativeMethod_)(int32_t, int32_t, MethodInfo*);
 				    *(int32_t*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)((*(int32_t*)(localVarBase + __param0)), (*(int32_t*)(localVarBase + __param1)), _resolvedMethod);
-					ip += 16;
+				    ip += 16;
+#if !HOTC233_COMMUNITY_BASELINE
 					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar)
 					{
 						if (g_opcodeProfilerEnabled)
@@ -10616,6 +10720,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 						goto HOTC233_EXEC_LdlocVarVar;
 					}
+#endif
 				    continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeStatic_i4_i4_3:
@@ -11533,6 +11638,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					Il2CppClass* __klass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
 				    (*(Il2CppObject**)(localVarBase + __dst)) = il2cpp::vm::Object::Box(__klass, (void*)(localVarBase + __data));
 					ip += 16;
+#if !HOTC233_COMMUNITY_BASELINE
 					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::CallCommonNativeStatic_i4_i4_2)
 					{
 						if (g_opcodeProfilerEnabled)
@@ -11541,6 +11647,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 						goto HOTC233_EXEC_CallCommonNativeStatic_i4_i4_2;
 					}
+#endif
 				    continue;
 				}
 				case HiOpcodeEnum::UnBoxVarVar:

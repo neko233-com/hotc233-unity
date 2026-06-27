@@ -77,16 +77,14 @@ namespace transform
 			return false;
 		}
 		interpreter::IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4* fused = (interpreter::IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4*)ir;
-		if (fused->copyDst != fused->copySrc
-			&& fused->copyDst != fused->addRet
-			&& fused->copyDst != fused->addOp1
-			&& fused->copyDst != fused->addOp2
-			&& fused->copyDst != fused->constDst)
+		if (fused->copyDst != fused->addOp1 && fused->copyDst != fused->addOp2)
 		{
-			EmitRegI32Copy(pool, out, fused->copyDst, fused->copySrc);
+			return false;
 		}
 		EmitRegI32Ldc(pool, out, fused->constDst, fused->constant);
-		EmitRegI32Add(pool, out, fused->addRet, fused->addOp1, fused->addOp2);
+		EmitRegI32Add(pool, out, fused->addRet,
+			fused->addOp1 == fused->copyDst ? fused->copySrc : fused->addOp1,
+			fused->addOp2 == fused->copyDst ? fused->copySrc : fused->addOp2);
 		return true;
 	}
 
@@ -98,24 +96,19 @@ namespace transform
 		}
 		interpreter::IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar* fused =
 			(interpreter::IRLdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar*)ir;
-		if (fused->copyDst1 != fused->copySrc1
-			&& fused->copyDst1 != fused->addRet
-			&& fused->copyDst1 != fused->addOp1
-			&& fused->copyDst1 != fused->addOp2
-			&& fused->copyDst1 != fused->constDst)
+		if (fused->copyDst1 != fused->addOp1 && fused->copyDst1 != fused->addOp2)
 		{
-			EmitRegI32Copy(pool, out, fused->copyDst1, fused->copySrc1);
+			return false;
+		}
+		if (fused->copySrc2 != fused->addRet)
+		{
+			return false;
 		}
 		EmitRegI32Ldc(pool, out, fused->constDst, fused->constant);
-		EmitRegI32Add(pool, out, fused->addRet, fused->addOp1, fused->addOp2);
-		if (fused->copyDst2 != fused->copySrc2
-			&& fused->copyDst2 != fused->addRet
-			&& fused->copyDst2 != fused->addOp1
-			&& fused->copyDst2 != fused->addOp2
-			&& fused->copyDst2 != fused->constDst)
-		{
-			EmitRegI32Copy(pool, out, fused->copyDst2, fused->copySrc2);
-		}
+		EmitRegI32Add(pool, out, fused->addRet,
+			fused->addOp1 == fused->copyDst1 ? fused->copySrc1 : fused->addOp1,
+			fused->addOp2 == fused->copyDst1 ? fused->copySrc1 : fused->addOp2);
+		EmitRegI32Copy(pool, out, fused->copyDst2, fused->copySrc2);
 		return true;
 	}
 
@@ -126,16 +119,14 @@ namespace transform
 			return false;
 		}
 		interpreter::IRLdlocVarVar_LdcVarConst_4_BinOpMul_i4* fused = (interpreter::IRLdlocVarVar_LdcVarConst_4_BinOpMul_i4*)ir;
-		if (fused->copyDst != fused->copySrc
-			&& fused->copyDst != fused->mulRet
-			&& fused->copyDst != fused->mulOp1
-			&& fused->copyDst != fused->mulOp2
-			&& fused->copyDst != fused->constDst)
+		if (fused->copyDst != fused->mulOp1 && fused->copyDst != fused->mulOp2)
 		{
-			EmitRegI32Copy(pool, out, fused->copyDst, fused->copySrc);
+			return false;
 		}
 		EmitRegI32Ldc(pool, out, fused->constDst, fused->constant);
-		EmitRegI32Mul(pool, out, fused->mulRet, fused->mulOp1, fused->mulOp2);
+		EmitRegI32Mul(pool, out, fused->mulRet,
+			fused->mulOp1 == fused->copyDst ? fused->copySrc : fused->mulOp1,
+			fused->mulOp2 == fused->copyDst ? fused->copySrc : fused->mulOp2);
 		return true;
 	}
 
@@ -146,6 +137,10 @@ namespace transform
 			return false;
 		}
 		interpreter::IRBinOpVarVarVar_Add_i4_LdlocVarVar* fused = (interpreter::IRBinOpVarVarVar_Add_i4_LdlocVarVar*)ir;
+		if (fused->copySrc != fused->addRet)
+		{
+			return false;
+		}
 		EmitRegI32Add(pool, out, fused->addRet, fused->addOp1, fused->addOp2);
 		if (fused->copyDst != fused->copySrc)
 		{
@@ -162,6 +157,12 @@ namespace transform
 		}
 		interpreter::IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar* fused =
 			(interpreter::IRBinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar*)ir;
+		if (fused->copySrc1 != fused->addRet
+			|| fused->copySrc2 != fused->addRet
+			|| fused->copySrc3 != fused->addRet)
+		{
+			return false;
+		}
 		EmitRegI32Add(pool, out, fused->addRet, fused->addOp1, fused->addOp2);
 		if (fused->copyDst1 != fused->copySrc1)
 		{
@@ -182,19 +183,6 @@ namespace transform
 	{
 		switch (ir->type)
 		{
-		case interpreter::HiOpcodeEnum::LdlocVarVar:
-		{
-			interpreter::IRLdlocVarVar* copy = (interpreter::IRLdlocVarVar*)ir;
-			if (copy->dst == copy->src)
-			{
-				return false;
-			}
-			CreateIR(reg, RegI32Copy);
-			reg->dst = copy->dst;
-			reg->src = copy->src;
-			converted = reg;
-			return true;
-		}
 		case interpreter::HiOpcodeEnum::LdcVarConst_4:
 		{
 			interpreter::IRLdcVarConst_4* constant = (interpreter::IRLdcVarConst_4*)ir;

@@ -59,9 +59,20 @@
 - `verification-report.json`：机器可读完整验证结果。
 - `comparison-report.json`：本项目 HybridCLR 基线矩阵对比。
 - `feature-report.md`：中文功能矩阵。
-- `performance-report.md`：性能结论和基准项。
 - `platform-matrix-report.json`：平台构建/验证矩阵。
-- 所有菜单、MCP 工具、日志需要输出报告绝对路径或 `report-links.md`。
+- **性能对标归档（权威）**：`benchmark-docs/results/latest-hotc-vs-hybridclr.json` / `.md`。
+- 宿主 `Assets/EditorForBuild/Generated/` 仅作当次运行临时产物；结论必须同步到 `benchmark-docs/results/`。
+- 所有菜单、MCP 工具、日志需要输出报告绝对路径或 `benchmark-docs/README.md`。
+
+## 性能对标规范（2026-06-27 起）
+
+- **唯一文档入口**：`benchmark-docs/`（见 `benchmark-docs/README.md`）。
+- **唯一验收 benchmark 代码**：HybridCLR 官方 14 条 base（`hybridclr-benchmark-demo/OfficialBenchmarkProbe.cs` 形状）；demo `PerformanceProbe` 的 business 行不得进入 Pro/社区版硬验收。
+- **唯一验收命令**：宿主 `go run ./tools/hotc233ctl benchmark`；顺序探针，禁止 multitask / `-parallel-captures`。
+- **同机社区版参照**：`D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo`（HybridCLR 8.11.0 + Tuanjie 2022.3.62t10）；测试环境与该工程完全一致（WebGL IL2CPP + 相同探针链路）。
+- **Pro 终态**；**L1 绝对门槛：同机 14 条 base 必须全面快于 HybridCLR 社区版**（fork 基线，任一条未赢即方向错误）。
+- **废弃**：`flywheel` 作性能验收、`docs/flywheel-automation.md`、`docs/webgl-performance.md`、`docs/performance-peak-plan.md` 作性能依据。
+- 修改 loader、解释器、benchmark 形状或报告字段时，同步更新 `benchmark-docs/` 与两份 `AGENTS.md`。
 
 ## HybridCLR 差异处理
 
@@ -77,11 +88,9 @@
 ## RuntimeFast 与 minigame 健康检查
 
 - `HotUpdateBinaryLoader` 默认 profile 必须是 `RuntimeFast`；`RuntimeOptions` 只作为兼容别名。
-- demo 与自动化必须提供分组性能菜单，并且每次对比都写出性能表。
-- WebGL 与 PC 的性能验证必须优先使用 `StreamingAssets/Hotc233Probe/Payload/payload-manifest.json` 指向的原始 `.dll.bytes` 和 RuntimeMetadata bytes，避免把 AssetBundle、YooAsset 或 HTTP 下载耗时混入解释器性能表。
-- WebGL 本地 IL2CPP 对比必须生成 `performance-webgl-local-il2cpp.md/json`，并明确 hotc233、原生 WebGL IL2CPP、HybridCLR 专业版纯解释目标区间。
+- **WebGL 性能验收**走 `benchmark-docs/methodology.md` 中的 `hotc233ctl benchmark`；必须生成并归档 `benchmark-docs/results/latest-hotc-vs-hybridclr.*`。
 - 微信小游戏/minigame(WebGL2) 热更必须关闭 `weixinMiniGameUseSlimMetaFileFormat` 和全部 `m_SlimFeaturesWeixinMiniGame`。
-- 只读报告守门必须能通过 `go run ./hotc233ctl validate-reports -project <demo>`，不得要求 Unity editor 路径或触发 batchmode。
+- 只读报告守门：`go run ./hotc233ctl validate-reports -project <demo>`；`HOTC233_ENFORCE_BEAT_COMMUNITY=1` 启用 L1（全面超越社区版）。
 - 修改解释器 opcode 时，必须同步 `Instruction.h`、`Instruction.cpp`、`Interpreter_Execute.cpp`、transform 选择逻辑和宿主 `hotc233ctl validate-reports` 的指令表守门；RuntimeFast 热路径至少覆盖 `System.Math.Min/Max` signed int/long intrinsic 和 20/24/28/32 字节无引用 struct array store。
 - 超越 HybridCLR 专业版纯解释器的路线必须按稳定性优先推进：SSA、常量折叠、热路径 profiling、多核增量编译、低/无 GC 生成都需要先通过 WebGL/PC 回归和性能表，再扩大平台范围。
 - 修改 loader、性能菜单、AssetLib233/minigame 对接、报告字段或配置导入器时，同步更新 README、宿主 demo 文档、AGENTS 和 CI 守门。

@@ -1,4 +1,5 @@
 #include "TransformContext.h"
+#include "Hotc233TransformPolicy.h"
 
 #include "metadata/GenericMetadata.h"
 #include "vm/Class.h"
@@ -2466,12 +2467,11 @@ namespace transform
 		}
 	}
 
-	void TransformContext::OptimizeBasicBlocks()
+	void TransformContext::ApplyCommunityPeepholeFusion()
 	{
 		for (IRBasicBlock* bb : irbbs)
 		{
 			std::vector<IRCommon*>& insts = bb->insts;
-			FoldBinOpI4AddChainTrace(insts);
 			size_t writeIdx = 0;
 			for (size_t readIdx = 0; readIdx < insts.size(); readIdx++)
 			{
@@ -5129,7 +5129,6 @@ namespace transform
 			}
 			insts.resize(writeIdx);
 			FoldRunArrayI4IncrementTrace(insts);
-			FoldFused920I4AddCopyTrace(insts);
 			std::vector<IRCommon*> staticF4CallTraceOutput;
 			staticF4CallTraceOutput.reserve(insts.size());
 			for (size_t readIdx = 0; readIdx < insts.size();)
@@ -5274,14 +5273,38 @@ namespace transform
 				readIdx++;
 			}
 			insts.swap(staticI4CallTraceOutput);
+		}
+	}
+
+	void TransformContext::OptimizeBasicBlocks()
+	{
+#if HOTC233_ENABLE_PRO_EXPERIMENTAL_TRANSFORM && HOTC233_ENABLE_PRO_TRACE_FOLDING
+		for (IRBasicBlock* bb : irbbs)
+		{
+			FoldBinOpI4AddChainTrace(bb->insts);
+		}
+#endif
+		ApplyCommunityPeepholeFusion();
+#if HOTC233_ENABLE_PRO_EXPERIMENTAL_TRANSFORM
+		for (IRBasicBlock* bb : irbbs)
+		{
+			std::vector<IRCommon*>& insts = bb->insts;
+#if HOTC233_ENABLE_PRO_TRACE_FOLDING
+			FoldFused920I4AddCopyTrace(insts);
 			FoldBinOpI4AddChainTrace(insts);
+#endif
 			RecordTypedRegisterCoverage(insts);
 			LowerTypedRegisterI32(insts);
+#if HOTC233_ENABLE_PRO_TRACE_FOLDING
 			FoldRegI32NumericTrace(insts);
 			FoldRegI32AddCopyTrace(insts);
+#endif
 			LowerTypedRegisterVector3(insts);
+#if HOTC233_ENABLE_PRO_TRACE_FOLDING
 			FoldRegVector3AddTrace(insts);
+#endif
 		}
+#endif
 	}
 
 	void TransformContext::FoldRunArrayI4IncrementTrace(std::vector<IRCommon*>& insts)
@@ -10301,7 +10324,13 @@ ir->ele = ele.locOffset;
 		}
 	finish_transform:
 
+#if HOTC233_COMMUNITY_BASELINE
+		// HybridCLR OSS v8.11.0 has no peephole — skip entirely.
+#elif HOTC233_ENABLE_PRO_EXPERIMENTAL_TRANSFORM
 		OptimizeBasicBlocks();
+#else
+		ApplyCommunityPeepholeFusion();
+#endif
 
 		totalIRSize = 0;
 		for (IRBasicBlock* bb : irbbs)
@@ -10341,6 +10370,9 @@ ir->ele = ele.locOffset;
 		uint32_t argStackObjectSize,
 		uint32_t localStackSize)
 	{
+#if HOTC233_COMMUNITY_BASELINE
+		return Hotc233FastPath_Unsupported;
+#else
 		if (!codes || hasExceptionClauses || initLocals)
 		{
 			return Hotc233FastPath_Unsupported;
@@ -10478,6 +10510,7 @@ ir->ele = ele.locOffset;
 		}
 
 		return Hotc233FastPath_Unsupported;
+#endif
 	}
 
 	void TransformContext::BuildInterpMethodInfo(interpreter::InterpMethodInfo& result)
