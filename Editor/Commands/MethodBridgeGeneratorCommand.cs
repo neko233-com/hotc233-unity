@@ -87,7 +87,7 @@ namespace Hotc233.Editor.Commands
             var callPInvokeMethodSignatures = pinvokeAnalyzer.PInvokeMethodSignatures;
 
             string templateFile = $"{SettingsUtil.TemplatePathInPackage}/MethodBridge.cpp.tpl";
-            string outputFile = $"{SettingsUtil.GeneratedCppDir}/MethodBridge.cpp";
+            string outputFile = $"{SettingsUtil.GetGeneratedCppDir(target)}/MethodBridge.cpp";
 
             var callNativeMethodSignatures = calliAnalyzer.CalliMethodSignatures.Concat(pinvokeAnalyzer.PInvokeMethodSignatures).ToList();
             GenerateMethodBridgeCppFile(methodBridgeAnalyzer.GenericMethods, reversePInvokeAnalyzer.ReversePInvokeMethods, callNativeMethodSignatures, templateFile, outputFile);

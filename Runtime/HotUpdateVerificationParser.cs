@@ -61,6 +61,9 @@ namespace Hotc233
                 valueTuple = message.Contains("value-tuple"),
                 patternMatching = message.Contains("pattern-matching"),
                 spanLikeOps = message.Contains("span-like-ops"),
+                staticExtensionMethods = message.Contains("static-extension-methods"),
+                genericExtensionMethods = message.Contains("generic-extension-methods"),
+                extensionInterfaceDispatch = message.Contains("extension-interface-dispatch"),
             };
         }
 
@@ -325,6 +328,9 @@ namespace Hotc233
             public bool valueTuple;
             public bool patternMatching;
             public bool spanLikeOps;
+            public bool staticExtensionMethods;
+            public bool genericExtensionMethods;
+            public bool extensionInterfaceDispatch;
 
             public bool AllPassed()
             {
@@ -339,7 +345,10 @@ namespace Hotc233
                     && staticGenericClass
                     && valueTuple
                     && patternMatching
-                    && spanLikeOps;
+                    && spanLikeOps
+                    && staticExtensionMethods
+                    && genericExtensionMethods
+                    && extensionInterfaceDispatch;
             }
         }
 

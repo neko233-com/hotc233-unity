@@ -40,11 +40,50 @@ namespace Hotc233.Editor
 
         public static string Hotc233DataDir => $"{ProjectDir}/Hotc233Data";
 
-        public static string LocalUnityDataDir => $"{Hotc233DataDir}/LocalIl2CppData-{Application.platform}";
+        public static string LocalUnityDataDir => GetLocalUnityDataDir(EditorUserBuildSettings.activeBuildTarget);
 
-        public static string LocalIl2CppDir => $"{LocalUnityDataDir}/il2cpp";
+        public static string LocalIl2CppDir => GetLocalIl2CppDir(EditorUserBuildSettings.activeBuildTarget);
 
-        public static string GeneratedCppDir => $"{LocalIl2CppDir}/libil2cpp/hotc233/generated";
+        public static string GeneratedCppDir => GetGeneratedCppDir(EditorUserBuildSettings.activeBuildTarget);
+
+        public static string GetLocalUnityDataDir(BuildTarget target)
+        {
+            return $"{Hotc233DataDir}/LocalIl2CppData-{GetLocalIl2CppDataSuffix(target)}";
+        }
+
+        public static string GetLocalIl2CppDir(BuildTarget target)
+        {
+            return $"{GetLocalUnityDataDir(target)}/il2cpp";
+        }
+
+        public static string GetGeneratedCppDir(BuildTarget target)
+        {
+            return $"{GetLocalIl2CppDir(target)}/libil2cpp/hotc233/generated";
+        }
+
+        public static string GetLocalIl2CppDataSuffix(BuildTarget target)
+        {
+            switch (target)
+            {
+                case BuildTarget.StandaloneWindows:
+                case BuildTarget.StandaloneWindows64:
+                    return "StandaloneWindows";
+                case BuildTarget.StandaloneOSX:
+                    return "StandaloneOSX";
+                case BuildTarget.StandaloneLinux64:
+                    return "StandaloneLinux64";
+                case BuildTarget.WebGL:
+                    return "WebGL";
+                case BuildTarget.Android:
+                    return "Android";
+                case BuildTarget.iOS:
+                    return "iOS";
+                case BuildTarget.tvOS:
+                    return "tvOS";
+                default:
+                    return target.ToString();
+            }
+        }
 
         public static string Il2CppBuildCacheDir { get; } = $"{ProjectDir}/Library/Il2cppBuildCache";
 

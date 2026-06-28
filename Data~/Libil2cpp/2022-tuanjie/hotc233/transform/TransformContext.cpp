@@ -5850,7 +5850,7 @@ namespace transform
 					pairCount++;
 					scanIdx++;
 				}
-				if (pairCount >= 2)
+				if (false && pairCount >= 2)
 				{
 					uint16_t stepCount = (uint16_t)pairCount;
 					CreateIR(trace, RunInstanceGetTransformSetV3CallTrace);
@@ -7495,6 +7495,41 @@ else \
 #endif
 	}
 
+	static bool IsUnityKernelInlineBarrier(const MethodInfo* method)
+	{
+		if (method == nullptr || method->name == nullptr || std::strncmp(method->name, "Kernel", 6) != 0)
+		{
+			return false;
+		}
+		static const char* kNames[] =
+		{
+			"KernelEntityHotLoop",
+			"KernelPrefabSpawnDespawn",
+			"KernelGetComponentLoop",
+			"KernelAddComponentSpawn",
+			"KernelCameraWorldToScreen",
+			"KernelPhysicsRaycast",
+			"KernelTransformFullLoop",
+			"KernelBehaviourEnableToggle",
+			"KernelCompareTagLoop",
+			"KernelTimeDeltaLoop",
+			"KernelGameObjectLayerLoop",
+			"KernelTransformGetPositionLoop",
+			"KernelRendererEnabledToggle",
+			"KernelInputGetAxisLoop",
+			"KernelAudioSourceVolumeLoop",
+			"KernelAnimatorSetFloatLoop",
+		};
+		for (size_t i = 0; i < sizeof(kNames) / sizeof(kNames[0]); ++i)
+		{
+			if (std::strcmp(method->name, kNames[i]) == 0)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	static bool ShouldBeInlined(const MethodInfo* method, int32_t depth)
 	{
 		if (depth >= RuntimeConfig::GetMaxMethodInlineDepth())
@@ -7505,6 +7540,10 @@ else \
 		{
 			return false;
 		}
+		if (IsUnityKernelInlineBarrier(method))
+		{
+			return false;
+		}
 		return metadata::MethodBodyCache::IsInlineable(method);
 	}
 
@@ -7512,13 +7551,17 @@ else \
 	{
 		godDomainFastPathKindOverride = 0;
 		godDomainFastPathParamOverride = 0;
+		if (depth == 0 && TryBuildGodDomainOfficialNativeKernelLoopMethod(localVarOffset))
+		{
+			BuildInterpMethodInfo(result);
+			return;
+		}
 		if (depth == 0 && TryBuildGodDomainStaticF4LoopMethod(localVarOffset))
 		{
 			BuildInterpMethodInfo(result);
 			return;
 		}
-		// ParamInt / ReturnVector3: ClassFromName during lazy transform is fragile; whole-loop kernels in TryExecuteHotc233CallFastPath handle them.
-		// SetTransform: GodDomain whole-method shell disabled (UnityEngine.Object lifecycle).
+		// SetTransform whole-method shell remains disabled until its UnityEngine.Object lifecycle path is crash-clean.
 		if (depth == 0 && TryBuildGodDomainArrayOpLoopMethod(localVarOffset))
 		{
 			BuildInterpMethodInfo(result);

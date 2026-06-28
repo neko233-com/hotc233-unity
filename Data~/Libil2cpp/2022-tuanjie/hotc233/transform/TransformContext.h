@@ -411,6 +411,7 @@ namespace transform
 
 	private:
 		void TransformBodyImpl(int32_t depth, int32_t localVarOffset);
+		bool TryBuildGodDomainOfficialNativeKernelLoopMethod(int32_t localVarOffset);
 		bool TryBuildGodDomainStaticF4LoopMethod(int32_t localVarOffset);
 		bool TryBuildGodDomainSetTransformLoopMethod(int32_t localVarOffset);
 		bool TryBuildGodDomainParamIntLoopMethod(int32_t localVarOffset);

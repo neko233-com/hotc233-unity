@@ -4,6 +4,29 @@
 
 每次跑完 `local-benchmark` / `benchmark` / `arch-self-review` 后，**必须**向负责人汇报 **14 条官方 base 全量对比表**（不得只报弱项子集）。若未设置 `HOTC233_INCLUDE_BUSINESS_BENCHMARK=0`，**同时**汇报 **10 条 `business-realworld-*` 业务场景表**（见 `RealWorldBusinessPerformanceProbe.cs`）。
 
+## 0.0.1 生产发布硬门禁
+
+生产发布前必须先过兼容性，再跑性能；两类测试不得混在一个结论里。功能支持状态统一维护在 [`compatibility-support-matrix.md`](compatibility-support-matrix.md)。未列入“已验证”的能力不得在发布材料中宣称支持；`extern` / PInvoke / native plugin 等特殊边界可以标记为暂忽略，但必须在表格中说明。
+
+| 阶段 | 命令/报告 | 停止条件 |
+|---|---|---|
+| 快速兼容性 | `go run ./tools/hotc233ctl compat-fast -project . -timeout 15m` | Editor 内 AB 热更加载；不构建 Player、不跑性能；0 crash、0 correctness failure、0 timeout |
+| 兼容性 | `validate-reports` + Unity 真实热更兼容套件 | 每个调用形状至少 5 次；包含随机输入/随机顺序；0 crash、0 correctness failure、0 timeout |
+| Unity API 真实热更 | `unity-realworld-benchmark` | `hotupdate-unity-*` 全量行输出；报告不得少行；raw API 形状失败时必须修 runtime/native 路径或显式列入不准发布项 |
+| 官方性能 | `local-benchmark` | 14 条官方 base 全表；hotc233、HybridCLR 社区版、Pro 估算、xLua 列不得省略 |
+| 业务性能 | `local-benchmark` 默认业务表 | 业务热更场景全表；不得只汇报快的子集 |
+
+兼容性套件的随机规则：同一 API 形状至少跑 5 次，输入需覆盖边界值与普通值，例如 `iterations`、bool toggles、Vector3/Quaternion、string tag/name、layer、组件启用状态。随机用于防止只针对固定测试写专用 bypass；随机失败视为 correctness failure。
+
+性能套件的时间规则：命令默认 timeout 不得超过 15 分钟；已构建 Player 的性能采样目标为 1 分钟内完成。native/IL2CPP 源码变更导致的重编时间要单独记为构建成本，不得混入 Player 内性能耗时。
+
+禁止发布项：
+
+- 任一兼容性行 crash、timeout、少行或 correctness failure。
+- 任一 hotc233 专用 Unity API kernel 只返回 checksum、但真实 raw API native ABI 未有独立兼容测试覆盖。
+- `性能报告.md` 使用 stale `Generated/` 残留、手写数字、或省略 HybridCLR/xLua/业务表。
+- 为了通过测试而修改用户热更代码写法；除非该写法本身不可确定或 Unity/IL2CPP 不支持。
+
 ## 必报字段
 
 | 列 | 说明 |

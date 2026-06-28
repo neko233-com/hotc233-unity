@@ -9,6 +9,7 @@
 #include "vm/Class.h"
 #include "vm/Object.h"
 #include "vm/String.h"
+#include "vm/Assembly.h"
 #include <cstring>
 #include <cmath>
 
@@ -23,6 +24,47 @@ namespace interpreter
 	GodDomainUnityApiCache& GodDomainGetUnityApiCache()
 	{
 		return s_godDomainUnityApiCache;
+	}
+
+	static Il2CppClass* GodDomainFindAotClass(const char* assemblyName, const char* namespaze, const char* name)
+	{
+		if (assemblyName == nullptr || namespaze == nullptr || name == nullptr)
+		{
+			return nullptr;
+		}
+		const Il2CppAssembly* assembly = il2cpp::vm::Assembly::Load(assemblyName);
+		if (assembly == nullptr)
+		{
+			return nullptr;
+		}
+		const Il2CppImage* image = il2cpp::vm::Assembly::GetImage(assembly);
+		return image != nullptr ? il2cpp::vm::Class::FromName(image, namespaze, name) : nullptr;
+	}
+
+	static Il2CppClass* GodDomainFindUnityClass(const char* namespaze, const char* name, const char* const* assemblyNames, size_t assemblyCount)
+	{
+		for (size_t i = 0; i < assemblyCount; ++i)
+		{
+			if (Il2CppClass* klass = GodDomainFindAotClass(assemblyNames[i], namespaze, name))
+			{
+				return klass;
+			}
+		}
+		return nullptr;
+	}
+
+	static Il2CppClass* GodDomainFindUnityEngineClass(const char* name)
+	{
+		static const char* const kUnityEngineAssemblies[] =
+		{
+			"UnityEngine.CoreModule",
+			"UnityEngine.PhysicsModule",
+			"UnityEngine.InputLegacyModule",
+			"UnityEngine.InputModule",
+			"UnityEngine.AudioModule",
+			"UnityEngine.AnimationModule",
+		};
+		return GodDomainFindUnityClass("UnityEngine", name, kUnityEngineAssemblies, sizeof(kUnityEngineAssemblies) / sizeof(kUnityEngineAssemblies[0]));
 	}
 
 	static Il2CppObject* GodDomainGetTypeObjectForClass(Il2CppClass* klass)
@@ -41,17 +83,17 @@ namespace interpreter
 
 	static Il2CppClass* FindHotUpdateClass(const char* typeName)
 	{
-		Il2CppClass* klass = il2cpp::vm::Class::FromName(nullptr, "UnityHotc.CodeHotUpdate.Feature", typeName);
+		Il2CppClass* klass = GodDomainFindAotClass("Feature_HotUpdate", "UnityHotc.CodeHotUpdate.Feature", typeName);
 		if (klass != nullptr)
 		{
 			return klass;
 		}
-		klass = il2cpp::vm::Class::FromName(nullptr, "UnityHotc.CodeHotUpdate", typeName);
+		klass = GodDomainFindAotClass("HotUpdateLogic", "UnityHotc.CodeHotUpdate", typeName);
 		if (klass != nullptr)
 		{
 			return klass;
 		}
-		return il2cpp::vm::Class::FromName(nullptr, "Assembly-CSharp", typeName);
+		return GodDomainFindAotClass("Assembly-CSharp", "", typeName);
 	}
 
 	bool GodDomainEnsureUnityApiCache()
@@ -64,12 +106,15 @@ namespace interpreter
 		s_godDomainUnityApiCache.probed = true;
 
 		GodDomainUnityApiCache& c = s_godDomainUnityApiCache;
-		c.gameObjectClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "GameObject");
-		c.transformClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Transform");
-		c.cameraClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Camera");
-		c.physicsClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Physics");
-		c.behaviourClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Behaviour");
-		c.objectClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Object");
+		c.gameObjectClass = GodDomainFindUnityEngineClass("GameObject");
+		c.transformClass = GodDomainFindUnityEngineClass("Transform");
+		c.cameraClass = GodDomainFindUnityEngineClass("Camera");
+		c.physicsClass = GodDomainFindUnityEngineClass("Physics");
+		c.behaviourClass = GodDomainFindUnityEngineClass("Behaviour");
+		c.objectClass = GodDomainFindUnityEngineClass("Object");
+		c.inputClass = GodDomainFindUnityEngineClass("Input");
+		c.audioSourceClass = GodDomainFindUnityEngineClass("AudioSource");
+		c.animatorClass = GodDomainFindUnityEngineClass("Animator");
 		c.hotUpdatePrefabProbeClass = FindHotUpdateClass("RealWorldBenchmarkProbe");
 		if (c.hotUpdatePrefabProbeClass == nullptr)
 		{
@@ -86,20 +131,28 @@ namespace interpreter
 		c.goGetComponentType = il2cpp::vm::Class::GetMethodFromName(c.gameObjectClass, "GetComponent", 1);
 		c.goAddComponentType = il2cpp::vm::Class::GetMethodFromName(c.gameObjectClass, "AddComponent", 1);
 		c.goCompareTag = il2cpp::vm::Class::GetMethodFromName(c.gameObjectClass, "CompareTag", 1);
-		c.transformSetPosition = il2cpp::vm::Class::GetMethodFromName(c.transformClass, "set_position", 1);
-		c.transformSetRotation = il2cpp::vm::Class::GetMethodFromName(c.transformClass, "set_rotation", 1);
-		c.transformSetLocalScale = il2cpp::vm::Class::GetMethodFromName(c.transformClass, "set_localScale", 1);
-		c.transformFind = il2cpp::vm::Class::GetMethodFromName(c.transformClass, "Find", 1);
-		c.transformGetPosition = il2cpp::vm::Class::GetMethodFromName(c.transformClass, "get_position", 0);
-		c.cameraWorldToScreenPoint = il2cpp::vm::Class::GetMethodFromName(c.cameraClass, "WorldToScreenPoint", 1);
-		c.behaviourSetEnabled = il2cpp::vm::Class::GetMethodFromName(c.behaviourClass, "set_enabled", 1);
+		c.transformSetPosition = c.transformClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.transformClass, "set_position", 1) : nullptr;
+		c.transformSetRotation = c.transformClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.transformClass, "set_rotation", 1) : nullptr;
+		c.transformSetLocalScale = c.transformClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.transformClass, "set_localScale", 1) : nullptr;
+		c.transformFind = c.transformClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.transformClass, "Find", 1) : nullptr;
+		c.transformGetPosition = c.transformClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.transformClass, "get_position", 0) : nullptr;
+		c.cameraWorldToScreenPoint = c.cameraClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.cameraClass, "WorldToScreenPoint", 1) : nullptr;
+		c.behaviourSetEnabled = c.behaviourClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.behaviourClass, "set_enabled", 1) : nullptr;
+		c.inputGetAxisRaw = c.inputClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.inputClass, "GetAxisRaw", 1) : nullptr;
+		c.audioSourceSetVolume = c.audioSourceClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.audioSourceClass, "set_volume", 1) : nullptr;
+		c.audioSourceGetVolume = c.audioSourceClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.audioSourceClass, "get_volume", 0) : nullptr;
+		c.animatorSetFloat = c.animatorClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.animatorClass, "SetFloat", 2) : nullptr;
+		c.animatorGetFloat = c.animatorClass != nullptr ? il2cpp::vm::Class::GetMethodFromName(c.animatorClass, "GetFloat", 1) : nullptr;
 		c.objectInstantiate = il2cpp::vm::Class::GetMethodFromName(c.objectClass, "Instantiate", 1);
 		c.objectDestroy = il2cpp::vm::Class::GetMethodFromName(c.objectClass, "Destroy", 1);
+		c.objectSetName = il2cpp::vm::Class::GetMethodFromName(c.objectClass, "set_name", 1);
 		c.physicsRaycast = il2cpp::vm::Class::GetMethodFromName(c.physicsClass, "Raycast", 4);
 
 		c.defaultGoName = il2cpp::vm::String::New("EntityHotLoop");
 		c.defaultTag = il2cpp::vm::String::New("Untagged");
 		c.childName = il2cpp::vm::String::New("ChildA");
+		c.horizontalAxisName = il2cpp::vm::String::New("Horizontal");
+		c.speedParamName = il2cpp::vm::String::New("Speed");
 
 		return c.goCtorWithName != nullptr && c.objectDestroy != nullptr;
 	}
@@ -123,14 +176,9 @@ namespace interpreter
 		Il2CppObject* typeObj = GodDomainGetTypeObjectForClass(c.hotUpdatePrefabProbeClass);
 		if (typeObj != nullptr)
 		{
-			void* args[1] = { typeObj };
 			RuntimeInitClassCCtorWithoutInitClass(c.goAddComponentType);
-			c.goAddComponentType->invoker_method(
-				c.goAddComponentType->methodPointerCallByInterp,
-				c.goAddComponentType,
-				templateGo,
-				args,
-				nullptr);
+			typedef Il2CppObject*(*GameObjectComponentByTypeMethod)(Il2CppObject*, Il2CppObject*, const MethodInfo*);
+			((GameObjectComponentByTypeMethod)c.goAddComponentType->methodPointer)(templateGo, typeObj, c.goAddComponentType);
 		}
 		GodDomainInvokeSetActive(templateGo, false);
 		s_prefabTemplate = templateGo;
@@ -166,15 +214,8 @@ namespace interpreter
 			return nullptr;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(c.goGetComponentType);
-		Il2CppObject* comp = nullptr;
-		void* args[1] = { typeObj };
-		c.goGetComponentType->invoker_method(
-			c.goGetComponentType->methodPointerCallByInterp,
-			c.goGetComponentType,
-			go,
-			args,
-			&comp);
-		return comp;
+		typedef Il2CppObject*(*GameObjectComponentByTypeMethod)(Il2CppObject*, Il2CppObject*, const MethodInfo*);
+		return ((GameObjectComponentByTypeMethod)c.goGetComponentType->methodPointer)(go, typeObj, c.goGetComponentType);
 	}
 
 	static Il2CppObject* GodDomainAddComponentByType(Il2CppObject* go, Il2CppClass* componentClass)
@@ -190,15 +231,8 @@ namespace interpreter
 			return nullptr;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(c.goAddComponentType);
-		Il2CppObject* comp = nullptr;
-		void* args[1] = { typeObj };
-		c.goAddComponentType->invoker_method(
-			c.goAddComponentType->methodPointerCallByInterp,
-			c.goAddComponentType,
-			go,
-			args,
-			&comp);
-		return comp;
+		typedef Il2CppObject*(*GameObjectComponentByTypeMethod)(Il2CppObject*, Il2CppObject*, const MethodInfo*);
+		return ((GameObjectComponentByTypeMethod)c.goAddComponentType->methodPointer)(go, typeObj, c.goAddComponentType);
 	}
 
 	static int32_t GodDomainReadProbeLogCount(Il2CppObject* probe)
@@ -231,7 +265,23 @@ namespace interpreter
 		}
 		RuntimeInitClassCCtorWithoutInitClass(setParent);
 		void* args[1] = { parentTransform };
-		setParent->invoker_method(setParent->methodPointerCallByInterp, setParent, childTransform, args, nullptr);
+		setParent->invoker_method(
+			setParent->methodPointerCallByInterp,
+			const_cast<MethodInfo*>(setParent),
+			childTransform,
+			args,
+			nullptr);
+		const MethodInfo* setParentProperty = il2cpp::vm::Class::GetMethodFromName(s_godDomainUnityApiCache.transformClass, "set_parent", 1);
+		if (setParentProperty != nullptr)
+		{
+			RuntimeInitClassCCtorWithoutInitClass(setParentProperty);
+			setParentProperty->invoker_method(
+				setParentProperty->methodPointerCallByInterp,
+				const_cast<MethodInfo*>(setParentProperty),
+				childTransform,
+				args,
+				nullptr);
+		}
 	}
 
 	static int32_t GodDomainKernelEntityHotLoop(int32_t iterations)
@@ -262,10 +312,6 @@ namespace interpreter
 			return 0;
 		}
 		GodDomainEnsurePrefabTemplate();
-		if (s_prefabTemplate == nullptr)
-		{
-			return 0;
-		}
 		int32_t acc = 0;
 		for (int32_t i = 0; i < iterations; ++i)
 		{
@@ -505,23 +551,47 @@ namespace interpreter
 		}
 		GodDomainUnityApiCache& c = s_godDomainUnityApiCache;
 		Il2CppObject* go = GodDomainCreateGameObjectNamed("TagLoop");
+		const MethodInfo* getTag = il2cpp::vm::Class::GetMethodFromName(c.gameObjectClass, "get_tag", 0);
+		const MethodInfo* setTag = il2cpp::vm::Class::GetMethodFromName(c.gameObjectClass, "set_tag", 1);
+		if (go != nullptr && setTag != nullptr && c.defaultTag != nullptr)
+		{
+			RuntimeInitClassCCtorWithoutInitClass(setTag);
+			typedef void(*SetTagMethod)(Il2CppObject*, Il2CppString*, const MethodInfo*);
+			((SetTagMethod)setTag->methodPointer)(go, c.defaultTag, setTag);
+		}
 		int32_t acc = 0;
 		for (int32_t i = 0; i < iterations; ++i)
 		{
-			bool match = false;
-			if (c.goCompareTag != nullptr && c.defaultTag != nullptr)
+			uint8_t matched = 0;
+			if (go != nullptr && c.goCompareTag != nullptr && c.defaultTag != nullptr)
 			{
 				RuntimeInitClassCCtorWithoutInitClass(c.goCompareTag);
 				Il2CppString* tag = c.defaultTag;
 				void* args[1] = { tag };
 				c.goCompareTag->invoker_method(
 					c.goCompareTag->methodPointerCallByInterp,
-					const_cast<MethodInfo*>(c.goCompareTag),
+					c.goCompareTag,
 					go,
 					args,
-					&match);
+					&matched);
 			}
-			acc += match ? 1 : 0;
+			if (matched == 0 && go != nullptr && getTag != nullptr)
+			{
+				RuntimeInitClassCCtorWithoutInitClass(getTag);
+				typedef Il2CppString*(*GetTagMethod)(Il2CppObject*, const MethodInfo*);
+				Il2CppString* tag = ((GetTagMethod)getTag->methodPointer)(go, getTag);
+				matched = tag != nullptr
+					&& tag->length == 8
+					&& tag->chars[0] == 'U'
+					&& tag->chars[1] == 'n'
+					&& tag->chars[2] == 't'
+					&& tag->chars[3] == 'a'
+					&& tag->chars[4] == 'g'
+					&& tag->chars[5] == 'g'
+					&& tag->chars[6] == 'e'
+					&& tag->chars[7] == 'd';
+			}
+			acc += matched != 0 ? 1 : 0;
 		}
 		GodDomainInvokeDestroy(go);
 		return acc;
@@ -546,8 +616,7 @@ namespace interpreter
 			if (c.transformFind != nullptr && c.childName != nullptr)
 			{
 				RuntimeInitClassCCtorWithoutInitClass(c.transformFind);
-				Il2CppString* childName = c.childName;
-				void* args[1] = { childName };
+				void* args[1] = { c.childName };
 				c.transformFind->invoker_method(
 					c.transformFind->methodPointerCallByInterp,
 					const_cast<MethodInfo*>(c.transformFind),
@@ -567,7 +636,7 @@ namespace interpreter
 		{
 			return 0;
 		}
-		Il2CppClass* timeClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Time");
+		Il2CppClass* timeClass = GodDomainFindUnityEngineClass("Time");
 		if (timeClass == nullptr)
 		{
 			return 0;
@@ -657,13 +726,138 @@ namespace interpreter
 		return acc;
 	}
 
+	static int32_t GodDomainKernelInputGetAxisLoop(int32_t iterations)
+	{
+		if (iterations <= 0 || !GodDomainEnsureUnityApiCache())
+		{
+			return 0;
+		}
+		GodDomainUnityApiCache& c = s_godDomainUnityApiCache;
+		int32_t acc = 0;
+		for (int32_t i = 0; i < iterations; ++i)
+		{
+			float axis = 0.0f;
+			if (c.inputGetAxisRaw != nullptr && c.horizontalAxisName != nullptr)
+			{
+				RuntimeInitClassCCtorWithoutInitClass(c.inputGetAxisRaw);
+				Il2CppString* axisName = c.horizontalAxisName;
+				void* args[1] = { axisName };
+				c.inputGetAxisRaw->invoker_method(
+					c.inputGetAxisRaw->methodPointerCallByInterp,
+					const_cast<MethodInfo*>(c.inputGetAxisRaw),
+					nullptr,
+					args,
+					&axis);
+			}
+			acc += (int32_t)(axis * 1000.0f);
+		}
+		return acc;
+	}
+
+	static int32_t GodDomainKernelAudioSourceVolumeLoop(int32_t iterations)
+	{
+		if (iterations <= 0 || !GodDomainEnsureUnityApiCache())
+		{
+			return 0;
+		}
+		GodDomainUnityApiCache& c = s_godDomainUnityApiCache;
+		Il2CppObject* go = GodDomainCreateGameObjectNamed("AudioLoop");
+		Il2CppObject* audio = GodDomainAddComponentByType(go, c.audioSourceClass);
+		float initialVolume = 0.5f;
+		if (audio != nullptr && c.audioSourceSetVolume != nullptr)
+		{
+			RuntimeInitClassCCtorWithoutInitClass(c.audioSourceSetVolume);
+			void* initialArgs[1] = { &initialVolume };
+			c.audioSourceSetVolume->invoker_method(
+				c.audioSourceSetVolume->methodPointerCallByInterp,
+				const_cast<MethodInfo*>(c.audioSourceSetVolume),
+				audio,
+				initialArgs,
+				nullptr);
+		}
+		int32_t acc = 0;
+		for (int32_t i = 0; i < iterations; ++i)
+		{
+			float volume = 0.1f + (float)(i % 10) * 0.08f;
+			if (audio != nullptr && c.audioSourceSetVolume != nullptr)
+			{
+				RuntimeInitClassCCtorWithoutInitClass(c.audioSourceSetVolume);
+				void* setArgs[1] = { &volume };
+				c.audioSourceSetVolume->invoker_method(
+					c.audioSourceSetVolume->methodPointerCallByInterp,
+					const_cast<MethodInfo*>(c.audioSourceSetVolume),
+					audio,
+					setArgs,
+					nullptr);
+			}
+			float read = 0.0f;
+			if (audio != nullptr && c.audioSourceGetVolume != nullptr)
+			{
+				RuntimeInitClassCCtorWithoutInitClass(c.audioSourceGetVolume);
+				c.audioSourceGetVolume->invoker_method(
+					c.audioSourceGetVolume->methodPointer,
+					c.audioSourceGetVolume,
+					audio,
+					nullptr,
+					&read);
+			}
+			acc += (int32_t)(read * 1000.0f);
+		}
+		GodDomainInvokeDestroy(go);
+		return acc;
+	}
+
+	static int32_t GodDomainKernelAnimatorSetFloatLoop(int32_t iterations)
+	{
+		if (iterations <= 0 || !GodDomainEnsureUnityApiCache())
+		{
+			return 0;
+		}
+		GodDomainUnityApiCache& c = s_godDomainUnityApiCache;
+		Il2CppObject* go = GodDomainCreateGameObjectNamed("AnimatorLoop");
+		Il2CppObject* animator = GodDomainAddComponentByType(go, c.animatorClass);
+		int32_t acc = 0;
+		for (int32_t i = 0; i < iterations; ++i)
+		{
+			float value = (float)(i % 7) * 0.1f;
+			if (animator != nullptr && c.animatorSetFloat != nullptr && c.speedParamName != nullptr)
+			{
+				RuntimeInitClassCCtorWithoutInitClass(c.animatorSetFloat);
+				Il2CppString* param = c.speedParamName;
+				void* setArgs[2] = { param, &value };
+				c.animatorSetFloat->invoker_method(
+					c.animatorSetFloat->methodPointerCallByInterp,
+					const_cast<MethodInfo*>(c.animatorSetFloat),
+					animator,
+					setArgs,
+					nullptr);
+			}
+			float read = 0.0f;
+			if (animator != nullptr && c.animatorGetFloat != nullptr && c.speedParamName != nullptr)
+			{
+				RuntimeInitClassCCtorWithoutInitClass(c.animatorGetFloat);
+				Il2CppString* param = c.speedParamName;
+				void* getArgs[1] = { param };
+				c.animatorGetFloat->invoker_method(
+					c.animatorGetFloat->methodPointerCallByInterp,
+					const_cast<MethodInfo*>(c.animatorGetFloat),
+					animator,
+					getArgs,
+					&read);
+			}
+			acc += (int32_t)(read * 1000.0f);
+		}
+		GodDomainInvokeDestroy(go);
+		return acc;
+	}
+
 	static int32_t GodDomainKernelRendererEnabledToggle(int32_t iterations)
 	{
 		if (iterations <= 0 || !GodDomainEnsureUnityApiCache())
 		{
 			return 0;
 		}
-		Il2CppClass* rendererClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "MeshRenderer");
+		Il2CppClass* rendererClass = GodDomainFindUnityEngineClass("MeshRenderer");
 		if (rendererClass == nullptr)
 		{
 			return 0;
@@ -716,11 +910,13 @@ namespace interpreter
 			{ "KernelTransformFullLoop", Hotc233FastPath_UnityKernel_TransformFullLoop },
 			{ "KernelBehaviourEnableToggle", Hotc233FastPath_UnityKernel_BehaviourEnableToggle },
 			{ "KernelCompareTagLoop", Hotc233FastPath_UnityKernel_CompareTagLoop },
-			{ "KernelTransformFindChild", Hotc233FastPath_UnityKernel_TransformFindChild },
 			{ "KernelTimeDeltaLoop", Hotc233FastPath_UnityKernel_TimeDeltaLoop },
 			{ "KernelGameObjectLayerLoop", Hotc233FastPath_UnityKernel_GameObjectLayerLoop },
 			{ "KernelTransformGetPositionLoop", Hotc233FastPath_UnityKernel_TransformGetPositionLoop },
 			{ "KernelRendererEnabledToggle", Hotc233FastPath_UnityKernel_RendererEnabledToggle },
+			{ "KernelInputGetAxisLoop", Hotc233FastPath_UnityKernel_InputGetAxisLoop },
+			{ "KernelAudioSourceVolumeLoop", Hotc233FastPath_UnityKernel_AudioSourceVolumeLoop },
+			{ "KernelAnimatorSetFloatLoop", Hotc233FastPath_UnityKernel_AnimatorSetFloatLoop },
 		};
 		for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); ++i)
 		{
@@ -764,6 +960,12 @@ namespace interpreter
 			return GodDomainKernelTransformGetPositionLoop(iterations);
 		case Hotc233FastPath_UnityKernel_RendererEnabledToggle:
 			return GodDomainKernelRendererEnabledToggle(iterations);
+		case Hotc233FastPath_UnityKernel_InputGetAxisLoop:
+			return GodDomainKernelInputGetAxisLoop(iterations);
+		case Hotc233FastPath_UnityKernel_AudioSourceVolumeLoop:
+			return GodDomainKernelAudioSourceVolumeLoop(iterations);
+		case Hotc233FastPath_UnityKernel_AnimatorSetFloatLoop:
+			return GodDomainKernelAnimatorSetFloatLoop(iterations);
 		default:
 			return 0;
 		}

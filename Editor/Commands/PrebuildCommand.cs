@@ -41,7 +41,7 @@ namespace Hotc233.Editor.Commands
             Debug.Log(Hotc233Localization.Format("generate.start", target, developmentBuild, forceRebuild));
             SaveDirtyOpenScenesWithoutPrompt();
 
-            var installer = new Installer.InstallerController();
+            var installer = new Installer.InstallerController(target);
             installer.EnsureBuiltinRuntimeReady();
 
             if (!installer.HasInstalledHotc233())
@@ -142,7 +142,7 @@ namespace Hotc233.Editor.Commands
 
             RunStage(context, state, "GenerateIl2CppDef", forceRebuild, ComputeProjectFingerprint, HasIl2CppDefOutputs, () =>
             {
-                Il2CppDefGeneratorCommand.GenerateIl2CppDef();
+                Il2CppDefGeneratorCommand.GenerateIl2CppDef(target);
             });
 
             RunStage(context, state, "GenerateLinkXml", forceRebuild, ComputeProjectFingerprint, HasLinkOutput, () =>
@@ -349,11 +349,12 @@ namespace Hotc233.Editor.Commands
                 yield return Path.Combine(hotUpdateDir, assemblyName + ".dll");
             }
 
-            yield return Path.Combine(SettingsUtil.GeneratedCppDir, "UnityVersion.h");
-            yield return Path.Combine(SettingsUtil.GeneratedCppDir, "AssemblyManifest.cpp");
+            string generatedCppDir = SettingsUtil.GetGeneratedCppDir(context.Target);
+            yield return Path.Combine(generatedCppDir, "UnityVersion.h");
+            yield return Path.Combine(generatedCppDir, "AssemblyManifest.cpp");
             yield return Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputLinkFile);
             yield return Path.Combine(Application.dataPath, SettingsUtil.Hotc233Settings.outputAOTGenericReferenceFile);
-            yield return Path.Combine(SettingsUtil.GeneratedCppDir, "MethodBridge.cpp");
+            yield return Path.Combine(generatedCppDir, "MethodBridge.cpp");
 
             string strippedAotDir = SettingsUtil.GetAssembliesPostIl2CppStripDir(context.Target);
             if (Directory.Exists(strippedAotDir))
@@ -373,8 +374,9 @@ namespace Hotc233.Editor.Commands
 
         private static bool HasIl2CppDefOutputs(PipelineContext context)
         {
-            string unityVersionFile = Path.Combine(SettingsUtil.GeneratedCppDir, "UnityVersion.h");
-            string assemblyManifestFile = Path.Combine(SettingsUtil.GeneratedCppDir, "AssemblyManifest.cpp");
+            string generatedCppDir = SettingsUtil.GetGeneratedCppDir(context.Target);
+            string unityVersionFile = Path.Combine(generatedCppDir, "UnityVersion.h");
+            string assemblyManifestFile = Path.Combine(generatedCppDir, "AssemblyManifest.cpp");
             return FileContains(unityVersionFile, "#define HOTC233_UNITY_VERSION ")
                 && SettingsUtil.HotUpdateAssemblyNamesIncludePreserved.All(assemblyName => FileContains(assemblyManifestFile, $"\"{assemblyName}\""));
         }
@@ -392,7 +394,7 @@ namespace Hotc233.Editor.Commands
 
         private static bool HasMethodBridgeOutput(PipelineContext context)
         {
-            return File.Exists(Path.Combine(SettingsUtil.GeneratedCppDir, "MethodBridge.cpp"));
+            return File.Exists(Path.Combine(SettingsUtil.GetGeneratedCppDir(context.Target), "MethodBridge.cpp"));
         }
 
         private static bool HasAotReferenceOutput(PipelineContext context)

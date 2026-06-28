@@ -36,10 +36,10 @@ namespace Hotc233.Editor.BuildProcessors
              */
 
             string pbxprojFile = BuildProcessorUtil.GetXcodeProjectFile(pathToBuiltProject);
-            string srcLibil2cppDir = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp";
+            string srcLibil2cppDir = $"{SettingsUtil.GetLocalIl2CppDir(target)}/libil2cpp";
             string dstLibil2cppDir = $"{pathToBuiltProject}/Libraries/libil2cpp";
             string lumpDir = $"{pathToBuiltProject}/Libraries/lumps";
-            string srcExternalDir = $"{SettingsUtil.LocalIl2CppDir}/external";
+            string srcExternalDir = $"{SettingsUtil.GetLocalIl2CppDir(target)}/external";
             string dstExternalDir = $"{pathToBuiltProject}/Libraries/external";
             //RemoveExternalLibil2cppOption(srcExternalDir, dstExternalDir);
             CopyLibil2cppToXcodeProj(srcLibil2cppDir, dstLibil2cppDir);

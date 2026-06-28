@@ -18,6 +18,7 @@ namespace Hotc233.Editor.Installer
         public int MajorVersion => _curVersion.major;
 
         private readonly UnityVersion _curVersion;
+        private readonly BuildTarget _target;
 
         public string PackageVersion { get; private set; }
 
@@ -28,14 +29,22 @@ namespace Hotc233.Editor.Installer
 
         private string RuntimeMarkerRelativePath => "libil2cpp/hotc233";
 
-        private string LocalRuntimeMarkerDir => $"{SettingsUtil.LocalIl2CppDir}/{RuntimeMarkerRelativePath}";
+        private string LocalIl2CppDir => SettingsUtil.GetLocalIl2CppDir(_target);
+
+        private string LocalRuntimeMarkerDir => $"{LocalIl2CppDir}/{RuntimeMarkerRelativePath}";
 
         private string BundledRuntimeMarkerDir => $"{BundledLibil2cppDir}/hotc233";
 
         private string LocalGeneratedDir => $"{LocalRuntimeMarkerDir}/generated";
 
         public InstallerController()
+            : this(EditorUserBuildSettings.activeBuildTarget)
         {
+        }
+
+        public InstallerController(BuildTarget target)
+        {
+            _target = target;
             _curVersion = ParseUnityVersion(Application.unityVersion);
             PackageVersion = LoadPackageVersion();
             InstalledLibil2cppVersion = ReadLocalVersion();
@@ -127,6 +136,11 @@ namespace Hotc233.Editor.Installer
             InstallDefaultHotc233();
         }
 
+        public void EnsureBuiltinRuntimeReady(BuildTarget target)
+        {
+            new InstallerController(target).InstallDefaultHotc233();
+        }
+
         /// <summary>从包内内置 libil2cpp 同步 Hotc233 运行时。</summary>
         public void InstallDefaultHotc233()
         {
@@ -162,13 +176,13 @@ namespace Hotc233.Editor.Installer
             Directory.CreateDirectory(workDir);
 
             // 本地工作目录保持增量同步，避免每次整目录重拷导致编辑器长时间无响应。
-            string localIl2CppDir = SettingsUtil.LocalIl2CppDir;
+            string localIl2CppDir = LocalIl2CppDir;
             Directory.CreateDirectory(localIl2CppDir);
 
             List<PreservedGeneratedFile> generatedFiles = CaptureGeneratedRuntimeFiles();
             bool editorFilesChanged = BashUtil.SyncDirIncremental(editorIl2cppPath, localIl2CppDir, true);
 
-            string dstLibil2cppDir = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp";
+            string dstLibil2cppDir = $"{LocalIl2CppDir}/libil2cpp";
             bool runtimeFilesChanged = BashUtil.SyncDirIncremental(libil2cppSourceDir, dstLibil2cppDir, true);
             runtimeFilesChanged = RestoreGeneratedRuntimeFiles(generatedFiles) || runtimeFilesChanged;
 

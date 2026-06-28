@@ -26,6 +26,9 @@ namespace interpreter
 		Il2CppClass* physicsClass;
 		Il2CppClass* behaviourClass;
 		Il2CppClass* objectClass;
+		Il2CppClass* inputClass;
+		Il2CppClass* audioSourceClass;
+		Il2CppClass* animatorClass;
 		Il2CppClass* hotUpdatePrefabProbeClass;
 		const MethodInfo* goCtorWithName;
 		const MethodInfo* goSetActive;
@@ -39,12 +42,20 @@ namespace interpreter
 		const MethodInfo* transformGetPosition;
 		const MethodInfo* cameraWorldToScreenPoint;
 		const MethodInfo* behaviourSetEnabled;
+		const MethodInfo* inputGetAxisRaw;
+		const MethodInfo* audioSourceSetVolume;
+		const MethodInfo* audioSourceGetVolume;
+		const MethodInfo* animatorSetFloat;
+		const MethodInfo* animatorGetFloat;
 		const MethodInfo* objectInstantiate;
 		const MethodInfo* objectDestroy;
+		const MethodInfo* objectSetName;
 		const MethodInfo* physicsRaycast;
 		Il2CppString* defaultGoName;
 		Il2CppString* defaultTag;
 		Il2CppString* childName;
+		Il2CppString* horizontalAxisName;
+		Il2CppString* speedParamName;
 	};
 
 	GodDomainUnityApiCache& GodDomainGetUnityApiCache();
@@ -58,8 +69,8 @@ namespace interpreter
 			return;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(c.objectDestroy);
-		void* arg = obj;
-		c.objectDestroy->invoker_method(c.objectDestroy->methodPointerCallByInterp, c.objectDestroy, nullptr, &arg, nullptr);
+		typedef void(*ObjectDestroyMethod)(Il2CppObject*, const MethodInfo*);
+		((ObjectDestroyMethod)c.objectDestroy->methodPointer)(obj, c.objectDestroy);
 	}
 
 	IL2CPP_FORCE_INLINE Il2CppObject* GodDomainInvokeInstantiate(Il2CppObject* templateObj)
@@ -70,10 +81,8 @@ namespace interpreter
 			return nullptr;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(c.objectInstantiate);
-		Il2CppObject* inst = nullptr;
-		void* args[1] = { templateObj };
-		c.objectInstantiate->invoker_method(c.objectInstantiate->methodPointerCallByInterp, c.objectInstantiate, nullptr, args, &inst);
-		return inst;
+		typedef Il2CppObject*(*ObjectInstantiateMethod)(Il2CppObject*, const MethodInfo*);
+		return ((ObjectInstantiateMethod)c.objectInstantiate->methodPointer)(templateObj, c.objectInstantiate);
 	}
 
 	IL2CPP_FORCE_INLINE void GodDomainInvokeSetActive(Il2CppObject* go, bool active)
@@ -112,8 +121,14 @@ namespace interpreter
 			return nullptr;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(c.goCtorWithName);
-		void* args[1] = { nameStr };
-		c.goCtorWithName->invoker_method(c.goCtorWithName->methodPointerCallByInterp, c.goCtorWithName, obj, args, nullptr);
+		typedef void(*GameObjectCtorWithNameMethod)(Il2CppObject*, Il2CppString*, const MethodInfo*);
+		((GameObjectCtorWithNameMethod)c.goCtorWithName->methodPointer)(obj, nameStr, c.goCtorWithName);
+		if (c.objectSetName != nullptr)
+		{
+			RuntimeInitClassCCtorWithoutInitClass(c.objectSetName);
+			typedef void(*ObjectSetNameMethod)(Il2CppObject*, Il2CppString*, const MethodInfo*);
+			((ObjectSetNameMethod)c.objectSetName->methodPointer)(obj, nameStr, c.objectSetName);
+		}
 		return obj;
 	}
 
@@ -150,11 +165,13 @@ namespace interpreter
 			((DirectSetV3)directPtr)(transformObj, v3);
 			return;
 		}
-		typedef void(*SetInterpV3Method)(void*, void*, MethodInfo*);
-		((SetInterpV3Method)c.transformSetPosition->methodPointerCallByInterp)(
+		void* args[1] = { v3 };
+		c.transformSetPosition->invoker_method(
+			c.transformSetPosition->methodPointerCallByInterp,
+			const_cast<MethodInfo*>(c.transformSetPosition),
 			transformObj,
-			v3,
-			const_cast<MethodInfo*>(c.transformSetPosition));
+			args,
+			nullptr);
 	}
 
 	int32_t GodDomainRunUnityKernel(int32_t fastPathKind, int32_t iterations);

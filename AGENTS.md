@@ -93,7 +93,7 @@
 ## 内置运行时规范
 
 - 包内运行时目录：`Assets/neko233/hotc233-unity/Data~/Libil2cpp/2022-tuanjie`。
-- 本地工作目录：`Hotc233Data/LocalIl2CppData-{Application.platform}/il2cpp`。
+- 本地工作目录：`Hotc233Data/LocalIl2CppData-{BuildTarget}/il2cpp`，例如 WebGL 使用 `LocalIl2CppData-WebGL`，Android 使用 `LocalIl2CppData-Android`，iOS 使用 `LocalIl2CppData-iOS`，macOS Standalone 使用 `LocalIl2CppData-StandaloneOSX`。不要再用编辑器平台（如 WindowsEditor）推导目标平台运行时目录。
 - 子仓库不提交 Unity `.meta` 文件；`.meta` 由宿主 Unity / Tuanjie 项目本地生成，避免国际版 Unity 与 Tuanjie GUID 格式差异导致仓库反复变脏。
 - `Generate/All`、构建前检查、EditorForBuild 自动化必须自动调用 `EnsureBuiltinRuntimeReady()`。
 - 不允许因为未手动打开窗口而失败；只有包内运行时缺失或 Unity/Tuanjie 版本不兼容时才失败。

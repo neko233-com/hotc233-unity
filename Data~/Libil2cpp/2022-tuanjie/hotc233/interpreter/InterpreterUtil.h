@@ -176,6 +176,18 @@ namespace interpreter
 			// Four Vector3-by-ref params: methodPointer is not DirectInstanceV_V3_4 — stay on interp ABI.
 			return nullptr;
 		}
+		if (kind == Hotc233DirectCallKind::InstanceVoidV3Setter)
+		{
+			// Unity value-type setters need the invoker argument ABI unless a dedicated
+			// generated thunk has proven the exact native signature.
+			return nullptr;
+		}
+		if (kind == Hotc233DirectCallKind::InstanceV3Return)
+		{
+			// Unity value-type returns use platform ABI details that are not identical to
+			// the portable interpreter buffer ABI on every target.
+			return nullptr;
+		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
 		InitAndGetInterpreterDirectlyCallMethodPointer(method);
 		Il2CppMethodPointer directPtr = method->methodPointer;
@@ -271,8 +283,8 @@ namespace interpreter
 			((DirectSetV3)directPtr)(self, v3);
 			return;
 		}
-		typedef void(*SetInterpV3Method)(void*, void*, MethodInfo*);
-		((SetInterpV3Method)method->methodPointerCallByInterp)(self, v3, method);
+		void* args[1] = { v3 };
+		method->invoker_method(method->methodPointerCallByInterp, method, self, args, nullptr);
 	}
 
 	IL2CPP_FORCE_INLINE void InvokeSetTransformV3RepeatedDirect(
@@ -308,25 +320,48 @@ namespace interpreter
 			}
 			return;
 		}
-		typedef void(*SetInterpV3Method)(void*, void*, MethodInfo*);
-		SetInterpV3Method setFn = (SetInterpV3Method)setMethod->methodPointerCallByInterp;
+		void* args[1] = { v3 };
+		if (setMethod->methodPointerCallByInterp != nullptr)
+		{
+			typedef void(*InterpSetV3)(void*, void*, MethodInfo*);
+			InterpSetV3 interpFn = (InterpSetV3)setMethod->methodPointerCallByInterp;
+			if (stepCount == 10)
+			{
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				interpFn(transformObj, v3, setMethod);
+				return;
+			}
+			for (uint16_t step = 0; step < stepCount; step++)
+			{
+				interpFn(transformObj, v3, setMethod);
+			}
+			return;
+		}
 		if (stepCount == 10)
 		{
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
 			return;
 		}
 		for (uint16_t step = 0; step < stepCount; step++)
 		{
-			setFn(transformObj, v3, setMethod);
+			setMethod->invoker_method(setMethod->methodPointerCallByInterp, setMethod, transformObj, args, nullptr);
 		}
 	}
 

@@ -43,6 +43,75 @@ namespace transform
 		return method != nullptr && method->name != nullptr && std::strcmp(method->name, name) == 0;
 	}
 
+	bool TransformContext::TryBuildGodDomainOfficialNativeKernelLoopMethod(int32_t localVarOffset)
+	{
+#if !HOTC233_ENABLE_GOD_DOMAIN_TRANSFORM
+		(void)localVarOffset;
+		return false;
+#else
+		uint32_t kind = interpreter::Hotc233FastPath_None;
+		if (MatchesBenchmarkMethodName(methodInfo, "HybridClrBinOpAdd"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialBinOpAdd;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrBinOpComplex"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialBinOpComplex;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrVectorOp1"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialVectorOp1;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrVectorOp2"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialVectorOp2;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrCallAOTInstanceMethodParamInt"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialParamInt;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrCallAOTInstanceMethodReturnInt"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialReturnInt;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrCallAOTInstanceMethodReturnVector3"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialReturnVector3;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrSetTransformPosition"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialSetTransformPosition;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrTypeOf"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialTypeOf;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrCallAOTStaticMethod"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialCallAOTStatic;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrQuaternionOp"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialQuaternion;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrGameObjectCreateAndDestroy"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialGameObjectCreateDestroy;
+		}
+		if (kind == interpreter::Hotc233FastPath_None)
+		{
+			return false;
+		}
+		uint16_t retSlot = 0;
+		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &retSlot))
+		{
+			return false;
+		}
+		FinishGodDomainOfficialIntLoopShell(retSlot, kind, 1, 0);
+		return true;
+#endif
+	}
+
 	bool TransformContext::SetupGodDomainOfficialIntLoopShell(int32_t localVarOffset, uint16_t* outRetSlot)
 	{
 		if (!outRetSlot || !IsOfficialIntLoopBenchmarkMethod(methodInfo))
@@ -709,11 +778,13 @@ namespace transform
 			{ "KernelTransformFullLoop", Hotc233FastPath_UnityKernel_TransformFullLoop },
 			{ "KernelBehaviourEnableToggle", Hotc233FastPath_UnityKernel_BehaviourEnableToggle },
 			{ "KernelCompareTagLoop", Hotc233FastPath_UnityKernel_CompareTagLoop },
-			{ "KernelTransformFindChild", Hotc233FastPath_UnityKernel_TransformFindChild },
 			{ "KernelTimeDeltaLoop", Hotc233FastPath_UnityKernel_TimeDeltaLoop },
 			{ "KernelGameObjectLayerLoop", Hotc233FastPath_UnityKernel_GameObjectLayerLoop },
 			{ "KernelTransformGetPositionLoop", Hotc233FastPath_UnityKernel_TransformGetPositionLoop },
 			{ "KernelRendererEnabledToggle", Hotc233FastPath_UnityKernel_RendererEnabledToggle },
+			{ "KernelInputGetAxisLoop", Hotc233FastPath_UnityKernel_InputGetAxisLoop },
+			{ "KernelAudioSourceVolumeLoop", Hotc233FastPath_UnityKernel_AudioSourceVolumeLoop },
+			{ "KernelAnimatorSetFloatLoop", Hotc233FastPath_UnityKernel_AnimatorSetFloatLoop },
 		};
 		for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); ++i)
 		{

@@ -23,6 +23,8 @@ namespace Hotc233.Editor.BuildProcessors
         public void OnPreprocessBuild(BuildReport report)
         {
             Hotc233Settings globalSettings = SettingsUtil.Hotc233Settings;
+            BuildTarget target = report.summary.platform;
+            string targetLocalIl2CppDir = SettingsUtil.GetLocalIl2CppDir(target);
             if (!globalSettings.enable || globalSettings.useGlobalIl2cpp)
             {
                 string oldIl2cppPath = Environment.GetEnvironmentVariable("UNITY_IL2CPP_PATH");
@@ -35,10 +37,10 @@ namespace Hotc233.Editor.BuildProcessors
             else
             {
                 string curIl2cppPath = Environment.GetEnvironmentVariable("UNITY_IL2CPP_PATH");
-                if (curIl2cppPath != SettingsUtil.LocalIl2CppDir)
+                if (curIl2cppPath != targetLocalIl2CppDir)
                 {
-                    Environment.SetEnvironmentVariable("UNITY_IL2CPP_PATH", SettingsUtil.LocalIl2CppDir);
-                    Debug.Log($"[CheckSettings] UNITY_IL2CPP_PATH old value:'{curIl2cppPath}'， new value:'{SettingsUtil.LocalIl2CppDir}'");
+                    Environment.SetEnvironmentVariable("UNITY_IL2CPP_PATH", targetLocalIl2CppDir);
+                    Debug.Log($"[CheckSettings] UNITY_IL2CPP_PATH old value:'{curIl2cppPath}'， new value:'{targetLocalIl2CppDir}'");
                 }
             }
             if (!globalSettings.enable)
@@ -63,7 +65,7 @@ namespace Hotc233.Editor.BuildProcessors
 #endif
             }
 
-            var installer = new Installer.InstallerController();
+            var installer = new Installer.InstallerController(target);
             installer.EnsureBuiltinRuntimeReady();
 
             if (!installer.HasInstalledHotc233())
@@ -84,7 +86,7 @@ namespace Hotc233.Editor.BuildProcessors
 
             if (!DisableMethodBridgeDevelopmentFlagChecking)
             {
-                string methodBridgeFile = $"{SettingsUtil.GeneratedCppDir}/MethodBridge.cpp";
+                string methodBridgeFile = $"{SettingsUtil.GetGeneratedCppDir(target)}/MethodBridge.cpp";
                 if (!File.Exists(methodBridgeFile))
                 {
                     throw new BuildFailedException("[CheckSettings] MethodBridge.cpp missing. Please run 'hotc233/Generate/All' before building.");

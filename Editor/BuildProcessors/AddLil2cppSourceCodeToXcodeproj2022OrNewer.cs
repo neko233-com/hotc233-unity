@@ -22,7 +22,7 @@ namespace Hotc233.Editor.BuildProcessors
                 return;
             string pbxprojFile = BuildProcessorUtil.GetXcodeProjectFile(pathToBuiltProject);
             RemoveExternalLibil2cppOption(pbxprojFile);
-            CopyLibil2cppToXcodeProj(pathToBuiltProject);
+            CopyLibil2cppToXcodeProj(target, pathToBuiltProject);
         }
 
         private static string TryRemoveDunplicateShellScriptSegment(string pbxprojFile, string pbxprojContent)
@@ -70,9 +70,9 @@ namespace Hotc233.Editor.BuildProcessors
             File.WriteAllText(pbxprojFile, pbxprojContent, Encoding.UTF8);
         }
 
-        private static void CopyLibil2cppToXcodeProj(string pathToBuiltProject)
+        private static void CopyLibil2cppToXcodeProj(BuildTarget target, string pathToBuiltProject)
         {
-            string srcLibil2cppDir = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp";
+            string srcLibil2cppDir = $"{SettingsUtil.GetLocalIl2CppDir(target)}/libil2cpp";
             string destLibil2cppDir = $"{pathToBuiltProject}/Il2CppOutputProject/IL2CPP/libil2cpp";
             BashUtil.RemoveDir(destLibil2cppDir);
             BashUtil.CopyDir(srcLibil2cppDir, destLibil2cppDir, true);

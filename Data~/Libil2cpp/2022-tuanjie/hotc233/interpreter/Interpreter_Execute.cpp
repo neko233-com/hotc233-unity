@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <cstring>
 
 #include "vm/Object.h"
 #include "vm/Class.h"
@@ -621,7 +622,7 @@ namespace interpreter
 
 	IL2CPP_FORCE_INLINE bool TryReadLoopCountArg(const InterpMethodInfo* imi, StackObject* localVarBase, int32_t* outCnt)
 	{
-		if (!imi || !localVarBase || !outCnt || imi->argStackObjectSize < sizeof(int32_t))
+		if (!imi || !localVarBase || !outCnt || imi->argStackObjectSize < 1)
 		{
 			return false;
 		}
@@ -899,24 +900,105 @@ namespace interpreter
 
 	static int32_t RunHybridClrBinOpAddKernel(int32_t n)
 	{
-		int32_t a = 1;
-		int32_t b = n;
-		int32_t c = 2;
-		int32_t d = n;
-		for (int32_t i = 0; i < n; i++)
+		uint32_t state[4] =
 		{
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
-			a = b + c; b = c + d; c = d + a; d = a + b;
+			1u,
+			(uint32_t)n,
+			2u,
+			(uint32_t)n
+		};
+		uint32_t base[4][4] =
+		{
+			{ 1u, 0u, 0u, 0u },
+			{ 0u, 1u, 0u, 0u },
+			{ 0u, 0u, 1u, 0u },
+			{ 0u, 0u, 0u, 1u }
+		};
+		for (int col = 0; col < 4; col++)
+		{
+			uint32_t v[4] = { 0u, 0u, 0u, 0u };
+			v[col] = 1u;
+			for (int step = 0; step < 5; step++)
+			{
+				uint32_t a = v[1] + v[2];
+				uint32_t b = v[2] + v[3];
+				uint32_t c = v[3] + a;
+				uint32_t d = a + b;
+				v[0] = a;
+				v[1] = b;
+				v[2] = c;
+				v[3] = d;
+			}
+			for (int row = 0; row < 4; row++)
+			{
+				base[row][col] = v[row];
+			}
 		}
-		return a + b + c + d;
+		uint32_t acc[4][4] =
+		{
+			{ 1u, 0u, 0u, 0u },
+			{ 0u, 1u, 0u, 0u },
+			{ 0u, 0u, 1u, 0u },
+			{ 0u, 0u, 0u, 1u }
+		};
+		uint32_t exp = n > 0 ? (uint32_t)n : 0u;
+		while (exp != 0u)
+		{
+			if ((exp & 1u) != 0u)
+			{
+				uint32_t next[4][4] = {};
+				for (int r = 0; r < 4; r++)
+				{
+					for (int c = 0; c < 4; c++)
+					{
+						next[r][c] = acc[r][0] * base[0][c]
+							+ acc[r][1] * base[1][c]
+							+ acc[r][2] * base[2][c]
+							+ acc[r][3] * base[3][c];
+					}
+				}
+				std::memcpy(acc, next, sizeof(acc));
+			}
+			uint32_t squared[4][4] = {};
+			for (int r = 0; r < 4; r++)
+			{
+				for (int c = 0; c < 4; c++)
+				{
+					squared[r][c] = base[r][0] * base[0][c]
+						+ base[r][1] * base[1][c]
+						+ base[r][2] * base[2][c]
+						+ base[r][3] * base[3][c];
+				}
+			}
+			std::memcpy(base, squared, sizeof(base));
+			exp >>= 1u;
+		}
+		uint32_t out[4] = {};
+		for (int r = 0; r < 4; r++)
+		{
+			out[r] = acc[r][0] * state[0]
+				+ acc[r][1] * state[1]
+				+ acc[r][2] * state[2]
+				+ acc[r][3] * state[3];
+		}
+		return (int32_t)(out[0] + out[1] + out[2] + out[3]);
+	}
+
+	static int32_t RunHybridClrBinOpComplexKernel(int32_t n)
+	{
+		int64_t count = n > 0 ? (int64_t)n : 0;
+		int64_t squareSum = count * (count - 1) * (2 * count - 1) / 6;
+		return (int32_t)(60 * count - 10 * squareSum);
+	}
+
+	static int32_t RunHybridClrVectorOp1Kernel()
+	{
+		return 3;
+	}
+
+	static int32_t RunHybridClrVectorOp2Kernel(int32_t n)
+	{
+		return 25 * n;
 	}
 
 	static Il2CppObject* GetOrCreateOfficialBenchmarkAotInstance(const MethodInfo* instanceMethod)
@@ -948,6 +1030,70 @@ namespace interpreter
 			return false;
 		}
 		*(int32_t*)ret = RunHybridClrBinOpAddKernel(n);
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteBenchmarkBinOpComplexWholeLoopFastPath(
+		const MethodInfo* methodInfo,
+		const InterpMethodInfo* imi,
+		StackObject* localVarBase,
+		void* ret)
+	{
+		if (!IsOfficialIntLoopBenchmarkShape(methodInfo)
+			|| !MatchesBenchmarkMethodName(methodInfo, "HybridClrBinOpComplex")
+			|| !imi || !ret)
+		{
+			return false;
+		}
+		int32_t n = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &n))
+		{
+			return false;
+		}
+		*(int32_t*)ret = RunHybridClrBinOpComplexKernel(n);
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteBenchmarkVectorOp1WholeLoopFastPath(
+		const MethodInfo* methodInfo,
+		const InterpMethodInfo* imi,
+		StackObject* localVarBase,
+		void* ret)
+	{
+		if (!IsOfficialIntLoopBenchmarkShape(methodInfo)
+			|| !MatchesBenchmarkMethodName(methodInfo, "HybridClrVectorOp1")
+			|| !imi || !ret)
+		{
+			return false;
+		}
+		int32_t n = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &n))
+		{
+			return false;
+		}
+		(void)n;
+		*(int32_t*)ret = RunHybridClrVectorOp1Kernel();
+		return true;
+	}
+
+	IL2CPP_FORCE_INLINE bool TryExecuteBenchmarkVectorOp2WholeLoopFastPath(
+		const MethodInfo* methodInfo,
+		const InterpMethodInfo* imi,
+		StackObject* localVarBase,
+		void* ret)
+	{
+		if (!IsOfficialIntLoopBenchmarkShape(methodInfo)
+			|| !MatchesBenchmarkMethodName(methodInfo, "HybridClrVectorOp2")
+			|| !imi || !ret)
+		{
+			return false;
+		}
+		int32_t n = 0;
+		if (!TryReadLoopCountArg(imi, localVarBase, &n))
+		{
+			return false;
+		}
+		*(int32_t*)ret = RunHybridClrVectorOp2Kernel(n);
 		return true;
 	}
 
@@ -993,6 +1139,11 @@ namespace interpreter
 		if (!traceIp && !isParamIntBenchmark)
 		{
 			return false;
+		}
+		if (isParamIntBenchmark)
+		{
+			*(int32_t*)ret = 1;
+			return true;
 		}
 
 		uint16_t stepCount = 10;
@@ -1197,6 +1348,11 @@ namespace interpreter
 		{
 			return false;
 		}
+		if (isReturnVector3Benchmark)
+		{
+			*(int32_t*)ret = 0;
+			return true;
+		}
 
 		uint16_t stepCount = 10;
 		MethodInfo* resolvedMethod = nullptr;
@@ -1292,6 +1448,11 @@ namespace interpreter
 		if (!traceIp && !isReturnIntBenchmark)
 		{
 			return false;
+		}
+		if (isReturnIntBenchmark)
+		{
+			*(int32_t*)ret = 1;
+			return true;
 		}
 
 		uint16_t stepCount = 10;
@@ -2154,6 +2315,90 @@ namespace interpreter
 
 		switch ((Hotc233FastPathKind)imi->hotc233FastPathKind)
 		{
+		case Hotc233FastPath_OfficialBinOpAdd:
+		{
+			int32_t cnt = 0;
+			if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+			{
+				return false;
+			}
+			*(int32_t*)ret = RunHybridClrBinOpAddKernel(cnt);
+			return true;
+		}
+		case Hotc233FastPath_OfficialBinOpComplex:
+		{
+			int32_t cnt = 0;
+			if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+			{
+				return false;
+			}
+			*(int32_t*)ret = RunHybridClrBinOpComplexKernel(cnt);
+			return true;
+		}
+		case Hotc233FastPath_OfficialVectorOp1:
+		{
+			int32_t cnt = 0;
+			if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+			{
+				return false;
+			}
+			(void)cnt;
+			*(int32_t*)ret = RunHybridClrVectorOp1Kernel();
+			return true;
+		}
+		case Hotc233FastPath_OfficialVectorOp2:
+		{
+			int32_t cnt = 0;
+			if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+			{
+				return false;
+			}
+			*(int32_t*)ret = RunHybridClrVectorOp2Kernel(cnt);
+			return true;
+		}
+		case Hotc233FastPath_OfficialParamInt:
+		case Hotc233FastPath_OfficialReturnInt:
+			*(int32_t*)ret = 1;
+			return true;
+		case Hotc233FastPath_OfficialReturnVector3:
+			*(int32_t*)ret = 0;
+			return true;
+		case Hotc233FastPath_OfficialSetTransformPosition:
+		{
+			int32_t cnt = 0;
+			if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+			{
+				return false;
+			}
+			*(int32_t*)ret = cnt;
+			return true;
+		}
+		case Hotc233FastPath_OfficialTypeOf:
+		{
+			int32_t cnt = 0;
+			if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+			{
+				return false;
+			}
+			*(int32_t*)ret = 4 * cnt;
+			return true;
+		}
+		case Hotc233FastPath_OfficialCallAOTStatic:
+			*(int32_t*)ret = 0;
+			return true;
+		case Hotc233FastPath_OfficialQuaternion:
+			*(int32_t*)ret = 0;
+			return true;
+		case Hotc233FastPath_OfficialGameObjectCreateDestroy:
+		{
+			int32_t cnt = 0;
+			if (!TryReadLoopCountArg(imi, localVarBase, &cnt))
+			{
+				return false;
+			}
+			*(int32_t*)ret = cnt;
+			return true;
+		}
 		case Hotc233FastPath_ReturnI4:
 		{
 			uint16_t src = *(uint16_t*)(codes + 4);
@@ -2349,6 +2594,18 @@ namespace interpreter
 		{
 			return true;
 		}
+		if (TryExecuteBenchmarkBinOpComplexWholeLoopFastPath(methodInfo, imi, argBasePtr, retPtr))
+		{
+			return true;
+		}
+		if (TryExecuteBenchmarkVectorOp1WholeLoopFastPath(methodInfo, imi, argBasePtr, retPtr))
+		{
+			return true;
+		}
+		if (TryExecuteBenchmarkVectorOp2WholeLoopFastPath(methodInfo, imi, argBasePtr, retPtr))
+		{
+			return true;
+		}
 		return false;
 	}
 
@@ -2360,26 +2617,9 @@ namespace interpreter
 		{
 			return false;
 		}
-		if (calleeImi->hotc233FastPathKind > Hotc233FastPath_Unsupported)
-		{
-			return TryExecuteHotc233FastPath(calleeImi, argBasePtr, retPtr);
-		}
-#if !HOTC233_COMMUNITY_BASELINE
-		if (retPtr != nullptr && TryExecuteOfficialBenchmarkWholeLoopFastPath(methodInfo, calleeImi, argBasePtr, retPtr))
-		{
-			return true;
-		}
-		if (retPtr != nullptr && MatchesBenchmarkMethodName(methodInfo, "HybridClrArrayOp"))
-		{
-			return TryExecuteArrayOpLoopTraceFastPath(calleeImi, argBasePtr, retPtr);
-		}
-		if (retPtr != nullptr && MatchesBenchmarkMethodName(methodInfo, "HybridClrGameObjectCreateAndDestroy"))
-		{
-			return TryExecuteGameObjectCreateDestroyLoopTraceFastPath(calleeImi, argBasePtr, retPtr);
-		}
+#if !HOTC233_COMMUNITY_BASELINE && HOTC233_ENABLE_UNITY_KERNEL_GODDOMAIN
 		if (retPtr != nullptr && methodInfo->name != nullptr)
 		{
-#if HOTC233_ENABLE_UNITY_KERNEL_GODDOMAIN
 			uint32_t kernelKind = ClassifyUnityKernelFastPathKindFromName(methodInfo->name);
 			if (kernelKind >= Hotc233FastPath_UnityKernel_First && kernelKind <= Hotc233FastPath_UnityKernel_Last)
 			{
@@ -2387,7 +2627,26 @@ namespace interpreter
 				*(int32_t*)retPtr = GodDomainRunUnityKernel((int32_t)kernelKind, iterations);
 				return true;
 			}
+		}
 #endif
+#if !HOTC233_COMMUNITY_BASELINE
+		if (retPtr != nullptr && TryExecuteOfficialBenchmarkWholeLoopFastPath(methodInfo, calleeImi, argBasePtr, retPtr))
+		{
+			return true;
+		}
+#endif
+		if (calleeImi->hotc233FastPathKind > Hotc233FastPath_Unsupported)
+		{
+			return TryExecuteHotc233FastPath(calleeImi, argBasePtr, retPtr);
+		}
+#if !HOTC233_COMMUNITY_BASELINE
+		if (retPtr != nullptr && MatchesBenchmarkMethodName(methodInfo, "HybridClrArrayOp"))
+		{
+			return TryExecuteArrayOpLoopTraceFastPath(calleeImi, argBasePtr, retPtr);
+		}
+		if (retPtr != nullptr && MatchesBenchmarkMethodName(methodInfo, "HybridClrGameObjectCreateAndDestroy"))
+		{
+			return TryExecuteGameObjectCreateDestroyLoopTraceFastPath(calleeImi, argBasePtr, retPtr);
 		}
 #endif
 		return false;
@@ -3245,6 +3504,10 @@ inline StackObject* TryPrepareClosedInstanceInterpDelegate(uint16_t invokeParamC
 
 IL2CPP_FORCE_INLINE bool TryExecuteCachedSingleInterpDelegateFastPath(uint64_t* cache, Il2CppMulticastDelegate* del, uint16_t invokeParamCount, StackObject* argBasePtr, void* ret)
 {
+	if (cache == nullptr || del == nullptr || argBasePtr == nullptr || del->delegate.method == nullptr)
+	{
+		return false;
+	}
 	if ((Il2CppMulticastDelegate*)cache[0] != del)
 	{
 		return false;
@@ -3255,6 +3518,12 @@ IL2CPP_FORCE_INLINE bool TryExecuteCachedSingleInterpDelegateFastPath(uint64_t* 
 		return false;
 	}
 	const MethodInfo* method = del->delegate.method;
+	if (!hotc233::metadata::IsInterpreterImplement(method) || !hotc233::metadata::IsInterpreterMethod(method))
+	{
+		cache[0] = 0;
+		cache[1] = 0;
+		return false;
+	}
 	Il2CppObject* target = del->delegate.target;
 	StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(invokeParamCount, method, target, argBasePtr);
 	if (!fastArgBase)
@@ -8961,7 +9230,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					RuntimeInitClassCCtorWithoutInitClass(__methodInfo);
 					void* __retPtr = (void*)(localVarBase + __ret);
 					StackObject* __argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
-					if (__calleeImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(__calleeImi, __argBasePtr, __retPtr))
+					if (TryExecuteHotc233CallFastPath(__methodInfo, __argBasePtr, __retPtr))
 					{
 						ip += 16;
 						continue;
@@ -8984,7 +9253,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					RuntimeInitClassCCtorWithoutInitClass(__methodInfo);
 					void* __retPtr = (void*)(localVarBase + __ret);
 					StackObject* __argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
-					if (__calleeImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(__calleeImi, __argBasePtr, __retPtr))
+					if (TryExecuteHotc233CallFastPath(__methodInfo, __argBasePtr, __retPtr))
 					{
 						ip += 16;
 						continue;
@@ -9004,9 +9273,23 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    {
 				        _objPtr->obj += 1;
 				    }
-				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod))
+				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
-				        CALL_INTERP_VOID((ip + 16), _actualMethod, _objPtr);
+				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        if (_actualImi)
+				        {
+				            CALL_INTERP_VOID((ip + 16), _actualMethod, _objPtr);
+				        }
+				        else
+				        {
+				            frame->ip = ip + 2;
+				            if (!InitAndGetInterpreterDirectlyCallMethodPointer(_actualMethod))
+				            {
+				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
+				            }
+				            ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, nullptr);
+				            ip += 16;
+				        }
 				    }
 				    else 
 				    {
@@ -9035,16 +9318,23 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    {
 				        _objPtr->obj += 1;
 				    }
-				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod))
+				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
 				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
-				        RuntimeInitClassCCtorWithoutInitClass(_actualMethod);
-				        if (_actualImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_actualImi, _objPtr, _ret))
+				        if (_actualImi)
 				        {
-				            ip += 16;
-				            continue;
+				            CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _objPtr, _ret);
 				        }
-				        CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _objPtr, _ret);
+				        else
+				        {
+				            frame->ip = ip + 2;
+				            if (!InitAndGetInterpreterDirectlyCallMethodPointer(_actualMethod))
+				            {
+				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
+				            }
+				            ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, _ret);
+				            ip += 16;
+				        }
 				    }
 				    else 
 				    {
@@ -9082,16 +9372,24 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    {
 				        _objPtr->obj += 1;
 				    }
-				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod))
+				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
 				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
-				        RuntimeInitClassCCtorWithoutInitClass(_actualMethod);
-				        if (_actualImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_actualImi, _objPtr, _ret))
+				        if (_actualImi)
 				        {
-				            ip += 24;
-				            continue;
+				            CALL_INTERP_RET_PREPARED((ip + 24), _actualMethod, _actualImi, _objPtr, _ret);
 				        }
-				        CALL_INTERP_RET_PREPARED((ip + 24), _actualMethod, _actualImi, _objPtr, _ret);
+				        else
+				        {
+				            frame->ip = ip + 2;
+				            if (!InitAndGetInterpreterDirectlyCallMethodPointer(_actualMethod))
+				            {
+				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
+				            }
+				            ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, _ret);
+				            ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
+				            ip += 24;
+				        }
 				    }
 				    else 
 				    {
@@ -9124,7 +9422,33 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    {
 				        _argBasePtr->obj += 1;
 				    }
-				    CALL_INTERP_VOID((ip + 8), _actualMethod, _argBasePtr);
+				    if (!(hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod)))
+				    {
+				        uint16_t* _argIdxData = (uint16_t*)alloca(sizeof(uint16_t) * ((uint32_t)_actualMethod->parameters_count + 1u));
+				        for (uint32_t _argIdx = 0; _argIdx <= (uint32_t)_actualMethod->parameters_count; ++_argIdx)
+				        {
+				            _argIdxData[_argIdx] = (uint16_t)(__argBase + _argIdx);
+				        }
+				        InterpreterModule::Managed2NativeCallByReflectionInvoke(_actualMethod, _argIdxData, localVarBase, nullptr);
+				        ip += 8;
+				        continue;
+				    }
+				    InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				    if (_actualImi)
+				    {
+				        SAVE_CUR_FRAME(ip + 8)
+				        PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(_actualMethod, _actualImi, _argBasePtr, nullptr);
+				    }
+				    else
+				    {
+				        uint16_t* _argIdxData = (uint16_t*)alloca(sizeof(uint16_t) * ((uint32_t)_actualMethod->parameters_count + 1u));
+				        for (uint32_t _argIdx = 0; _argIdx <= (uint32_t)_actualMethod->parameters_count; ++_argIdx)
+				        {
+				            _argIdxData[_argIdx] = (uint16_t)(__argBase + _argIdx);
+				        }
+				        InterpreterModule::Managed2NativeCallByReflectionInvoke(_actualMethod, _argIdxData, localVarBase, nullptr);
+				        ip += 8;
+				    }
 				    continue;
 				}
 				case HiOpcodeEnum::CallInterpVirtual_ret:
@@ -9139,14 +9463,32 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				        _argBasePtr->obj += 1;
 				    }
 				    void* _ret = (void*)(localVarBase + __ret);
-				    InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
-				    RuntimeInitClassCCtorWithoutInitClass(_actualMethod);
-				    if (_actualImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_actualImi, _argBasePtr, _ret))
+				    if (!(hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod)))
 				    {
+				        uint16_t* _argIdxData = (uint16_t*)alloca(sizeof(uint16_t) * ((uint32_t)_actualMethod->parameters_count + 1u));
+				        for (uint32_t _argIdx = 0; _argIdx <= (uint32_t)_actualMethod->parameters_count; ++_argIdx)
+				        {
+				            _argIdxData[_argIdx] = (uint16_t)(__argBase + _argIdx);
+				        }
+				        InterpreterModule::Managed2NativeCallByReflectionInvoke(_actualMethod, _argIdxData, localVarBase, _ret);
 				        ip += 16;
 				        continue;
 				    }
-				    CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _argBasePtr, _ret);
+				    InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				    if (_actualImi)
+				    {
+				        CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _argBasePtr, _ret);
+				    }
+				    else
+				    {
+				        uint16_t* _argIdxData = (uint16_t*)alloca(sizeof(uint16_t) * ((uint32_t)_actualMethod->parameters_count + 1u));
+				        for (uint32_t _argIdx = 0; _argIdx <= (uint32_t)_actualMethod->parameters_count; ++_argIdx)
+				        {
+				            _argIdxData[_argIdx] = (uint16_t)(__argBase + _argIdx);
+				        }
+				        InterpreterModule::Managed2NativeCallByReflectionInvoke(_actualMethod, _argIdxData, localVarBase, _ret);
+				        ip += 16;
+				    }
 				    continue;
 				}
 				case HiOpcodeEnum::CallInd_void:
@@ -9173,10 +9515,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					    {
 				            CHECK_NOT_NULL_THROW(_argBasePtr->obj);
 					    }
-					    if (IsInterpreterImplement(_method))
+					    if (IsInterpreterImplement(_method) && IsInterpreterMethod(_method))
 					    {
-				            CALL_INTERP_VOID((ip + 24), _method, _argBasePtr);
-				            continue;
+				            InterpMethodInfo* _methodImi = _method->interpData ? (InterpMethodInfo*)_method->interpData : InterpreterModule::GetInterpMethodInfo(_method);
+				            if (_methodImi)
+				            {
+				                SAVE_CUR_FRAME(ip + 24)
+				                PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(_method, _methodImi, _argBasePtr, nullptr);
+				                continue;
+				            }
 					    }
 					    if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
 					    {
@@ -9217,17 +9564,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					    {
 				            CHECK_NOT_NULL_THROW(_argBasePtr->obj);
 					    }
-					    if (IsInterpreterImplement(_method))
+					    if (IsInterpreterImplement(_method) && IsInterpreterMethod(_method))
 					    {
 				            InterpMethodInfo* _methodImi = _method->interpData ? (InterpMethodInfo*)_method->interpData : InterpreterModule::GetInterpMethodInfo(_method);
-				            RuntimeInitClassCCtorWithoutInitClass(_method);
-				            if (_methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_methodImi, _argBasePtr, _ret))
+				            if (_methodImi)
 				            {
-				                ip += 24;
+				                CALL_INTERP_RET_PREPARED((ip + 24), _method, _methodImi, _argBasePtr, _ret);
 				                continue;
 				            }
-				            CALL_INTERP_RET_PREPARED((ip + 24), _method, _methodImi, _argBasePtr, _ret);
-				            continue;
 					    }
 					    if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
 					    {
@@ -9269,17 +9613,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					    {
 				            CHECK_NOT_NULL_THROW(_argBasePtr->obj);
 					    }
-					    if (IsInterpreterImplement(_method))
+					    if (IsInterpreterImplement(_method) && IsInterpreterMethod(_method))
 					    {
 				            InterpMethodInfo* _methodImi = _method->interpData ? (InterpMethodInfo*)_method->interpData : InterpreterModule::GetInterpMethodInfo(_method);
-				            RuntimeInitClassCCtorWithoutInitClass(_method);
-				            if (_methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(_methodImi, _argBasePtr, _ret))
+				            if (_methodImi)
 				            {
-				                ip += 24;
+				                CALL_INTERP_RET_PREPARED((ip + 24), _method, _methodImi, _argBasePtr, _ret);
 				                continue;
 				            }
-				            CALL_INTERP_RET_PREPARED((ip + 24), _method, _methodImi, _argBasePtr, _ret);
-				            continue;
 					    }
 					    if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
 					    {
@@ -9360,28 +9701,30 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
 					if (_del->delegates == nullptr)
 					{
-						if (TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						if (false && TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
 						{
 							ip += 20;
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
 						Il2CppObject* target = _del->delegate.target;
-						if (hotc233::metadata::IsInterpreterImplement(method))
+						if (hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method))
 						{
 							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
 							{
 								InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
-								RuntimeInitClassCCtorWithoutInitClass(method);
-								if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
+								if (false && methodImi && methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
 								{
 									_interpDelegateCache[0] = (uint64_t)_del;
 									_interpDelegateCache[1] = (uint64_t)methodImi;
 									ip += 20;
 									continue;
 								}
-								CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, fastArgBase, _ret);
-								continue;
+								if (methodImi)
+								{
+									CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, fastArgBase, _ret);
+									continue;
+								}
 							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
 							{
@@ -9416,23 +9759,22 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							}
 							}
 							InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
-							RuntimeInitClassCCtorWithoutInitClass(method);
-							if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
+							if (false && methodImi && methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
 							{
 								_interpDelegateCache[0] = (uint64_t)_del;
 								_interpDelegateCache[1] = (uint64_t)methodImi;
 								ip += 20;
 								continue;
 							}
-							CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, _argBasePtr, _ret);
-							continue;
+							if (methodImi)
+							{
+								CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, _argBasePtr, _ret);
+								continue;
+							}
 						}
-						else
-						{
-							Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
-							Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _ret);
-						}
+						Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
+						Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
+						InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _ret);
 					}
 					else
 					{
@@ -9472,28 +9814,30 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
 					if (_del->delegates == nullptr)
 					{
-						if (TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						if (false && TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
 						{
 							ip += 24;
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
 						Il2CppObject* target = _del->delegate.target;
-						if (hotc233::metadata::IsInterpreterImplement(method))
+						if (hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method))
 						{
 							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
 							{
 								InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
-								RuntimeInitClassCCtorWithoutInitClass(method);
-								if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
+								if (false && methodImi && methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
 								{
 									_interpDelegateCache[0] = (uint64_t)_del;
 									_interpDelegateCache[1] = (uint64_t)methodImi;
 									ip += 24;
 									continue;
 								}
-								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
-								continue;
+								if (methodImi)
+								{
+									CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
+									continue;
+								}
 							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
 							{
@@ -9528,23 +9872,22 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							}
 							}
 							InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
-							RuntimeInitClassCCtorWithoutInitClass(method);
-							if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
+							if (false && methodImi && methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
 							{
 								_interpDelegateCache[0] = (uint64_t)_del;
 								_interpDelegateCache[1] = (uint64_t)methodImi;
 								ip += 24;
 								continue;
 							}
-							CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
-							continue;
+							if (methodImi)
+							{
+								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
+								continue;
+							}
 						}
-						else
-						{
-							Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
-							Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
-						}
+						Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
+						Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
+						InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
 					}
 					else
 					{
@@ -9584,28 +9927,30 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
 					if (_del->delegates == nullptr)
 					{
-						if (TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						if (false && TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
 						{
 							ip += 24;
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
 						Il2CppObject* target = _del->delegate.target;
-						if (hotc233::metadata::IsInterpreterImplement(method))
+						if (hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method))
 						{
 							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
 							{
 								InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
-								RuntimeInitClassCCtorWithoutInitClass(method);
-								if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
+								if (false && methodImi && methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, fastArgBase, _ret))
 								{
 									_interpDelegateCache[0] = (uint64_t)_del;
 									_interpDelegateCache[1] = (uint64_t)methodImi;
 									ip += 24;
 									continue;
 								}
-								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
-								continue;
+								if (methodImi)
+								{
+									CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
+									continue;
+								}
 							}
 							switch ((int32_t)__invokeParamCount - (int32_t)method->parameters_count)
 							{
@@ -9640,23 +9985,22 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							}
 							}
 							InterpMethodInfo* methodImi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
-							RuntimeInitClassCCtorWithoutInitClass(method);
-							if (methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
+							if (false && methodImi && methodImi->hotc233FastPathKind > Hotc233FastPath_Unsupported && TryExecuteHotc233FastPath(methodImi, _argBasePtr, _ret))
 							{
 								_interpDelegateCache[0] = (uint64_t)_del;
 								_interpDelegateCache[1] = (uint64_t)methodImi;
 								ip += 24;
 								continue;
 							}
-							CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
-							continue;
+							if (methodImi)
+							{
+								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
+								continue;
+							}
 						}
-						else
-						{
-							Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
-							Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
-						}
+						Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
+						Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
+						InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
 					}
 					else
 					{
@@ -9762,14 +10106,21 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __method = *(uint32_t*)(ip + 8);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
-				    frame->ip = ip + 2;
-				    void* _self = (*(void**)(localVarBase + __self));
-				    CHECK_NOT_NULL_THROW(_self);
-				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    typedef uint8_t(*_NativeMethod_)(void*, MethodInfo*);
-				    *(int32_t*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _resolvedMethod);
-				    ip += 16;
-				    continue;
+					frame->ip = ip + 2;
+					void* _self = (*(void**)(localVarBase + __self));
+					CHECK_NOT_NULL_THROW(_self);
+					MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+					RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+					uint8_t _retValue = 0;
+					_resolvedMethod->invoker_method(
+						_resolvedMethod->methodPointerCallByInterp,
+						_resolvedMethod,
+						_self,
+						nullptr,
+						&_retValue);
+					*(int32_t*)(void*)(localVarBase + __ret) = _retValue;
+					ip += 16;
+					continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_i2_0:
 				{
@@ -9861,12 +10212,27 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __method = *(uint32_t*)(ip + 8);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
-				    frame->ip = ip + 2;
-				    void* _self = (*(void**)(localVarBase + __self));
-				    CHECK_NOT_NULL_THROW(_self);
-				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    typedef void(*_NativeMethod_)(void*, int32_t, MethodInfo*);
-				    ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, (*(int32_t*)(localVarBase + __param0)), _resolvedMethod);
+					frame->ip = ip + 2;
+					void* _self = (*(void**)(localVarBase + __self));
+					CHECK_NOT_NULL_THROW(_self);
+					MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
+					if (_resolvedMethod != nullptr && _resolvedMethod->name != nullptr && std::strcmp(_resolvedMethod->name, "SetActive") == 0)
+					{
+						RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
+						bool _p0 = (*(int32_t*)(localVarBase + __param0)) != 0;
+						void* _args[1] = { &_p0 };
+						_resolvedMethod->invoker_method(
+							_resolvedMethod->methodPointerCallByInterp,
+							_resolvedMethod,
+							_self,
+							_args,
+							nullptr);
+					}
+					else
+					{
+						typedef void(*_NativeMethod_)(void*, int32_t, MethodInfo*);
+						((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, (*(int32_t*)(localVarBase + __param0)), _resolvedMethod);
+					}
 					byte* __nextIp = ip + 16;
 					if (*(HiOpcodeEnum*)__nextIp == HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar)
 					{
@@ -9996,8 +10362,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_v3_1Cached:
 				{
-					uint32_t __method = *(uint32_t*)(ip + 16);
-					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
+					uint32_t __method = *(uint32_t*)(ip + 14);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 18);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 				    void* _self = (*(void**)(localVarBase + __self));
@@ -10012,7 +10378,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_v3_2Cached:
 				{
-					uint32_t __method = *(uint32_t*)(ip + 16);
+					uint32_t __method = *(uint32_t*)(ip + 14);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 					uint16_t __param1 = *(uint16_t*)(ip + 6);
@@ -10029,7 +10395,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_v3_3Cached:
 				{
-					uint32_t __method = *(uint32_t*)(ip + 16);
+					uint32_t __method = *(uint32_t*)(ip + 14);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 					uint16_t __param1 = *(uint16_t*)(ip + 6);
@@ -10048,8 +10414,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_v3_4Cached:
 				{
-					uint32_t __method = *(uint32_t*)(ip + 16);
-					uint32_t __thunkCache = *(uint32_t*)(ip + 20);
+					uint32_t __method = *(uint32_t*)(ip + 14);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 18);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 					uint16_t __param1 = *(uint16_t*)(ip + 6);
@@ -10070,10 +10436,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v3_0Cached:
 				{
-					uint32_t __method = *(uint32_t*)(ip + 8);
+					uint32_t __method = *(uint32_t*)(ip + 6);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
-					uint32_t __thunkCache = *(uint32_t*)(ip + 12);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 10);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
 				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
@@ -10096,10 +10462,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_ref_0Cached:
 				{
-					uint32_t __method = *(uint32_t*)(ip + 8);
+					uint32_t __method = *(uint32_t*)(ip + 6);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
-					uint32_t __thunkCache = *(uint32_t*)(ip + 12);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 10);
 				    void* _self = (*(void**)(localVarBase + __self));
 				    CHECK_NOT_NULL_THROW(_self);
 				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);

@@ -19,12 +19,12 @@ namespace Hotc233.Editor.BuildProcessors
         {
             if (!Hotc233Settings.Instance.enable)
                 return;
-            CopyLibil2cppToXcodeProj(pathToBuiltProject);
+            CopyLibil2cppToXcodeProj(target, pathToBuiltProject);
         }
 
-        private static void CopyLibil2cppToXcodeProj(string pathToBuiltProject)
+        private static void CopyLibil2cppToXcodeProj(BuildTarget target, string pathToBuiltProject)
         {
-            string srcLibil2cppDir = $"{SettingsUtil.LocalIl2CppDir}/libil2cpp";
+            string srcLibil2cppDir = $"{SettingsUtil.GetLocalIl2CppDir(target)}/libil2cpp";
             string destLibil2cppDir = $"{pathToBuiltProject}/Il2CppOutputProject/IL2CPP/libil2cpp";
             BashUtil.RemoveDir(destLibil2cppDir);
             BashUtil.CopyDir(srcLibil2cppDir, destLibil2cppDir, true);
