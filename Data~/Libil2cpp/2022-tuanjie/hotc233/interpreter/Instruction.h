@@ -1073,6 +1073,7 @@ namespace interpreter
 		RunInstanceVoidV3x4CallTrace,
 		RunInstanceGetTransformSetV3CallTrace,
 		RunInstanceV3ReturnCallTrace,
+		RunInstanceI4ReturnCallTrace,
 
 		//!!!}}OPCODE
 	};
@@ -2503,6 +2504,38 @@ namespace interpreter
 
 
 	struct IRBinOpVarVarVar_Div_i4 : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+
+	struct IRMathMinVarVarVar_i4 : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+
+	struct IRMathMaxVarVarVar_i4 : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+
+	struct IRMathMinVarVarVar_i8 : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
+		uint16_t op2;
+	};
+
+
+	struct IRMathMaxVarVarVar_i8 : IRCommon
 	{
 		uint16_t ret;
 		uint16_t op1;
@@ -12418,6 +12451,15 @@ namespace interpreter
 	};
 
 	struct IRRunInstanceV3ReturnCallTrace : IRCommon
+	{
+		uint16_t stepCount;
+		uint16_t self;
+		uint16_t ret;
+		uint32_t method;
+		uint32_t thunkCache;
+	};
+
+	struct IRRunInstanceI4ReturnCallTrace : IRCommon
 	{
 		uint16_t stepCount;
 		uint16_t self;

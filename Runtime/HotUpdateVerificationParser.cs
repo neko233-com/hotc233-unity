@@ -64,7 +64,30 @@ namespace Hotc233
             };
         }
 
+        public static bool IsFeatureVerificationPassed(string message)
+        {
+            return IsSelfTestPassed(message)
+                && message.Contains("FeatureCompatibilityProbe passed")
+                && message.Contains("ReflectionComprehensiveProbe passed")
+                && message.Contains("UnityAssetProbe passed")
+                && message.Contains("LinqAggregateProbe passed")
+                && message.Contains("CommercialCapabilityProbe passed")
+                && message.Contains("TimelineCustomTrackProbe passed")
+                && message.Contains("SceneManagementProbe passed")
+                && message.Contains("PlatformDeviceProbe passed");
+        }
+
+        public static void ValidateFeatureVerification(string message)
+        {
+            ValidateFeatureProbes(message, requirePerformanceProbe: false);
+        }
+
         public static void ValidateFullVerification(string message)
+        {
+            ValidateFeatureProbes(message, requirePerformanceProbe: true);
+        }
+
+        private static void ValidateFeatureProbes(string message, bool requirePerformanceProbe)
         {
             if (!IsSelfTestPassed(message))
             {
@@ -89,7 +112,7 @@ namespace Hotc233
                 throw new InvalidOperationException("Reflection comprehensive probe failed: " + message);
             }
 
-            if (!message.Contains("PerformanceProbe:"))
+            if (requirePerformanceProbe && !message.Contains("PerformanceProbe:"))
             {
                 throw new InvalidOperationException("Performance probe missing from verification output: " + message);
             }
@@ -110,6 +133,14 @@ namespace Hotc233
             if (!commercial.passed || !commercial.HotUpdateSurfacePassed())
             {
                 throw new InvalidOperationException("Commercial capability probe failed: " + message);
+            }
+
+            if (message.Contains("CommercialCapabilityLoaderProbe"))
+            {
+                if (!commercial.PreInterpreterPassed())
+                {
+                    throw new InvalidOperationException("Commercial loader business capabilities failed: " + message);
+                }
             }
 
             var timeline = ParseTimelineCustomTrack(message);
@@ -212,9 +243,13 @@ namespace Hotc233
             return new CommercialCapabilityFlags
             {
                 passed = message.Contains("CommercialCapabilityProbe passed"),
-                fullGenericSharing = message.Contains("full-generic-sharing"),
+                fullGenericSharing = message.Contains("full-generic-sharing")
+                    && message.Contains("full-generic-sharing-matrix")
+                    && message.Contains("full-generic-sharing-virtual")
+                    && message.Contains("full-generic-sharing-delegate"),
                 crashLog = message.Contains("crash-log"),
-                metadataOptimization = message.Contains("metadata-optimization"),
+                metadataOptimization = message.Contains("metadata-optimization")
+                    && (!message.Contains("CommercialCapabilityLoaderProbe") || message.Contains("metadata-saving-percent=")),
                 hotfix = message.Contains("hotfix"),
                 hotReload = message.Contains("hot-reload"),
                 codeProtection = message.Contains("code-protection"),
@@ -433,19 +468,22 @@ namespace Hotc233
 
             public bool HotUpdateSurfacePassed()
             {
-                return fullGenericSharing && crashLog;
+                return fullGenericSharing && metadataOptimization && crashLog;
+            }
+
+            public bool BusinessCapabilitiesPassed()
+            {
+                return HotUpdateSurfacePassed() && PreInterpreterPassed();
             }
 
             public bool PreInterpreterPassed()
             {
-                return fullGenericSharing
-                    && metadataOptimization
+                return metadataOptimization
                     && hotfix
                     && hotReload
                     && codeProtection
                     && accessControl
-                    && assemblyLoadOptimization
-                    && crashLog;
+                    && assemblyLoadOptimization;
             }
         }
 

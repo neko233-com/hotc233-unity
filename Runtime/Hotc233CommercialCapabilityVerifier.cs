@@ -9,6 +9,24 @@ using UnityEngine.Scripting;
 namespace Hotc233
 {
     [Preserve]
+    public sealed class MetadataOptimizationSummary
+    {
+        public long baselineTotalBytes;
+        public long optimizedTotalBytes;
+        public double savingPercent;
+        public double loadElapsedMs;
+        public long peakHeapDeltaBytes;
+
+        public bool MeetsP0Threshold(double minSavingPercent = 10.0)
+        {
+            return baselineTotalBytes > 0
+                && optimizedTotalBytes > 0
+                && optimizedTotalBytes < baselineTotalBytes
+                && savingPercent + 0.001 >= minSavingPercent;
+        }
+    }
+
+    [Preserve]
     public static class Hotc233CommercialCapabilityVerifier
     {
         [Preserve]
@@ -24,9 +42,16 @@ namespace Hotc233
             public bool assemblyLoadOptimization;
             public bool standardInterpreterOptimization;
             public bool offlineInstructionOptimization;
+            public long metadataTotalBytes;
+            public int metadataAssemblyCount;
+            public long metadataBaselineTotalBytes;
+            public double metadataSavingPercent;
+            public double metadataLoadElapsedMs;
+            public long metadataPeakHeapDeltaBytes;
             public string message;
 
-            public bool PreInterpreterPassed()
+            /// <summary>P0 商业能力（有/无）：不含标准解释优化、离线指令优化等性能项。</summary>
+            public bool BusinessCapabilitiesPassed()
             {
                 return metadataOptimization
                     && hotfix
@@ -35,12 +60,18 @@ namespace Hotc233
                     && accessControl
                     && assemblyLoadOptimization;
             }
+
+            public bool PreInterpreterPassed()
+            {
+                return BusinessCapabilitiesPassed();
+            }
         }
 
         public static Result VerifyLoaderPipeline(
             HotUpdateBinaryLoader loader,
             IReadOnlyList<NamedBinary> metadataBinaries,
-            IReadOnlyList<NamedBinary> hotUpdateBinaries)
+            IReadOnlyList<NamedBinary> hotUpdateBinaries,
+            MetadataOptimizationSummary metadataSummary = null)
         {
             if (loader == null)
             {
@@ -57,11 +88,38 @@ namespace Hotc233
                 throw new ArgumentException("Hot update binaries are required.", nameof(hotUpdateBinaries));
             }
 
-            var result = new Result();
+            var result = new Result
+            {
+                metadataAssemblyCount = metadataBinaries.Count,
+                metadataTotalBytes = metadataBinaries.Sum(binary => binary.Bytes?.LongLength ?? 0),
+            };
             var passed = new List<string>();
 
             result.metadataOptimization = VerifyMetadataPolicy(metadataBinaries);
+            if (metadataSummary != null)
+            {
+                result.metadataBaselineTotalBytes = metadataSummary.baselineTotalBytes;
+                result.metadataSavingPercent = metadataSummary.savingPercent;
+                result.metadataLoadElapsedMs = metadataSummary.loadElapsedMs;
+                result.metadataPeakHeapDeltaBytes = metadataSummary.peakHeapDeltaBytes;
+                if (!metadataSummary.MeetsP0Threshold())
+                {
+                    result.metadataOptimization = false;
+                }
+            }
+
             AddIfPassed(passed, result.metadataOptimization, "metadata-optimization");
+            if (result.metadataTotalBytes > 0)
+            {
+                passed.Add("metadata-bytes=" + result.metadataTotalBytes);
+            }
+
+            if (metadataSummary != null && metadataSummary.baselineTotalBytes > 0)
+            {
+                passed.Add("metadata-saving-percent=" + metadataSummary.savingPercent.ToString("F1"));
+                passed.Add("metadata-load-ms=" + metadataSummary.loadElapsedMs.ToString("F2"));
+                passed.Add("metadata-peak-heap=" + metadataSummary.peakHeapDeltaBytes);
+            }
 
             result.codeProtection = VerifyCodeProtection(hotUpdateBinaries[0]);
             AddIfPassed(passed, result.codeProtection, "code-protection");
@@ -84,10 +142,19 @@ namespace Hotc233
             result.offlineInstructionOptimization = VerifyOfflineInstructionOptimization(loader);
             AddIfPassed(passed, result.offlineInstructionOptimization, "offline-instruction-optimization");
 
-            result.passed = result.PreInterpreterPassed()
-                && result.standardInterpreterOptimization
-                && result.offlineInstructionOptimization;
-            result.message = "CommercialCapabilityLoaderProbe passed: " + string.Join(", ", passed);
+            result.passed = result.BusinessCapabilitiesPassed();
+            if (result.standardInterpreterOptimization)
+            {
+                passed.Add("standard-interpreter-optimization");
+            }
+
+            if (result.offlineInstructionOptimization)
+            {
+                passed.Add("offline-instruction-optimization");
+            }
+
+            result.message = (result.passed ? "CommercialCapabilityLoaderProbe passed: " : "CommercialCapabilityLoaderProbe failed: ")
+                + string.Join(", ", passed);
             Hotc233RuntimeDiagnostics.Info("commercial.loader.probe", result.message);
             return result;
         }
@@ -170,23 +237,53 @@ namespace Hotc233
             var replacement = loader.ReplaceHotUpdateAssembly(binary);
             var after = loader.Assemblies.Count(assembly =>
                 string.Equals(assembly.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase));
-            return replacement != null
-                && string.Equals(replacement.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase)
-                && before >= 1
-                && after == 1
-                && loader.TypeCacheCount == 0
-                && loader.StaticMethodCacheCount == 0
-                && loader.StaticDelegateCacheCount == 0;
+            if (replacement == null
+                || !string.Equals(replacement.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase)
+                || before < 1
+                || after != 1
+                || loader.TypeCacheCount != 0
+                || loader.StaticMethodCacheCount != 0
+                || loader.StaticDelegateCacheCount != 0)
+            {
+                return false;
+            }
+
+            return VerifyFeatureVerificationAfterLoaderChange(loader);
         }
 
         private static bool VerifyHotReload(HotUpdateBinaryLoader loader, IReadOnlyList<NamedBinary> binaries)
         {
             var reloaded = loader.ReloadHotUpdateAssemblies(binaries);
-            return reloaded != null
-                && reloaded.Count == binaries.Count
-                && loader.TypeCacheCount == 0
-                && loader.StaticMethodCacheCount == 0
-                && loader.StaticDelegateCacheCount == 0;
+            if (reloaded == null
+                || reloaded.Count != binaries.Count
+                || loader.TypeCacheCount != 0
+                || loader.StaticMethodCacheCount != 0
+                || loader.StaticDelegateCacheCount != 0)
+            {
+                return false;
+            }
+
+            return VerifyFeatureVerificationAfterLoaderChange(loader);
+        }
+
+        private static bool VerifyFeatureVerificationAfterLoaderChange(HotUpdateBinaryLoader loader)
+        {
+            try
+            {
+                string message = loader.InvokeStatic("UnityHotc.CodeHotUpdate.HotUpdateApp", "RunFeatureVerification") as string;
+                if (string.IsNullOrEmpty(message))
+                {
+                    return false;
+                }
+
+                HotUpdateVerificationParser.ValidateFeatureVerification(message);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Hotc233RuntimeDiagnostics.Error("commercial.feature-verify.failed", exception.Message);
+                return false;
+            }
         }
 
         private static bool VerifyAssemblyLoadOptimization(HotUpdateBinaryLoader loader)

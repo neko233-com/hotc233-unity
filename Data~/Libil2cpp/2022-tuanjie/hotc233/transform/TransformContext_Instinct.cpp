@@ -521,6 +521,21 @@ namespace transform
 	}
 
 
+	static bool TryAddSystemMathMinMax(TransformContext& ctx, const MethodInfo* method, HiOpcodeEnum opI4, HiOpcodeEnum opI8)
+	{
+		return ctx.TryAddSystemMathMinMax(method, opI4, opI8);
+	}
+
+	static bool IH_Math_Min(TransformContext& ctx, const MethodInfo* method)
+	{
+		return TryAddSystemMathMinMax(ctx, method, HiOpcodeEnum::MathMinVarVarVar_i4, HiOpcodeEnum::MathMinVarVarVar_i8);
+	}
+
+	static bool IH_Math_Max(TransformContext& ctx, const MethodInfo* method)
+	{
+		return TryAddSystemMathMinMax(ctx, method, HiOpcodeEnum::MathMaxVarVarVar_i4, HiOpcodeEnum::MathMaxVarVarVar_i8);
+	}
+
 	struct InstinctHandlerInfo
 	{
 		const char* namespaze;
@@ -531,6 +546,8 @@ namespace transform
 
 	static InstinctHandlerInfo s_instinctHandlerInfos[] =
 	{
+		{"System", "Math", "Min", IH_Math_Min},
+		{"System", "Math", "Max", IH_Math_Max},
 		{"System", "Object", ".ctor", IH_object_ctor},
 		{"System", "Nullable`1", ".ctor", IH_Nullable_ctor},
 		{"System", "Nullable`1", "GetValueOrDefault", IH_Nullable_GetValueOrDefault},
@@ -860,6 +877,52 @@ namespace transform
 			return false;
 		}
 		return (it->second)(*this, method);
+	}
+
+	bool TransformContext::TryAddSystemMathMinMax(const MethodInfo* method, HiOpcodeEnum opI4, HiOpcodeEnum opI8)
+	{
+		if (method->parameters_count != 2)
+		{
+			return false;
+		}
+		const Il2CppType* paramType0 = GET_METHOD_PARAMETER_TYPE(method->parameters[0]);
+		const Il2CppType* paramType1 = GET_METHOD_PARAMETER_TYPE(method->parameters[1]);
+		if (paramType0->type != paramType1->type)
+		{
+			return false;
+		}
+		IL2CPP_ASSERT(evalStackTop >= 2);
+		EvalStackVarInfo& op1 = evalStack[evalStackTop - 2];
+		EvalStackVarInfo& op2 = evalStack[evalStackTop - 1];
+		CreateAddIR(ir, MathMinVarVarVar_i4);
+		ir->op1 = op1.locOffset;
+		ir->op2 = op2.locOffset;
+		ir->ret = op1.locOffset;
+		EvalStackReduceDataType resultType = EvalStackReduceDataType::I4;
+		switch (paramType0->type)
+		{
+		case IL2CPP_TYPE_I4:
+		case IL2CPP_TYPE_U4:
+		{
+			ir->type = opI4;
+			resultType = EvalStackReduceDataType::I4;
+			break;
+		}
+		case IL2CPP_TYPE_I8:
+		case IL2CPP_TYPE_U8:
+		{
+			ir->type = opI8;
+			resultType = EvalStackReduceDataType::I8;
+			break;
+		}
+		default:
+			return false;
+		}
+		PopStack();
+		op1.reduceType = resultType;
+		op1.byteSize = (resultType == EvalStackReduceDataType::I8 || resultType == EvalStackReduceDataType::R8) ? 8 : 4;
+		AddInst(ir);
+		return true;
 	}
 
 	namespace

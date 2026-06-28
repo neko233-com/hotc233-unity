@@ -198,8 +198,8 @@ namespace transform
 
 		uint32_t GetOrAddResolveDataIndex(const void* ptr);
 
-		// Pro direct callsite cache: bake native entry pointer at transform time.
-		uint32_t AllocAndBakeNativeThunkSlot(const MethodInfo* method);
+		// Pro direct callsite cache: bake native entry pointer at transform time (signature-aware).
+		uint32_t AllocAndBakeNativeThunkSlot(const MethodInfo* method, interpreter::Hotc233DirectCallKind kind);
 
 		TemporaryMemoryArena& GetPool() const
 		{
@@ -371,6 +371,8 @@ namespace transform
 		bool TryAddInstinctInstrumentsByName(const MethodInfo* method);
 		bool TryAddArrayInstinctInstruments(const MethodInfo* method);
 
+		bool TryAddSystemMathMinMax(const MethodInfo* method, HiOpcodeEnum opI4, HiOpcodeEnum opI8);
+
 		bool TryAddInstinctCtorInstruments(const MethodInfo* method);
 
 		bool TryAddCallCommonInstanceZeroArgReturnCached(const MethodInfo* method, uint32_t methodDataIndex);
@@ -415,6 +417,8 @@ namespace transform
 		bool TryBuildGodDomainReturnVector3LoopMethod(int32_t localVarOffset);
 		bool TryBuildGodDomainArrayOpLoopMethod(int32_t localVarOffset);
 		bool TryBuildGodDomainQuaternionLoopMethod(int32_t localVarOffset);
+		bool TryBuildGodDomainGameObjectCreateDestroyLoopMethod(int32_t localVarOffset);
+		bool TryBuildGodDomainUnityKernelMethod(int32_t localVarOffset);
 		bool SetupGodDomainOfficialIntLoopShell(int32_t localVarOffset, uint16_t* outRetSlot);
 		void FinishGodDomainOfficialIntLoopShell(
 			uint16_t retSlot,

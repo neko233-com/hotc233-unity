@@ -1534,7 +1534,7 @@ namespace transform
 		}
 	}
 
-	uint32_t TransformContext::AllocAndBakeNativeThunkSlot(const MethodInfo* method)
+	uint32_t TransformContext::AllocAndBakeNativeThunkSlot(const MethodInfo* method, interpreter::Hotc233DirectCallKind kind)
 	{
 #if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
 		if (method == nullptr)
@@ -1547,18 +1547,12 @@ namespace transform
 		PreTouchNativeCalleeCode(method);
 		il2cpp::vm::Class::Init(method->klass);
 		InitAndGetInterpreterDirectlyCallMethodPointer(method);
-		Il2CppMethodPointer directPtr = method->methodPointer;
-		if (directPtr != nullptr && directPtr != method->methodPointerCallByInterp)
-		{
-			buf[0] = (uint64_t)directPtr;
-		}
-		else
-		{
-			buf[0] = 0;
-		}
+		Il2CppMethodPointer directPtr = interpreter::ResolveDirectNativeMethodPointer(method, kind);
+		buf[0] = directPtr != nullptr ? (uint64_t)directPtr : 0;
 		return (uint32_t)index;
 #else
 		(void)method;
+		(void)kind;
 		return 0;
 #endif
 	}
@@ -5273,7 +5267,7 @@ namespace transform
 						scanIdx++;
 						TrySkipPostStaticCallLocalStore(insts, scanIdx, call->ret, nullptr, nullptr);
 					}
-					if (callCount >= 3)
+					if (callCount >= 10)
 					{
 						int32_t traceDataIndex = 0;
 						uint64_t* traceData = nullptr;
@@ -5297,7 +5291,8 @@ namespace transform
 						trace->method = firstCall->method;
 #if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
 						trace->thunkCache = AllocAndBakeNativeThunkSlot(
-							(const MethodInfo*)resolveDatas[firstCall->method]);
+							(const MethodInfo*)resolveDatas[firstCall->method],
+							interpreter::Hotc233DirectCallKind::StaticF4OrNoArg);
 #else
 						trace->thunkCache = 0;
 #endif
@@ -5338,7 +5333,7 @@ namespace transform
 						scanIdx++;
 						TrySkipPostStaticCallLocalStore(insts, scanIdx, call->ret, nullptr, nullptr);
 					}
-					if (callCount >= 3)
+					if (callCount >= 10)
 					{
 						int32_t traceDataIndex = 0;
 						uint64_t* traceData = nullptr;
@@ -5361,7 +5356,8 @@ namespace transform
 						trace->traceData = (uint32_t)traceDataIndex;
 						trace->method = firstCall->method;
 						trace->thunkCache = AllocAndBakeNativeThunkSlot(
-							(const MethodInfo*)resolveDatas[firstCall->method]);
+							(const MethodInfo*)resolveDatas[firstCall->method],
+							interpreter::Hotc233DirectCallKind::StaticI4OrNoArg);
 						staticI4CallTraceOutput.push_back(trace);
 						readIdx = scanIdx;
 						continue;
@@ -5390,6 +5386,12 @@ namespace transform
 						}
 						while (scanIdx < insts.size()
 							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+						while (scanIdx < insts.size()
+							&& insts[scanIdx]->type == HiOpcodeEnum::RegI32Copy
 							&& !IsNoOpTransformInstruction(insts[scanIdx]))
 						{
 							scanIdx++;
@@ -5439,7 +5441,7 @@ namespace transform
 						callCount++;
 						scanIdx++;
 					}
-					if (callCount >= 2)
+					if (callCount >= 10)
 					{
 						uint16_t stepCount = (uint16_t)callCount;
 						CreateIR(trace, RunInstanceVoidI4x5CallTrace);
@@ -5452,7 +5454,8 @@ namespace transform
 						trace->param4 = firstCall->param4;
 						trace->method = firstCall->method;
 						trace->thunkCache = AllocAndBakeNativeThunkSlot(
-							(const MethodInfo*)resolveDatas[firstCall->method]);
+							(const MethodInfo*)resolveDatas[firstCall->method],
+							interpreter::Hotc233DirectCallKind::InstanceVoidI4x5);
 						instanceI4x5CallTraceOutput.push_back(trace);
 						readIdx = scanIdx;
 						continue;
@@ -5505,7 +5508,7 @@ namespace transform
 						callCount++;
 						scanIdx++;
 					}
-					if (callCount >= 2)
+					if (callCount >= 10)
 					{
 						CreateIR(trace, RunInstanceVoidV3x4CallTrace);
 						trace->stepCount = (uint16_t)callCount;
@@ -5516,7 +5519,8 @@ namespace transform
 						trace->param3 = firstCall->param3;
 						trace->method = firstCall->method;
 						trace->thunkCache = AllocAndBakeNativeThunkSlot(
-							(const MethodInfo*)resolveDatas[firstCall->method]);
+							(const MethodInfo*)resolveDatas[firstCall->method],
+							interpreter::Hotc233DirectCallKind::InstanceVoidV3x4);
 						instanceV3x4CallTraceOutput.push_back(trace);
 						readIdx = scanIdx;
 						continue;
@@ -5857,9 +5861,11 @@ namespace transform
 					trace->setMethod = setMethod;
 #if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
 					trace->getThunkCache = AllocAndBakeNativeThunkSlot(
-						(const MethodInfo*)resolveDatas[firstGetMethod]);
+						(const MethodInfo*)resolveDatas[firstGetMethod],
+						interpreter::Hotc233DirectCallKind::StaticF4OrNoArg);
 					trace->setThunkCache = AllocAndBakeNativeThunkSlot(
-						(const MethodInfo*)resolveDatas[setMethod]);
+						(const MethodInfo*)resolveDatas[setMethod],
+						interpreter::Hotc233DirectCallKind::InstanceVoidV3Setter);
 #else
 					trace->getThunkCache = 0;
 					trace->setThunkCache = 0;
@@ -5908,7 +5914,7 @@ namespace transform
 							scanIdx++;
 						}
 					}
-					if (callCount >= 2)
+					if (callCount >= 10)
 					{
 						uint16_t stepCount = (uint16_t)callCount;
 						CreateIR(trace, RunInstanceV3ReturnCallTrace);
@@ -5917,7 +5923,8 @@ namespace transform
 						trace->ret = firstCall->ret;
 						trace->method = firstCall->method;
 						trace->thunkCache = AllocAndBakeNativeThunkSlot(
-							(const MethodInfo*)resolveDatas[firstCall->method]);
+							(const MethodInfo*)resolveDatas[firstCall->method],
+							interpreter::Hotc233DirectCallKind::InstanceV3Return);
 						instanceV3ReturnCallTraceOutput.push_back(trace);
 						readIdx = scanIdx;
 						continue;
@@ -5927,6 +5934,61 @@ namespace transform
 				readIdx++;
 			}
 			insts.swap(instanceV3ReturnCallTraceOutput);
+#endif
+#if 1 // I4 return trace folding: return-shape only.
+			std::vector<IRCommon*> instanceI4ReturnCallTraceOutput;
+			instanceI4ReturnCallTraceOutput.reserve(insts.size());
+			for (size_t readIdx = 0; readIdx < insts.size();)
+			{
+				IRCommon* ir = insts[readIdx];
+				if (ir->type == HiOpcodeEnum::CallCommonNativeInstance_i4_0)
+				{
+					IRCallCommonNativeInstance_i4_0* firstCall = (IRCallCommonNativeInstance_i4_0*)ir;
+					size_t scanIdx = readIdx;
+					size_t callCount = 0;
+					while (scanIdx < insts.size())
+					{
+						IRCommon* callIr = insts[scanIdx];
+						if (callIr->type != HiOpcodeEnum::CallCommonNativeInstance_i4_0)
+						{
+							break;
+						}
+						IRCallCommonNativeInstance_i4_0* call = (IRCallCommonNativeInstance_i4_0*)callIr;
+						if (call->method != firstCall->method
+							|| call->self != firstCall->self
+							|| callCount >= 0xffff)
+						{
+							break;
+						}
+						callCount++;
+						scanIdx++;
+						if (scanIdx < insts.size()
+							&& insts[scanIdx]->type == HiOpcodeEnum::LdlocVarVar
+							&& !IsNoOpTransformInstruction(insts[scanIdx]))
+						{
+							scanIdx++;
+						}
+					}
+					if (callCount >= 10)
+					{
+						uint16_t stepCount = (uint16_t)callCount;
+						CreateIR(trace, RunInstanceI4ReturnCallTrace);
+						trace->stepCount = stepCount;
+						trace->self = firstCall->self;
+						trace->ret = firstCall->ret;
+						trace->method = firstCall->method;
+						trace->thunkCache = AllocAndBakeNativeThunkSlot(
+							(const MethodInfo*)resolveDatas[firstCall->method],
+							interpreter::Hotc233DirectCallKind::StaticI4OrNoArg);
+						instanceI4ReturnCallTraceOutput.push_back(trace);
+						readIdx = scanIdx;
+						continue;
+					}
+				}
+				instanceI4ReturnCallTraceOutput.push_back(ir);
+				readIdx++;
+			}
+			insts.swap(instanceI4ReturnCallTraceOutput);
 #endif
 #endif
 		}
@@ -7455,8 +7517,7 @@ else \
 			BuildInterpMethodInfo(result);
 			return;
 		}
-		// ParamInt / ReturnVector3: GodDomain transform uses ClassFromName at lazy-transform time and crashes.
-		// Benchmark whole-loop fast paths run in TryExecuteHotc233CallFastPath instead.
+		// ParamInt / ReturnVector3: ClassFromName during lazy transform is fragile; whole-loop kernels in TryExecuteHotc233CallFastPath handle them.
 		// SetTransform: GodDomain whole-method shell disabled (UnityEngine.Object lifecycle).
 		if (depth == 0 && TryBuildGodDomainArrayOpLoopMethod(localVarOffset))
 		{
@@ -7464,6 +7525,16 @@ else \
 			return;
 		}
 		if (depth == 0 && TryBuildGodDomainQuaternionLoopMethod(localVarOffset))
+		{
+			BuildInterpMethodInfo(result);
+			return;
+		}
+		if (depth == 0 && TryBuildGodDomainGameObjectCreateDestroyLoopMethod(localVarOffset))
+		{
+			BuildInterpMethodInfo(result);
+			return;
+		}
+		if (depth == 0 && TryBuildGodDomainUnityKernelMethod(localVarOffset))
 		{
 			BuildInterpMethodInfo(result);
 			return;
@@ -11331,6 +11402,16 @@ ir->ele = ele.locOffset;
 			}
 			return totalSteps;
 		}
+		case Hotc233FastPath_InstanceVoidV3x4LoopTrace:
+		{
+			uint32_t totalSteps = 0;
+			if (!TrySumGodDomainTraceOnlySteps(
+				codes, codeLength, HiOpcodeEnum::RunInstanceVoidV3x4CallTrace, &totalSteps))
+			{
+				return 0;
+			}
+			return totalSteps;
+		}
 		case Hotc233FastPath_InstanceVoidV3x1LoopTrace:
 		{
 			uint32_t totalSteps = 0;
@@ -11361,10 +11442,26 @@ ir->ele = ele.locOffset;
 			}
 			return totalSteps;
 		}
+		case Hotc233FastPath_InstanceI4ReturnLoopTrace:
+		{
+			uint32_t totalSteps = 0;
+			if (!TrySumGodDomainTraceOnlySteps(
+				codes, codeLength, HiOpcodeEnum::RunInstanceI4ReturnCallTrace, &totalSteps))
+			{
+				return 0;
+			}
+			return totalSteps;
+		}
 		case Hotc233FastPath_ArrayOpLoopTrace:
 		case Hotc233FastPath_QuaternionOpLoopTrace:
 			return 10;
+		case Hotc233FastPath_GameObjectCreateDestroyLoopTrace:
+			return 1;
 		default:
+			if (fastPathKind >= Hotc233FastPath_UnityKernel_First && fastPathKind <= Hotc233FastPath_UnityKernel_Last)
+			{
+				return 1;
+			}
 			return 0;
 		}
 	}
@@ -11413,12 +11510,20 @@ ir->ele = ele.locOffset;
 			return Hotc233FastPath_TypeOfConstAccumI4;
 		}
 
-		uint32_t godDomainTraceSteps = 0;
+		uint32_t 		godDomainTraceSteps = 0;
 		if (TrySumGodDomainTraceOnlySteps(
 			codes, codeLength, HiOpcodeEnum::RunInstanceVoidI4x5CallTrace, &godDomainTraceSteps)
 			&& argStackObjectSize >= sizeof(int32_t))
 		{
 			return Hotc233FastPath_InstanceVoidI4x5LoopTrace;
+		}
+
+		godDomainTraceSteps = 0;
+		if (TrySumGodDomainTraceOnlySteps(
+			codes, codeLength, HiOpcodeEnum::RunInstanceVoidV3x4CallTrace, &godDomainTraceSteps)
+			&& argStackObjectSize >= sizeof(int32_t))
+		{
+			return Hotc233FastPath_InstanceVoidV3x4LoopTrace;
 		}
 
 		godDomainTraceSteps = 0;
@@ -11443,6 +11548,14 @@ ir->ele = ele.locOffset;
 			&& argStackObjectSize >= sizeof(int32_t))
 		{
 			return Hotc233FastPath_InstanceV3ReturnLoopTrace;
+		}
+
+		godDomainTraceSteps = 0;
+		if (TrySumGodDomainTraceOnlySteps(
+			codes, codeLength, HiOpcodeEnum::RunInstanceI4ReturnCallTrace, &godDomainTraceSteps)
+			&& argStackObjectSize >= sizeof(int32_t))
+		{
+			return Hotc233FastPath_InstanceI4ReturnLoopTrace;
 		}
 
 		if (hasExceptionClauses)
@@ -11692,13 +11805,27 @@ ir->ele = ele.locOffset;
 			&& (result.hotc233FastPathKind == Hotc233FastPath_StaticF4LoopTrace
 				|| result.hotc233FastPathKind == Hotc233FastPath_TypeOfConstAccumI4
 				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceVoidI4x5LoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceVoidV3x4LoopTrace
 				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceVoidV3x1LoopTrace
 				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceGetTransformSetV3LoopTrace
 				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceV3ReturnLoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_InstanceI4ReturnLoopTrace
 				|| result.hotc233FastPathKind == Hotc233FastPath_ArrayOpLoopTrace
-				|| result.hotc233FastPathKind == Hotc233FastPath_QuaternionOpLoopTrace))
+				|| result.hotc233FastPathKind == Hotc233FastPath_QuaternionOpLoopTrace
+				|| result.hotc233FastPathKind == Hotc233FastPath_GameObjectCreateDestroyLoopTrace))
 		{
-			result.hotc233FastPathKind = Hotc233FastPath_Unsupported;
+			uint32_t defaultParam = ClassifyHotc233FastPathParam(
+				result.hotc233FastPathKind,
+				tranCodes,
+				totalIRSize);
+			if (defaultParam != 0)
+			{
+				result.hotc233FastPathParam = defaultParam;
+			}
+			else
+			{
+				result.hotc233FastPathKind = Hotc233FastPath_Unsupported;
+			}
 		}
 
 		if (resolveDatas.empty())

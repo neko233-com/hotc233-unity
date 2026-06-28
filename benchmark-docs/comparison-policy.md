@@ -47,6 +47,7 @@ hotc233 运行时 **从 HybridCLR 社区版代码 fork 改造**。因此：
 2. hotc233 与 HybridCLR 各用 **独立 Unity 工程**（本 demo **零** HybridCLR 安装；社区版只在 `hybridclr-benchmark-demo`）。
 3. 本机轻量对比表必须同时包含：hotc233 实测、HybridCLR 社区版实测、Pro 目标估算。
 4. WebGL 专项对比表再额外包含原生 WebGL IL2CPP，并归档到 `benchmark-docs/results/latest-hotc-vs-hybridclr.md`。
+5. 每次对标后按 [`benchmark-docs/reporting-requirements.md`](reporting-requirements.md) 向负责人汇报全量 14 行表，并注明 `HOTC233_ENABLE_OPCODE_PROFILER` / `-hotc233-opcode-profile` 是否开启。
 
 ## 验收门禁
 
@@ -70,19 +71,21 @@ hotc233 运行时 **从 HybridCLR 社区版代码 fork 改造**。因此：
 
 - 设置 `HOTC233_ALLOW_PRO_TARGET_GAP=1` 仅表示允许继续生成报告做迭代，**不代表** Pro 或社区版验收通过。
 
-## 优化路线（正确架构优先，禁止实验 default）
+## 优化路线（专用架构优先，禁止 dispatch 微优化）
 
-**已废弃（不得再作默认或“可选优化”）**：`PRO_EXPERIMENTAL_TRANSFORM`、RegI32 全局 lowering、linear trace、全局 copy propagation、release 常开 opcode profiler、MSVC threaded dispatch。
+**已废弃为性能路线**：通用 `Interpreter_Execute` dispatch 优化、M2N 桥接热路径、threaded dispatch、在错误 IR 上修 interp fallback、`PRO_EXPERIMENTAL_TRANSFORM`、RegI32 全局 lowering。归档说明：`benchmark-docs/archive/generic-dispatch-bridge-retired.md`。
 
 ```text
 P0  商业能力                     Hotfix/热重载/加固/访问控制/Assembly 缓存/栈诊断
-P1  Direct callsite + offline trace   transform 预烘焙 thunk / pretouch；RunStatic*CallTrace、*Cached
-P2  Typed ABI Callsite               Vector3/Quaternion / multi-arg AOT；禁止通用 bridge 占热路径
-P3  Typed Register + Array IR        仅 P1/P2 全绿后；Lowering 不得破坏 CallCommon 边界
-P4  细节 peephole / opcode           仅对应架构桶 L1 全绿后
+P1  14 base 专用 transform       TryBuildGodDomain* / trace fold / Instinct → minimal IR
+P2  whole-method execute bypass  TryExecuteHotc233FastPath；fastPathKind 验收
+P3  Typed ABI（V3/Quaternion）   struct-by-value direct；禁止 M2N 占热路径
+P4  冷路径通用解释器            仅正确性；禁止 P1 微优化堆在 switch 上
 ```
 
-若 L1 未过或 **200% 规则**触发：**只推进 P1→P2**，禁止跳步堆 P3 实验 pass 或 P4 微优化，禁止用 profile/策略模式绕过。
+若某 base 行 profile 仍为通用 dispatch opcode 或 `fastPathKind=1`：**只推进 P1 专用 builder**，禁止改 Execute switch case。
+
+权威矩阵：`benchmark-docs/god-domain-architecture.md`。
 
 ## 对外口径
 

@@ -2,7 +2,7 @@
 
 更新时间：2026-06-27
 
-每次跑完 `local-benchmark` / `benchmark` / `arch-self-review` 后，**必须**向负责人汇报 **14 条官方 base 全量对比表**（不得只报弱项子集）。
+每次跑完 `local-benchmark` / `benchmark` / `arch-self-review` 后，**必须**向负责人汇报 **14 条官方 base 全量对比表**（不得只报弱项子集）。若未设置 `HOTC233_INCLUDE_BUSINESS_BENCHMARK=0`，**同时**汇报 **10 条 `business-realworld-*` 业务场景表**（见 `RealWorldBusinessPerformanceProbe.cs`）。
 
 ## 必报字段
 
@@ -16,6 +16,7 @@
 | hotc / Pro | `hotc233PercentOfProfessionalTarget`（L2 方向） |
 | 追社区还需 | `hybridClrCatchUpMultiplier`（>1 表示 hotc 仍慢） |
 | 追 Pro 还需 | `professionalCatchUpMultiplier` |
+| **xLua（最后一列）** | 同机 demo Player 内 Tencent xLua 跑同形状 Lua 脚本；`xluaOpsPerSecond` + `hotc233PercentOfXlua`（参照项，非 L1 门禁） |
 
 ## 必报元信息（表头或表前 bullet）
 
@@ -23,7 +24,19 @@
 2. **Loader profile**：必须 `RuntimeFast`。
 3. **Opcode profiler 是否开启**（见下节）——**与社区版对比时必须声明**；社区版是 PC 直跑、无 hotc233 诊断开关。
 4. **L1 / L2 结论**：是否全面超越社区版；距 Pro 目标差距最大的 3 行。
-5. **报告路径**：`Generated/performance-local-hotc-vs-hybridclr-base.md`（临时）；**必更新** [`benchmark-docs/性能报告.md`](性能报告.md)；机器可读 [`benchmark-docs/results/latest-hotc-vs-hybridclr.json`](results/latest-hotc-vs-hybridclr.json)。
+5. **报告路径**：`Generated/performance-local-hotc-vs-hybridclr-base.md`（临时）；**自动生成** [`benchmark-docs/性能报告.md`](性能报告.md)（含 base + business 双表 + 自动摘要）；机器可读 [`benchmark-docs/results/latest-hotc-vs-hybridclr.json`](results/latest-hotc-vs-hybridclr.json)。
+
+## 业务场景表（追加，非 L1 硬门禁）
+
+| 前缀 | 来源 | L1 | 拉伸门禁 |
+|---|---|---|---|
+| `business-realworld-*` | `Assets/CodeHotUpdate/Feature/RealWorldBusinessPerformanceProbe.cs`（HybridCLR 同形状在 `hybridclr-benchmark-demo`） | 不参与 | 可选 `HOTC233_ENFORCE_BUSINESS_FLOOR=500`（默认 500%） |
+
+Player 参数：`-hotc233-performance-suite`（`local-benchmark` 默认开启；`HOTC233_INCLUDE_BUSINESS_BENCHMARK=0` 仅跑官方 14 条）。
+
+**xLua 对照（demo 内，表格最后一列）**：`tools/setup-xlua.ps1` 安装 `Assets/XLua` → Player 内 `-hotc233-performance-suite` 顺序跑 Lua 探针 → 报告列 `xLua` / `hotc / xLua`。关闭：`HOTC233_INCLUDE_XLUA_BENCHMARK=0` 或 `-hotc233-skip-xlua-benchmark`。
+
+架构说明可选写入 [`benchmark-docs/performance-architecture-notes.md`](performance-architecture-notes.md)，会并入 `性能报告.md` 的「架构要点」节。
 
 ## Opcode Profiler（性能统计）开关
 

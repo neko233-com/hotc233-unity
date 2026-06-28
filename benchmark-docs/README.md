@@ -80,10 +80,24 @@ go run ./hotc233ctl local-benchmark -project .. `
   -loader-profile RuntimeFast -skip-hybridclr -force-rebuild
 Remove-Item Env:\HOTC233_LOCAL_OFFICIAL_COUNT,Env:\HOTC233_LOCAL_BENCHMARK_FILTER,Env:\HOTC233_LOCAL_PERF_FAST -ErrorAction SilentlyContinue
 
-# 正式同机对标
+# 正式同机对标（默认含 10 条 business-realworld-* + 自动生成 性能报告.md）
 go run ./hotc233ctl local-benchmark -project .. `
   -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo `
   -loader-profile RuntimeFast
+
+# 仅官方 14 条 base（不含业务场景）
+$env:HOTC233_INCLUDE_BUSINESS_BENCHMARK='0'
+go run ./hotc233ctl local-benchmark -project .. `
+  -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo `
+  -loader-profile RuntimeFast
+Remove-Item Env:\HOTC233_INCLUDE_BUSINESS_BENCHMARK -ErrorAction SilentlyContinue
+
+# xLua 未安装时先执行
+powershell -ExecutionPolicy Bypass -File ..\tools\setup-xlua.ps1
+
+# Unity 真实热更快测（独立于官方 14 base；10~100 次推演 1s 吞吐）
+go run ./hotc233ctl unity-realworld-benchmark -project .. -loader-profile RuntimeFast
+# 详见 benchmark-docs/real-world-unity-hotupdate-suite.md
 ```
 
 WebGL/小游戏只在需要平台结论时顺序跑：
@@ -96,14 +110,14 @@ go run ./hotc233ctl benchmark -project .. `
 
 ## 判定口径
 
-- 只认 HybridCLR 官方 14 条 base benchmark。
-- 社区版是绝对门槛：任一 base 行 `hotc233PercentOfHybridClr <= 100%`，方向不合格。
+- **L1 硬门禁**：只认 HybridCLR 官方 14 条 `hybridclr-*` base；任一 base 行 `hotc233PercentOfHybridClr <= 100%`，方向不合格。
+- **业务拉伸（可选）**：10 条 `business-realworld-*`（custom class / struct / async / Task / callback / coroutine / tween 模拟等）；`HOTC233_ENFORCE_BUSINESS_FLOOR=500` 启用 500% 拉伸门禁。
 - Pro 目标是纯解释器性能，不用 DHE 或首包 AOT 预置热更代码替代。
 - 禁止 Cursor multitask、并行 WebGL 探针、旧 `flywheel` 结论。
 
 ## 报告位置
 
-- **人类可读唯一入口（必维护）**：[`benchmark-docs/性能报告.md`](性能报告.md) — 全量 14 行表 + L1 结论
+- **人类可读唯一入口（自动生成）**：[`benchmark-docs/性能报告.md`](性能报告.md) — 官方 14 行 + 业务场景双表 + 自动摘要 + L1 结论
 - 临时：`Assets/EditorForBuild/Generated/performance-local-hotc-vs-hybridclr-base.*`
 - 机器可读归档：`benchmark-docs/results/latest-hotc-vs-hybridclr.json`
 - 归档 Markdown 副本：`benchmark-docs/results/latest-hotc-vs-hybridclr.md`

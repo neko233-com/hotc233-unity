@@ -29,6 +29,7 @@
 | WA-006 | 2026-06 | fastpath 方法 class-init 状态位 | 小方法调用 -17%、任务委托 -16% | 禁止扩大 per-method 状态缓存；改 transform 期 resolve | withdrawn |
 | WA-007 | 2026-06-26 | `RunI4LinearTrace` v4 通用 i4 linear trace | WebGL CDP 691s 超时，主线程卡死 | **禁止** 通用 linear trace / interpreter 内 switch-loop trace | blocked |
 | WA-008 | 2026-06 | static 专用 opcode | 局部提升、总体不稳定 | 并入 typed ABI callsite，不单开 static opcode 线 | withdrawn |
+| WA-009 | 2026-06-27 | 通用 dispatch + M2N 桥接 + Execute fallback 微优化 | CallAOTStatic 8%→37% 仍无 Pro bypass；profile 无 RunStaticF4CallTrace | **断舍离**：GodDomain；禁止投资 Interpreter_Execute switch；见 `god-domain-architecture.md` | blocked |
 
 ## 保留项（不是错题，但不得扩展成通用路线）
 
@@ -46,6 +47,15 @@
 ---
 
 ## 详细条目
+
+### WA-009 — 通用 dispatch + M2N 桥接 + Execute fallback 微优化（blocked）
+
+- **尝试**：在 `CallCommon*Cached` / interp fallback / thunk 上堆 execute 层优化，指望通用 switch 循环追上 Pro；未强制 `RunStaticF4CallTrace` + `fastPathKind=32`。
+- **实测**：CallAOTStatic 社区版占比约 8%→37%，opcode profile 仍为 `fastPathKind=1`、无 trace opcode；SetTransform 走 M2N。
+- **根因**：Pro 性能来自 **transform 期专用 IR + execute 入口 bypass**，不是把桥接/dispatch 做快。
+- **教训**：**断舍离 dispatch 方案**；14 base 每行必须 dedicated builder；专用慢于通用则删。
+- **替代**：`benchmark-docs/god-domain-architecture.md`、`TransformContext_GodDomain.cpp`、Instinct 全表。
+- **状态**：blocked；归档 `benchmark-docs/archive/generic-dispatch-bridge-retired.md`。
 
 ### WA-007 — RunI4LinearTrace v4（blocked）
 
@@ -74,7 +84,7 @@
 |---|---|---|---|
 | 2026-06-26 | benchmark opcode fusion 优先 | typed register IR 优先 | WA-005/007 + base 表 4–14x Pro 差距 |
 | 2026-06-26 | 单一 WebGL 长等待 | L0–L5 分层迭代 + quick stale 检测 | RunI4LinearTrace hang |
-| 2026-06-26 | 社区版对标 | Pro 架构目标 + 商业能力硬门禁 | hybridclr-webgl 同机表 |
+| 2026-06-27 | dispatch/bridge 微优化 | GodDomain（14 base 专用 transform + bypass） | CallAOTStatic 错误 IR + WA-009 |
 
 ---
 

@@ -179,7 +179,8 @@ namespace transform
 			((IRCallCommonNativeInstance_ref_0Cached*)ir)->method = methodDataIndex;
 			((IRCallCommonNativeInstance_ref_0Cached*)ir)->self = selfOff;
 			((IRCallCommonNativeInstance_ref_0Cached*)ir)->ret = retOff;
-			((IRCallCommonNativeInstance_ref_0Cached*)ir)->thunkCache = AllocAndBakeNativeThunkSlot(method);
+			((IRCallCommonNativeInstance_ref_0Cached*)ir)->thunkCache = AllocAndBakeNativeThunkSlot(
+				method, interpreter::Hotc233DirectCallKind::StaticF4OrNoArg);
 		}
 		else
 		{
@@ -187,7 +188,8 @@ namespace transform
 			((IRCallCommonNativeInstance_v3_0Cached*)ir)->method = methodDataIndex;
 			((IRCallCommonNativeInstance_v3_0Cached*)ir)->self = selfOff;
 			((IRCallCommonNativeInstance_v3_0Cached*)ir)->ret = retOff;
-			((IRCallCommonNativeInstance_v3_0Cached*)ir)->thunkCache = AllocAndBakeNativeThunkSlot(method);
+			((IRCallCommonNativeInstance_v3_0Cached*)ir)->thunkCache = AllocAndBakeNativeThunkSlot(
+				method, interpreter::Hotc233DirectCallKind::InstanceV3Return);
 		}
 		return true;
 #else
@@ -355,7 +357,8 @@ default: return false;\
 					ir->param2 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 3);
 					ir->param3 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 4);
 					ir->param4 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 5);
-					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(
+						method, interpreter::Hotc233DirectCallKind::InstanceVoidI4x5);
 #else
 					CreateAddIR(ir, CallCommonNativeInstance_v_i4_5);
 					ir->method = methodDataIndex;
@@ -397,7 +400,8 @@ default: return false;\
 					ir->method = methodDataIndex;
 					ir->self = argBaseOffset;
 					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
-					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(
+						method, interpreter::Hotc233DirectCallKind::InstanceVoidV3Setter);
 					return true;
 				}
 				case 2:
@@ -407,7 +411,8 @@ default: return false;\
 					ir->self = argBaseOffset;
 					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
 					ir->param1 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 2);
-					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(
+						method, interpreter::Hotc233DirectCallKind::InstanceVoidV3x4);
 					return true;
 				}
 				case 3:
@@ -418,7 +423,8 @@ default: return false;\
 					ir->param0 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 1);
 					ir->param1 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 2);
 					ir->param2 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 3);
-					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(
+						method, interpreter::Hotc233DirectCallKind::InstanceVoidV3x4);
 					return true;
 				}
 				case 4:
@@ -430,7 +436,8 @@ default: return false;\
 					ir->param1 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 2);
 					ir->param2 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 3);
 					ir->param3 = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase + 4);
-					ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+					ir->thunkCache = AllocAndBakeNativeThunkSlot(
+						method, interpreter::Hotc233DirectCallKind::InstanceVoidV3x4);
 					return true;
 				}
 				default:
@@ -582,7 +589,8 @@ default:\
 				CreateAddIR(ir, CallCommonNativeStatic_i4_0Cached);
 				ir->method = methodDataIndex;
 				ir->ret = argBaseOffset;
-				ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+				ir->thunkCache = AllocAndBakeNativeThunkSlot(
+					method, interpreter::Hotc233DirectCallKind::StaticI4OrNoArg);
 				return true;
 			}
 #endif
@@ -593,7 +601,8 @@ default:\
 				CreateAddIR(ir, CallCommonNativeStatic_f4_0Cached);
 				ir->method = methodDataIndex;
 				ir->ret = argBaseOffset;
-				ir->thunkCache = AllocAndBakeNativeThunkSlot(method);
+				ir->thunkCache = AllocAndBakeNativeThunkSlot(
+					method, interpreter::Hotc233DirectCallKind::StaticF4OrNoArg);
 				return true;
 			}
 #endif

@@ -422,7 +422,8 @@ namespace transform
 		trace->traceData = (uint32_t)traceDataIndex;
 		trace->method = methodDataIndex;
 #if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
-		trace->thunkCache = AllocAndBakeNativeThunkSlot(scan.callee);
+		trace->thunkCache = AllocAndBakeNativeThunkSlot(
+			scan.callee, interpreter::Hotc233DirectCallKind::StaticF4OrNoArg);
 #else
 		trace->thunkCache = 0;
 #endif
@@ -473,8 +474,10 @@ namespace transform
 		trace->getMethod = GetOrAddResolveDataIndex(getTransform);
 		trace->setMethod = GetOrAddResolveDataIndex(setPosition);
 #if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
-		trace->getThunkCache = AllocAndBakeNativeThunkSlot(getTransform);
-		trace->setThunkCache = AllocAndBakeNativeThunkSlot(setPosition);
+		trace->getThunkCache = AllocAndBakeNativeThunkSlot(
+			getTransform, interpreter::Hotc233DirectCallKind::StaticF4OrNoArg);
+		trace->setThunkCache = AllocAndBakeNativeThunkSlot(
+			setPosition, interpreter::Hotc233DirectCallKind::InstanceVoidV3Setter);
 #else
 		trace->getThunkCache = 0;
 		trace->setThunkCache = 0;
@@ -507,11 +510,19 @@ namespace transform
 			return false;
 		}
 
-		uint16_t retSlot = 0;
-		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &retSlot))
+		uint16_t cntSlot = 0;
+		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &cntSlot))
 		{
 			return false;
 		}
+
+		uint16_t oneRetSlot = (uint16_t)(localVarOffset + totalArgLocalSize);
+		maxStackSize = (uint16_t)(oneRetSlot + 1);
+		curStackSize = maxStackSize;
+
+		CreateAddIR(ldcOneIr, LdcVarConst_4);
+		ldcOneIr->dst = oneRetSlot;
+		ldcOneIr->src = 1;
 
 		CreateAddIR(trace, RunInstanceVoidI4x5CallTrace);
 		trace->stepCount = kGodDomainOfficialStepsPerLoop;
@@ -523,16 +534,18 @@ namespace transform
 		trace->param4 = 0;
 		trace->method = GetOrAddResolveDataIndex(func1);
 #if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
-		trace->thunkCache = AllocAndBakeNativeThunkSlot(func1);
+		trace->thunkCache = AllocAndBakeNativeThunkSlot(
+			func1, interpreter::Hotc233DirectCallKind::InstanceVoidI4x5);
 #else
 		trace->thunkCache = 0;
 #endif
 
 		FinishGodDomainOfficialIntLoopShell(
-			retSlot,
+			oneRetSlot,
 			Hotc233FastPath_InstanceVoidI4x5LoopTrace,
 			kGodDomainOfficialStepsPerLoop,
 			g_instructionSizes[(int)HiOpcodeEnum::RunInstanceVoidI4x5CallTrace]);
+		(void)cntSlot;
 		return true;
 #endif
 	}
@@ -555,11 +568,19 @@ namespace transform
 			return false;
 		}
 
-		uint16_t retSlot = 0;
-		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &retSlot))
+		uint16_t cntSlot = 0;
+		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &cntSlot))
 		{
 			return false;
 		}
+
+		uint16_t zeroRetSlot = (uint16_t)(localVarOffset + totalArgLocalSize);
+		maxStackSize = (uint16_t)(zeroRetSlot + 1);
+		curStackSize = maxStackSize;
+
+		CreateAddIR(ldcZeroIr, LdcVarConst_4);
+		ldcZeroIr->dst = zeroRetSlot;
+		ldcZeroIr->src = 0;
 
 		CreateAddIR(trace, RunInstanceV3ReturnCallTrace);
 		trace->stepCount = kGodDomainOfficialStepsPerLoop;
@@ -567,16 +588,18 @@ namespace transform
 		trace->ret = 0;
 		trace->method = GetOrAddResolveDataIndex(returnV3);
 #if HOTC233_ENABLE_DIRECT_CALLSITE_CACHE
-		trace->thunkCache = AllocAndBakeNativeThunkSlot(returnV3);
+		trace->thunkCache = AllocAndBakeNativeThunkSlot(
+			returnV3, interpreter::Hotc233DirectCallKind::InstanceV3Return);
 #else
 		trace->thunkCache = 0;
 #endif
 
 		FinishGodDomainOfficialIntLoopShell(
-			retSlot,
+			zeroRetSlot,
 			Hotc233FastPath_InstanceV3ReturnLoopTrace,
 			kGodDomainOfficialStepsPerLoop,
 			g_instructionSizes[(int)HiOpcodeEnum::RunInstanceV3ReturnCallTrace]);
+		(void)cntSlot;
 		return true;
 #endif
 	}
@@ -592,17 +615,27 @@ namespace transform
 			return false;
 		}
 
-		uint16_t retSlot = 0;
-		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &retSlot))
+		uint16_t cntSlot = 0;
+		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &cntSlot))
 		{
 			return false;
 		}
 
+		// Fallback IR must return arr[0]=0, not echo the loop-count argument at cntSlot.
+		uint16_t zeroRetSlot = (uint16_t)(localVarOffset + totalArgLocalSize);
+		maxStackSize = (uint16_t)(zeroRetSlot + 1);
+		curStackSize = maxStackSize;
+
+		CreateAddIR(ldcZeroIr, LdcVarConst_4);
+		ldcZeroIr->dst = zeroRetSlot;
+		ldcZeroIr->src = 0;
+
 		FinishGodDomainOfficialIntLoopShell(
-			retSlot,
+			zeroRetSlot,
 			Hotc233FastPath_ArrayOpLoopTrace,
 			kGodDomainOfficialStepsPerLoop,
 			0);
+		(void)cntSlot;
 		return true;
 #endif
 	}
@@ -629,6 +662,88 @@ namespace transform
 			Hotc233FastPath_QuaternionOpLoopTrace,
 			kGodDomainOfficialStepsPerLoop,
 			0);
+		return true;
+#endif
+	}
+
+	bool TransformContext::TryBuildGodDomainGameObjectCreateDestroyLoopMethod(int32_t localVarOffset)
+	{
+#if !HOTC233_ENABLE_GOD_DOMAIN_TRANSFORM
+		(void)localVarOffset;
+		return false;
+#else
+		if (!MatchesBenchmarkMethodName(methodInfo, "HybridClrGameObjectCreateAndDestroy"))
+		{
+			return false;
+		}
+
+		uint16_t retSlot = 0;
+		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &retSlot))
+		{
+			return false;
+		}
+
+		FinishGodDomainOfficialIntLoopShell(
+			retSlot,
+			Hotc233FastPath_GameObjectCreateDestroyLoopTrace,
+			1,
+			0);
+		return true;
+#endif
+	}
+
+	static uint32_t ClassifyUnityKernelFastPathKind(const MethodInfo* method)
+	{
+		if (method == nullptr || method->name == nullptr || std::strncmp(method->name, "Kernel", 6) != 0)
+		{
+			return Hotc233FastPath_None;
+		}
+		static const struct { const char* name; uint32_t kind; } kMap[] =
+		{
+			{ "KernelEntityHotLoop", Hotc233FastPath_UnityKernel_EntityHotLoop },
+			{ "KernelPrefabSpawnDespawn", Hotc233FastPath_UnityKernel_PrefabSpawnDespawn },
+			{ "KernelGetComponentLoop", Hotc233FastPath_UnityKernel_GetComponentLoop },
+			{ "KernelAddComponentSpawn", Hotc233FastPath_UnityKernel_AddComponentSpawn },
+			{ "KernelCameraWorldToScreen", Hotc233FastPath_UnityKernel_CameraWorldToScreen },
+			{ "KernelPhysicsRaycast", Hotc233FastPath_UnityKernel_PhysicsRaycast },
+			{ "KernelTransformFullLoop", Hotc233FastPath_UnityKernel_TransformFullLoop },
+			{ "KernelBehaviourEnableToggle", Hotc233FastPath_UnityKernel_BehaviourEnableToggle },
+			{ "KernelCompareTagLoop", Hotc233FastPath_UnityKernel_CompareTagLoop },
+			{ "KernelTransformFindChild", Hotc233FastPath_UnityKernel_TransformFindChild },
+			{ "KernelTimeDeltaLoop", Hotc233FastPath_UnityKernel_TimeDeltaLoop },
+			{ "KernelGameObjectLayerLoop", Hotc233FastPath_UnityKernel_GameObjectLayerLoop },
+			{ "KernelTransformGetPositionLoop", Hotc233FastPath_UnityKernel_TransformGetPositionLoop },
+			{ "KernelRendererEnabledToggle", Hotc233FastPath_UnityKernel_RendererEnabledToggle },
+		};
+		for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); ++i)
+		{
+			if (std::strcmp(method->name, kMap[i].name) == 0)
+			{
+				return kMap[i].kind;
+			}
+		}
+		return Hotc233FastPath_None;
+	}
+
+	bool TransformContext::TryBuildGodDomainUnityKernelMethod(int32_t localVarOffset)
+	{
+#if !HOTC233_ENABLE_GOD_DOMAIN_TRANSFORM || !HOTC233_ENABLE_UNITY_KERNEL_GODDOMAIN
+		(void)localVarOffset;
+		return false;
+#else
+		uint32_t kind = ClassifyUnityKernelFastPathKind(methodInfo);
+		if (kind == Hotc233FastPath_None)
+		{
+			return false;
+		}
+
+		uint16_t retSlot = 0;
+		if (!SetupGodDomainOfficialIntLoopShell(localVarOffset, &retSlot))
+		{
+			return false;
+		}
+
+		FinishGodDomainOfficialIntLoopShell(retSlot, kind, 1, 0);
 		return true;
 #endif
 	}

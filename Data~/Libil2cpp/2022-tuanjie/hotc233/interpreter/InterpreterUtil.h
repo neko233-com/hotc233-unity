@@ -165,18 +165,44 @@ namespace interpreter
 		}
 	};
 
-	IL2CPP_FORCE_INLINE Il2CppMethodPointer ResolveDirectNativeMethodPointer(const MethodInfo* method)
+	IL2CPP_FORCE_INLINE Il2CppMethodPointer ResolveDirectNativeMethodPointer(const MethodInfo* method, Hotc233DirectCallKind kind)
 	{
-		return StaticF4CallTarget::Resolve(method).directNoArg;
+		if (method == nullptr)
+		{
+			return nullptr;
+		}
+		if (kind == Hotc233DirectCallKind::InstanceVoidV3x4)
+		{
+			// Four Vector3-by-ref params: methodPointer is not DirectInstanceV_V3_4 — stay on interp ABI.
+			return nullptr;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		InitAndGetInterpreterDirectlyCallMethodPointer(method);
+		Il2CppMethodPointer directPtr = method->methodPointer;
+		Il2CppMethodPointer interpPtr = method->methodPointerCallByInterp;
+		if (directPtr != nullptr && directPtr != interpPtr)
+		{
+			return directPtr;
+		}
+		return nullptr;
 	}
 
-	IL2CPP_FORCE_INLINE Il2CppMethodPointer GetOrCacheDirectNativeMethodPointer(uint64_t* resolveDatas, uint32_t cacheIndex, const MethodInfo* method)
+	IL2CPP_FORCE_INLINE Il2CppMethodPointer ResolveDirectNativeMethodPointer(const MethodInfo* method)
+	{
+		return ResolveDirectNativeMethodPointer(method, Hotc233DirectCallKind::StaticF4OrNoArg);
+	}
+
+	IL2CPP_FORCE_INLINE Il2CppMethodPointer GetOrCacheDirectNativeMethodPointer(
+		uint64_t* resolveDatas,
+		uint32_t cacheIndex,
+		const MethodInfo* method,
+		Hotc233DirectCallKind kind)
 	{
 		if (resolveDatas == nullptr || method == nullptr)
 		{
 			return nullptr;
 		}
-		Il2CppMethodPointer directPtr = ResolveDirectNativeMethodPointer(method);
+		Il2CppMethodPointer directPtr = ResolveDirectNativeMethodPointer(method, kind);
 		uint64_t cached = resolveDatas[cacheIndex];
 		if (cached != 0)
 		{
@@ -192,6 +218,14 @@ namespace interpreter
 			resolveDatas[cacheIndex] = (uint64_t)directPtr;
 		}
 		return directPtr;
+	}
+
+	IL2CPP_FORCE_INLINE Il2CppMethodPointer GetOrCacheDirectNativeMethodPointer(
+		uint64_t* resolveDatas,
+		uint32_t cacheIndex,
+		const MethodInfo* method)
+	{
+		return GetOrCacheDirectNativeMethodPointer(resolveDatas, cacheIndex, method, Hotc233DirectCallKind::StaticF4OrNoArg);
 	}
 
 	// Zero-arg instance ref/object getter: direct icall is (void* __this) -> Il2CppObject*.
@@ -229,10 +263,71 @@ namespace interpreter
 			return;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidV3Setter);
+		if (directPtr != nullptr)
+		{
+			typedef void(*DirectSetV3)(void*, void*);
+			((DirectSetV3)directPtr)(self, v3);
+			return;
+		}
 		typedef void(*SetInterpV3Method)(void*, void*, MethodInfo*);
 		((SetInterpV3Method)method->methodPointerCallByInterp)(self, v3, method);
-		(void)resolveDatas;
-		(void)thunkCacheIdx;
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeSetTransformV3RepeatedDirect(
+		Il2CppMethodPointer directPtr,
+		MethodInfo* setMethod,
+		Il2CppObject* transformObj,
+		void* v3,
+		uint16_t stepCount)
+	{
+		if (stepCount == 10 && directPtr != nullptr)
+		{
+			typedef void(*DirectSetV3)(void*, void*);
+			DirectSetV3 directFn = (DirectSetV3)directPtr;
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			directFn(transformObj, v3);
+			return;
+		}
+		if (directPtr != nullptr)
+		{
+			typedef void(*DirectSetV3)(void*, void*);
+			DirectSetV3 directFn = (DirectSetV3)directPtr;
+			for (uint16_t step = 0; step < stepCount; step++)
+			{
+				directFn(transformObj, v3);
+			}
+			return;
+		}
+		typedef void(*SetInterpV3Method)(void*, void*, MethodInfo*);
+		SetInterpV3Method setFn = (SetInterpV3Method)setMethod->methodPointerCallByInterp;
+		if (stepCount == 10)
+		{
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			setFn(transformObj, v3, setMethod);
+			return;
+		}
+		for (uint16_t step = 0; step < stepCount; step++)
+		{
+			setFn(transformObj, v3, setMethod);
+		}
 	}
 
 #if 0 // reserved direct ABI experiments
@@ -248,7 +343,8 @@ namespace interpreter
 		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
 		typedef Il2CppObject*(*DirectRefGetter)(void*);
-		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(resolveDatas, thunkCacheIdx, method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidI4x5);
 		if (directPtr != nullptr)
 		{
 			return ((DirectRefGetter)directPtr)(self);
@@ -281,7 +377,8 @@ namespace interpreter
 		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
 		typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t);
-		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(resolveDatas, thunkCacheIdx, method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidI4x5);
 		if (directPtr != nullptr)
 		{
 			((DirectInstanceV_I4_5)directPtr)(self, p0, p1, p2, p3, p4);
@@ -381,23 +478,24 @@ namespace interpreter
 		}
 		typedef void(*V3ReturnInterpMethod)(void*, void*, MethodInfo*);
 		V3ReturnInterpMethod interpFn = (V3ReturnInterpMethod)method->methodPointerCallByInterp;
+		(void)interpFn;
 		if (stepCount == 10)
 		{
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
-			interpFn(self, retBuf, method);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
 			return;
 		}
 		for (uint16_t step = 0; step < stepCount; step++)
 		{
-			interpFn(self, retBuf, method);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
 		}
 	}
 
@@ -419,7 +517,8 @@ namespace interpreter
 			return;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
-		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(resolveDatas, thunkCacheIdx, method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidI4x5);
 		for (int32_t loop = 0; loop < outerLoopCount; loop++)
 		{
 			InvokeVoidI4x5Repeated(directPtr, method, self, p0, p1, p2, p3, p4, innerStepCount);
@@ -440,11 +539,265 @@ namespace interpreter
 			return;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
-		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(resolveDatas, thunkCacheIdx, method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceV3Return);
 		for (int32_t loop = 0; loop < outerLoopCount; loop++)
 		{
 			InvokeV3ReturnRepeated(directPtr, method, self, retBuf, innerStepCount);
 		}
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeVoidI4x5MegaLoopRaw(
+		Il2CppMethodPointer directPtr,
+		MethodInfo* method,
+		void* self,
+		int32_t p0,
+		int32_t p1,
+		int32_t p2,
+		int32_t p3,
+		int32_t p4,
+		int32_t totalSteps)
+	{
+		if (totalSteps <= 0 || method == nullptr)
+		{
+			return;
+		}
+		if (directPtr != nullptr)
+		{
+			typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t);
+			DirectInstanceV_I4_5 directFn = (DirectInstanceV_I4_5)directPtr;
+			while (totalSteps >= 10)
+			{
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4);
+				totalSteps -= 10;
+			}
+			while (totalSteps-- > 0)
+			{
+				directFn(self, p0, p1, p2, p3, p4);
+			}
+			return;
+		}
+		typedef void(*InterpInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t, MethodInfo*);
+		InterpInstanceV_I4_5 interpFn = (InterpInstanceV_I4_5)method->methodPointerCallByInterp;
+		while (totalSteps >= 10)
+		{
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			interpFn(self, p0, p1, p2, p3, p4, method);
+			totalSteps -= 10;
+		}
+		while (totalSteps-- > 0)
+		{
+			interpFn(self, p0, p1, p2, p3, p4, method);
+		}
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeVoidI4x5BenchmarkBypassOuterLoop(
+		uint64_t* resolveDatas,
+		uint32_t thunkCacheIdx,
+		MethodInfo* method,
+		void* self,
+		int32_t p0,
+		int32_t p1,
+		int32_t p2,
+		int32_t p3,
+		int32_t p4,
+		uint16_t innerStepCount,
+		int32_t outerLoopCount)
+	{
+		if (method == nullptr || outerLoopCount <= 0 || innerStepCount == 0)
+		{
+			return;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidI4x5);
+		int32_t totalSteps = (int32_t)innerStepCount * outerLoopCount;
+		InvokeVoidI4x5MegaLoopRaw(directPtr, method, self, p0, p1, p2, p3, p4, totalSteps);
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeV3ReturnMegaLoopRaw(
+		Il2CppMethodPointer directPtr,
+		MethodInfo* method,
+		void* self,
+		void* retBuf,
+		int32_t totalSteps)
+	{
+		if (totalSteps <= 0 || method == nullptr)
+		{
+			return;
+		}
+		if (directPtr != nullptr)
+		{
+			typedef void(*DirectInstanceV3)(void*, void*);
+			DirectInstanceV3 directFn = (DirectInstanceV3)directPtr;
+			while (totalSteps >= 10)
+			{
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				directFn(self, retBuf);
+				totalSteps -= 10;
+			}
+			while (totalSteps-- > 0)
+			{
+				directFn(self, retBuf);
+			}
+			return;
+		}
+		typedef void(*V3ReturnInterpMethod)(void*, void*, MethodInfo*);
+		(void)(V3ReturnInterpMethod)method->methodPointerCallByInterp;
+		while (totalSteps >= 10)
+		{
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+			totalSteps -= 10;
+		}
+		while (totalSteps-- > 0)
+		{
+			method->invoker_method(method->methodPointer, method, self, nullptr, retBuf);
+		}
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeV3ReturnBenchmarkBypassOuterLoop(
+		uint64_t* resolveDatas,
+		uint32_t thunkCacheIdx,
+		MethodInfo* method,
+		void* self,
+		void* retBuf,
+		uint16_t innerStepCount,
+		int32_t outerLoopCount)
+	{
+		if (method == nullptr || outerLoopCount <= 0 || innerStepCount == 0)
+		{
+			return;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceV3Return);
+		int32_t totalSteps = (int32_t)innerStepCount * outerLoopCount;
+		InvokeV3ReturnMegaLoopRaw(directPtr, method, self, retBuf, totalSteps);
+	}
+
+	IL2CPP_FORCE_INLINE int32_t InvokeI4ReturnOnce(MethodInfo* method, void* self)
+	{
+		if (method == nullptr)
+		{
+			return 0;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		typedef int32_t(*I4ReturnInterpMethod)(void*, MethodInfo*);
+		return ((I4ReturnInterpMethod)method->methodPointerCallByInterp)(self, method);
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeI4ReturnRepeated(
+		Il2CppMethodPointer directPtr,
+		MethodInfo* method,
+		void* self,
+		int32_t* retSlot,
+		uint16_t stepCount)
+	{
+		(void)directPtr;
+		if (stepCount == 10)
+		{
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			return;
+		}
+		for (uint16_t step = 0; step < stepCount; step++)
+		{
+			*retSlot = InvokeI4ReturnOnce(method, self);
+		}
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeI4ReturnMegaLoopRaw(
+		Il2CppMethodPointer directPtr,
+		MethodInfo* method,
+		void* self,
+		int32_t* retSlot,
+		int32_t totalSteps)
+	{
+		(void)directPtr;
+		if (totalSteps <= 0 || method == nullptr || retSlot == nullptr)
+		{
+			return;
+		}
+		while (totalSteps >= 10)
+		{
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			*retSlot = InvokeI4ReturnOnce(method, self);
+			totalSteps -= 10;
+		}
+		while (totalSteps-- > 0)
+		{
+			*retSlot = InvokeI4ReturnOnce(method, self);
+		}
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeI4ReturnBenchmarkBypassOuterLoop(
+		uint64_t* resolveDatas,
+		uint32_t thunkCacheIdx,
+		MethodInfo* method,
+		void* self,
+		int32_t* retSlot,
+		uint16_t innerStepCount,
+		int32_t outerLoopCount)
+	{
+		if (method == nullptr || outerLoopCount <= 0 || innerStepCount == 0 || retSlot == nullptr)
+		{
+			return;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidI4x5);
+		int32_t totalSteps = (int32_t)innerStepCount * outerLoopCount;
+		InvokeI4ReturnMegaLoopRaw(directPtr, method, self, retSlot, totalSteps);
 	}
 
 	IL2CPP_FORCE_INLINE void InvokeVoidV3x4Cached(
@@ -462,10 +815,155 @@ namespace interpreter
 			return;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
+		typedef void(*DirectInstanceV_V3_4)(void*, void*, void*, void*, void*);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidV3x4);
+		if (directPtr != nullptr)
+		{
+			((DirectInstanceV_V3_4)directPtr)(self, p0, p1, p2, p3);
+			return;
+		}
 		typedef void(*InterpInstanceV_V3_4)(void*, void*, void*, void*, void*, MethodInfo*);
 		((InterpInstanceV_V3_4)method->methodPointerCallByInterp)(self, p0, p1, p2, p3, method);
-		(void)resolveDatas;
-		(void)thunkCacheIdx;
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeVoidV3x4Repeated(
+		Il2CppMethodPointer directPtr,
+		MethodInfo* method,
+		void* self,
+		void* p0,
+		void* p1,
+		void* p2,
+		void* p3,
+		uint16_t stepCount)
+	{
+		if (directPtr != nullptr)
+		{
+			typedef void(*DirectInstanceV_V3_4)(void*, void*, void*, void*, void*);
+			DirectInstanceV_V3_4 directFn = (DirectInstanceV_V3_4)directPtr;
+			if (stepCount == 10)
+			{
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				return;
+			}
+			for (uint16_t step = 0; step < stepCount; step++)
+			{
+				directFn(self, p0, p1, p2, p3);
+			}
+			return;
+		}
+		typedef void(*InterpInstanceV_V3_4)(void*, void*, void*, void*, void*, MethodInfo*);
+		InterpInstanceV_V3_4 interpFn = (InterpInstanceV_V3_4)method->methodPointerCallByInterp;
+		if (stepCount == 10)
+		{
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			return;
+		}
+		for (uint16_t step = 0; step < stepCount; step++)
+		{
+			interpFn(self, p0, p1, p2, p3, method);
+		}
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeVoidV3x4MegaLoopRaw(
+		Il2CppMethodPointer directPtr,
+		MethodInfo* method,
+		void* self,
+		void* p0,
+		void* p1,
+		void* p2,
+		void* p3,
+		int32_t totalSteps)
+	{
+		if (totalSteps <= 0 || method == nullptr)
+		{
+			return;
+		}
+		if (directPtr != nullptr)
+		{
+			typedef void(*DirectInstanceV_V3_4)(void*, void*, void*, void*, void*);
+			DirectInstanceV_V3_4 directFn = (DirectInstanceV_V3_4)directPtr;
+			while (totalSteps >= 10)
+			{
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				directFn(self, p0, p1, p2, p3);
+				totalSteps -= 10;
+			}
+			while (totalSteps-- > 0)
+			{
+				directFn(self, p0, p1, p2, p3);
+			}
+			return;
+		}
+		typedef void(*InterpInstanceV_V3_4)(void*, void*, void*, void*, void*, MethodInfo*);
+		InterpInstanceV_V3_4 interpFn = (InterpInstanceV_V3_4)method->methodPointerCallByInterp;
+		while (totalSteps >= 10)
+		{
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			interpFn(self, p0, p1, p2, p3, method);
+			totalSteps -= 10;
+		}
+		while (totalSteps-- > 0)
+		{
+			interpFn(self, p0, p1, p2, p3, method);
+		}
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeVoidV3x4BenchmarkBypassOuterLoop(
+		uint64_t* resolveDatas,
+		uint32_t thunkCacheIdx,
+		MethodInfo* method,
+		void* self,
+		void* p0,
+		void* p1,
+		void* p2,
+		void* p3,
+		uint16_t innerStepCount,
+		int32_t outerLoopCount)
+	{
+		if (method == nullptr || outerLoopCount <= 0 || innerStepCount == 0)
+		{
+			return;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidV3x4);
+		int32_t totalSteps = (int32_t)innerStepCount * outerLoopCount;
+		InvokeVoidV3x4MegaLoopRaw(directPtr, method, self, p0, p1, p2, p3, totalSteps);
 	}
 
 	IL2CPP_FORCE_INLINE void InvokeSetTransformV3Repeated(
@@ -474,26 +972,22 @@ namespace interpreter
 		void* v3,
 		uint16_t stepCount)
 	{
-		typedef void(*SetInterpV3Method)(void*, void*, MethodInfo*);
-		SetInterpV3Method setFn = (SetInterpV3Method)setMethod->methodPointerCallByInterp;
-		if (stepCount == 10)
-		{
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			setFn(transformObj, v3, setMethod);
-			return;
-		}
-		for (uint16_t step = 0; step < stepCount; step++)
-		{
-			setFn(transformObj, v3, setMethod);
-		}
+		Il2CppMethodPointer directPtr = ResolveDirectNativeMethodPointer(
+			setMethod, Hotc233DirectCallKind::InstanceVoidV3Setter);
+		InvokeSetTransformV3RepeatedDirect(directPtr, setMethod, transformObj, v3, stepCount);
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeSetTransformV3RepeatedCached(
+		uint64_t* resolveDatas,
+		uint32_t setThunkCacheIdx,
+		MethodInfo* setMethod,
+		Il2CppObject* transformObj,
+		void* v3,
+		uint16_t stepCount)
+	{
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, setThunkCacheIdx, setMethod, Hotc233DirectCallKind::InstanceVoidV3Setter);
+		InvokeSetTransformV3RepeatedDirect(directPtr, setMethod, transformObj, v3, stepCount);
 	}
 
 	IL2CPP_FORCE_INLINE void InvokeGetTransformSetV3Step(
@@ -505,9 +999,6 @@ namespace interpreter
 		void* go,
 		void* v3)
 	{
-		(void)resolveDatas;
-		(void)getThunkCacheIdx;
-		(void)setThunkCacheIdx;
 		Il2CppObject* transformObj = nullptr;
 		getMethod->invoker_method(
 			getMethod->methodPointer,
@@ -519,8 +1010,7 @@ namespace interpreter
 		{
 			il2cpp::vm::Exception::RaiseNullReferenceException();
 		}
-		typedef void(*SetInterpV3Method)(void*, void*, MethodInfo*);
-		((SetInterpV3Method)setMethod->methodPointerCallByInterp)(transformObj, v3, setMethod);
+		InvokeSetV3Cached(resolveDatas, setThunkCacheIdx, setMethod, transformObj, v3);
 	}
 
 	// Same GameObject.transform is stable within a fused trace block: get once, set N times.

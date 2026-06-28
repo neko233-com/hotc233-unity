@@ -133,6 +133,37 @@ namespace hotc233
 			Hotc233FastPath_InstanceV3ReturnLoopTrace = 37,
 			Hotc233FastPath_ArrayOpLoopTrace = 38,
 			Hotc233FastPath_QuaternionOpLoopTrace = 39,
+			Hotc233FastPath_InstanceI4ReturnLoopTrace = 40,
+			Hotc233FastPath_InstanceVoidV3x4LoopTrace = 41,
+			Hotc233FastPath_GameObjectCreateDestroyLoopTrace = 42,
+			Hotc233FastPath_UnityKernel_First = 43,
+			Hotc233FastPath_UnityKernel_EntityHotLoop = 43,
+			Hotc233FastPath_UnityKernel_PrefabSpawnDespawn = 44,
+			Hotc233FastPath_UnityKernel_GetComponentLoop = 45,
+			Hotc233FastPath_UnityKernel_AddComponentSpawn = 46,
+			Hotc233FastPath_UnityKernel_CameraWorldToScreen = 47,
+			Hotc233FastPath_UnityKernel_PhysicsRaycast = 48,
+			Hotc233FastPath_UnityKernel_TransformFullLoop = 49,
+			Hotc233FastPath_UnityKernel_BehaviourEnableToggle = 50,
+			Hotc233FastPath_UnityKernel_CompareTagLoop = 51,
+			Hotc233FastPath_UnityKernel_TransformFindChild = 52,
+			Hotc233FastPath_UnityKernel_TimeDeltaLoop = 53,
+			Hotc233FastPath_UnityKernel_GameObjectLayerLoop = 54,
+			Hotc233FastPath_UnityKernel_TransformGetPositionLoop = 55,
+			Hotc233FastPath_UnityKernel_RendererEnabledToggle = 56,
+			Hotc233FastPath_UnityKernel_Last = 56,
+		};
+
+		// Typed native entry selection for transform-baked callsite caches and runtime mega-loops.
+		// Never treat methodPointer as a generic direct entry — each kind matches a verified ABI.
+		enum class Hotc233DirectCallKind : uint8_t
+		{
+			StaticF4OrNoArg = 0,
+			StaticI4OrNoArg = 1,
+			InstanceVoidI4x5 = 2,
+			InstanceVoidV3Setter = 3,
+			InstanceVoidV3x4 = 4,
+			InstanceV3Return = 5,
 		};
 
 		struct InterpMethodInfo

@@ -1,3 +1,4 @@
+using Hotc233.Editor.AOT;
 using Hotc233.Editor.Installer;
 using System;
 using System.Collections.Generic;
@@ -111,7 +112,56 @@ namespace Hotc233.Editor.BuildProcessors
             {
                 var file = Path.GetFileName(fileFullPath);
                 Debug.Log($"[CopyStrippedAOTAssemblies] copy strip dll {fileFullPath} ==> {dstPath}/{file}");
-                File.Copy($"{fileFullPath}", $"{dstPath}/{file}", true);
+                string destinationPath = Path.Combine(dstPath, file);
+                File.Copy($"{fileFullPath}", destinationPath, true);
+                if (SettingsUtil.Hotc233Settings.enableMetadataOptimization)
+                {
+                    byte[] baselineBytes = File.ReadAllBytes(destinationPath);
+                    byte[] optimizedBytes = AOTAssemblyMetadataStripper.Strip(baselineBytes);
+                    File.WriteAllBytes(destinationPath + ".hotc233-baseline", baselineBytes);
+                    File.WriteAllBytes(destinationPath, optimizedBytes);
+                }
+            }
+
+            if (SettingsUtil.Hotc233Settings.enableMetadataOptimization)
+            {
+                var rows = new List<Hotc233MetadataOptimizationAssemblyRow>();
+                long baselineTotal = 0;
+                long optimizedTotal = 0;
+                foreach (string optimizedPath in Directory.GetFiles(dstPath, "*.dll"))
+                {
+                    if (optimizedPath.EndsWith(".hotc233-baseline", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    string baselinePath = optimizedPath + ".hotc233-baseline";
+                    if (!File.Exists(baselinePath))
+                    {
+                        continue;
+                    }
+
+                    long baseline = new FileInfo(baselinePath).Length;
+                    long optimized = new FileInfo(optimizedPath).Length;
+                    baselineTotal += baseline;
+                    optimizedTotal += optimized;
+                    rows.Add(new Hotc233MetadataOptimizationAssemblyRow
+                    {
+                        name = Path.GetFileNameWithoutExtension(optimizedPath),
+                        baselineBytes = baseline,
+                        optimizedBytes = optimized,
+                        savingPercent = Hotc233MetadataOptimizationReporter.ComputeSavingPercent(baseline, optimized),
+                    });
+                }
+
+                var report = Hotc233MetadataOptimizationReporter.BuildReport(rows.ToArray(), target, baselineTotal, optimizedTotal, null);
+                string reportPath = Path.Combine(SettingsUtil.Hotc233DataDir, "Generated", "metadata-optimization-report.json");
+                Hotc233MetadataOptimizationReporter.WriteReport(reportPath, report);
+                Debug.Log($"[CopyStrippedAOTAssemblies] metadata optimization: {report.message}; report={reportPath}");
+                if (!report.success)
+                {
+                    throw new BuildFailedException("[CopyStrippedAOTAssemblies] metadata optimization did not meet P0 savings threshold.");
+                }
             }
         }
 

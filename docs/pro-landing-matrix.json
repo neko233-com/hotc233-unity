@@ -29,16 +29,32 @@
   },
   "architecturePhases": [
     {
-      "id": "typed-register-ir",
-      "title": "Typed register IR",
+      "id": "god-domain-transform-bypass",
+      "title": "GodDomain transform + whole-method bypass",
       "priority": "P1",
-      "blocks": ["hybridclr-binop-add", "hybridclr-binop-complex", "hybridclr-vector-op1", "hybridclr-vector-op2", "hybridclr-quaternion-op"]
+      "blocks": [
+        "hybridclr-call-aot-static-method",
+        "hybridclr-typeof",
+        "hybridclr-call-aot-instance-param-int",
+        "hybridclr-set-transform-position",
+        "hybridclr-binop-add",
+        "hybridclr-binop-complex",
+        "hybridclr-array-op"
+      ],
+      "doc": "benchmark-docs/god-domain-architecture.md"
     },
     {
       "id": "typed-abi-callsite",
       "title": "Typed ABI callsite cache",
       "priority": "P1",
       "blocks": ["hybridclr-call-aot-static-method", "hybridclr-call-aot-instance-param-int", "hybridclr-call-aot-instance-param-vector3", "hybridclr-call-aot-instance-return-vector3"]
+    },
+    {
+      "id": "typed-register-ir",
+      "title": "Typed register IR (deprecated; superseded by GodDomain trace opcodes)",
+      "priority": "retired",
+      "status": "superseded-by-god-domain-transform-bypass",
+      "blocks": []
     },
     {
       "id": "typed-array-memory",
