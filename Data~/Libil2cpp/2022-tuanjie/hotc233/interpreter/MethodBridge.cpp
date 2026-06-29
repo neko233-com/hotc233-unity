@@ -323,6 +323,7 @@ namespace interpreter
 	static const Il2CppType* GetRawMethodParameterTypeForBridge(const MethodInfo* method, uint8_t index)
 	{
 		if (method
+			&& method->has_full_generic_sharing_signature
 			&& method->genericMethod
 			&& method->genericMethod->methodDefinition
 			&& index < method->genericMethod->methodDefinition->parameters_count)
@@ -372,7 +373,7 @@ namespace interpreter
 			return false;
 		}
 		const Il2CppType* rawReturnType = method->return_type;
-		if (method->genericMethod && method->genericMethod->methodDefinition)
+		if (method->has_full_generic_sharing_signature && method->genericMethod && method->genericMethod->methodDefinition)
 		{
 			rawReturnType = method->genericMethod->methodDefinition->return_type;
 		}
