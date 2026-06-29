@@ -12090,6 +12090,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				case HiOpcodeEnum::CallCommonNativeInstance_v_v3_2Cached:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 14);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 18);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 					uint16_t __param1 = *(uint16_t*)(ip + 6);
@@ -12099,14 +12100,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
 				    void* _p0 = (void*)(localVarBase + __param0);
 				    void* _p1 = (void*)(localVarBase + __param1);
-				    typedef void(*_NativeMethod_)(void*, void*, void*, MethodInfo*);
-				    ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _p0, _p1, _resolvedMethod);
+					InvokeVoidV3x2Cached(
+						imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1);
 				    ip += 24;
 				    continue;
 				}
 				case HiOpcodeEnum::CallCommonNativeInstance_v_v3_3Cached:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 14);
+					uint32_t __thunkCache = *(uint32_t*)(ip + 18);
 					uint16_t __self = *(uint16_t*)(ip + 2);
 					uint16_t __param0 = *(uint16_t*)(ip + 4);
 					uint16_t __param1 = *(uint16_t*)(ip + 6);
@@ -12118,8 +12120,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    void* _p0 = (void*)(localVarBase + __param0);
 				    void* _p1 = (void*)(localVarBase + __param1);
 				    void* _p2 = (void*)(localVarBase + __param2);
-				    typedef void(*_NativeMethod_)(void*, void*, void*, void*, MethodInfo*);
-				    ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _p0, _p1, _p2, _resolvedMethod);
+					InvokeVoidV3x3Cached(
+						imi->resolveDatas, __thunkCache, _resolvedMethod, _self, _p0, _p1, _p2);
 				    ip += 24;
 				    continue;
 				}

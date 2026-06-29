@@ -869,6 +869,66 @@ namespace interpreter
 		((InterpInstanceV_V3_4)method->methodPointerCallByInterp)(self, p0, p1, p2, p3, method);
 	}
 
+	IL2CPP_FORCE_INLINE void InvokeVoidV3x3Cached(
+		uint64_t* resolveDatas,
+		uint32_t thunkCacheIdx,
+		MethodInfo* method,
+		void* self,
+		void* p0,
+		void* p1,
+		void* p2)
+	{
+		if (method == nullptr)
+		{
+			return;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		typedef void(*DirectInstanceV_V3_3)(void*, HtVector3f, HtVector3f, HtVector3f, MethodInfo*);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidV3x4);
+		if (directPtr != nullptr)
+		{
+			((DirectInstanceV_V3_3)directPtr)(
+				self,
+				LoadVector3Value(p0),
+				LoadVector3Value(p1),
+				LoadVector3Value(p2),
+				method);
+			return;
+		}
+		typedef void(*InterpInstanceV_V3_3)(void*, void*, void*, void*, MethodInfo*);
+		((InterpInstanceV_V3_3)method->methodPointerCallByInterp)(self, p0, p1, p2, method);
+	}
+
+	IL2CPP_FORCE_INLINE void InvokeVoidV3x2Cached(
+		uint64_t* resolveDatas,
+		uint32_t thunkCacheIdx,
+		MethodInfo* method,
+		void* self,
+		void* p0,
+		void* p1)
+	{
+		if (method == nullptr)
+		{
+			return;
+		}
+		RuntimeInitClassCCtorWithoutInitClass(method);
+		typedef void(*DirectInstanceV_V3_2)(void*, HtVector3f, HtVector3f, MethodInfo*);
+		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
+			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidV3x4);
+		if (directPtr != nullptr)
+		{
+			((DirectInstanceV_V3_2)directPtr)(
+				self,
+				LoadVector3Value(p0),
+				LoadVector3Value(p1),
+				method);
+			return;
+		}
+		typedef void(*InterpInstanceV_V3_2)(void*, void*, void*, MethodInfo*);
+		((InterpInstanceV_V3_2)method->methodPointerCallByInterp)(self, p0, p1, method);
+	}
+
 	IL2CPP_FORCE_INLINE void InvokeVoidV3x4Repeated(
 		Il2CppMethodPointer directPtr,
 		MethodInfo* method,
