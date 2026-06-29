@@ -23,6 +23,8 @@ namespace Hotc233
         private readonly Dictionary<string, Type> typeCache = new Dictionary<string, Type>(StringComparer.Ordinal);
         private readonly Dictionary<string, MethodInfo> staticMethodCache = new Dictionary<string, MethodInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, Delegate> staticDelegateCache = new Dictionary<string, Delegate>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Assembly> loadedAssemblyByName = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> loadedAssemblyHashByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private bool performanceDefaultsApplied;
         private const string UnsafePreJitEnvironmentVariable = "HOTC233_UNSAFE_PREJIT";
 
@@ -147,8 +149,10 @@ namespace Hotc233
                 }
 
                 Hotc233RuntimeDiagnostics.Info("assembly.load.begin", Hotc233RuntimeDiagnostics.DescribeBinary(prepared.Name, prepared.Bytes));
-                var assembly = Assembly.Load(prepared.Bytes);
+                var preparedHash = Hotc233RuntimeDiagnostics.Sha256Hex(prepared.Bytes);
+                var assembly = LoadOrReuseHotUpdateAssembly(prepared.Name, prepared.Bytes, preparedHash);
                 assemblies.Add(assembly);
+                RegisterLoadedAssembly(assembly, preparedHash);
                 typeCache.Clear();
                 staticMethodCache.Clear();
                 staticDelegateCache.Clear();
@@ -182,15 +186,69 @@ namespace Hotc233
                 throw new ArgumentException($"Hotfix binary is empty: {prepared.Name}");
             }
 
-            var assembly = Assembly.Load(prepared.Bytes);
+            var preparedHash = Hotc233RuntimeDiagnostics.Sha256Hex(prepared.Bytes);
+            var assembly = LoadOrReuseHotUpdateAssembly(prepared.Name, prepared.Bytes, preparedHash);
             string assemblyName = assembly.GetName().Name;
             assemblies.RemoveAll(item => string.Equals(item.GetName().Name, assemblyName, StringComparison.Ordinal));
             assemblies.Insert(0, assembly);
+            RegisterLoadedAssembly(assembly, preparedHash);
             typeCache.Clear();
             staticMethodCache.Clear();
             staticDelegateCache.Clear();
             Hotc233RuntimeDiagnostics.Info("assembly.hotfix.replace", $"{assemblyName} from {prepared.Name}; old Assembly objects remain loaded by CLR but hotc233 resolution now prefers the replacement");
             return assembly;
+        }
+
+        private Assembly LoadOrReuseHotUpdateAssembly(string binaryName, byte[] bytes, string sha256)
+        {
+            try
+            {
+                return Assembly.Load(bytes);
+            }
+            catch (ExecutionEngineException exception) when (IsPlaceholderReloadException(exception)
+                && TryGetLoadedAssemblyByHash(sha256, out var existing))
+            {
+                Hotc233RuntimeDiagnostics.Info(
+                    "assembly.load.reuse",
+                    $"{existing.GetName().Name} from {binaryName}; sha256={sha256}; reason=placeholder-reload-same-bytes");
+                return existing;
+            }
+        }
+
+        private static bool IsPlaceholderReloadException(ExecutionEngineException exception)
+        {
+            return exception != null
+                && exception.Message != null
+                && exception.Message.IndexOf("reloading placeholder assembly", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private bool TryGetLoadedAssemblyByHash(string sha256, out Assembly assembly)
+        {
+            assembly = null;
+            string matchedName = null;
+            foreach (var pair in loadedAssemblyHashByName)
+            {
+                if (!string.Equals(pair.Value, sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (matchedName != null)
+                {
+                    return false;
+                }
+
+                matchedName = pair.Key;
+            }
+
+            return matchedName != null && loadedAssemblyByName.TryGetValue(matchedName, out assembly);
+        }
+
+        private void RegisterLoadedAssembly(Assembly assembly, string sha256)
+        {
+            string assemblyName = assembly.GetName().Name;
+            loadedAssemblyByName[assemblyName] = assembly;
+            loadedAssemblyHashByName[assemblyName] = sha256;
         }
 
         public void ApplyPerformanceDefaultsIfNeeded()

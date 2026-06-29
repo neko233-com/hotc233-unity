@@ -372,6 +372,10 @@ namespace interpreter
 			return false;
 		}
 		const Il2CppType* rawReturnType = method->return_type;
+		if (method->genericMethod && method->genericMethod->methodDefinition)
+		{
+			rawReturnType = method->genericMethod->methodDefinition->return_type;
+		}
 		if (rawReturnType->type == IL2CPP_TYPE_VOID)
 		{
 			return false;
@@ -420,18 +424,11 @@ namespace interpreter
 
 	uintptr_t M2NFromValueOrAddressFullGenericAware(const MethodInfo* method, int32_t bridgeArgIndex, StackObject* value)
 	{
-		if (method && method->has_full_generic_sharing_signature && bridgeArgIndex >= 0 && bridgeArgIndex < method->parameters_count)
+		const Il2CppType* rawType = GetRawMethodParameterTypeForBridge(method, static_cast<uint8_t>(bridgeArgIndex));
+		const Il2CppType* inflatedType = InflateMethodTypeForSignature(method, rawType);
+		if (IsFullGenericSharedValueTypeParameter(method, rawType, inflatedType))
 		{
-			const Il2CppType* rawType = GetRawMethodParameterTypeForBridge(method, (uint8_t)bridgeArgIndex);
-			const Il2CppType* inflatedType = InflateMethodTypeForSignature(method, rawType);
-			if (method
-				&& rawType
-				&& (rawType->type == IL2CPP_TYPE_VAR || rawType->type == IL2CPP_TYPE_MVAR)
-				&& !rawType->byref
-				&& IsMethodSignatureValueType(inflatedType))
-			{
-				return (uintptr_t)value;
-			}
+			return reinterpret_cast<uintptr_t>(value);
 		}
 		return M2NFromValueOrAddress<uintptr_t>(value);
 	}

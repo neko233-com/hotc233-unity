@@ -78,13 +78,6 @@ namespace transform
 		return false;
 	}
 
-	static uint32_t GetMethodArgStackObjectCount(const MethodInfo* method, const Il2CppType* type)
-	{
-		return IsFullGenericSharedValueTypeArg(method, type)
-			? 1u
-			: (uint32_t)GetTypeValueStackObjectCount(type);
-	}
-
 	static const Il2CppType* InflateMethodTypeForTransform(const MethodInfo* method, const Il2CppType* type)
 	{
 		if (!method || !type)
@@ -104,6 +97,11 @@ namespace transform
 			? il2cpp::metadata::GenericMetadata::InflateIfNeeded(type, context, true)
 			: type;
 		return inflatedType ? inflatedType : type;
+	}
+
+	static uint32_t GetMethodArgStackObjectCount(const MethodInfo* method, const Il2CppType* type)
+	{
+		return (uint32_t)GetTypeValueStackObjectCount(InflateMethodTypeForTransform(method, type));
 	}
 
 	template<typename T>
@@ -11888,13 +11886,13 @@ ir->ele = ele.locOffset;
 			for (int32_t i = 0; i < actualParamCount; i++)
 			{
 				const Il2CppType* argType = args[i].type;
-				TypeDesc typeDesc = GetTypeArgDesc(argType);
+				const Il2CppType* inflatedArgType = InflateMethodTypeForTransform(methodInfo, argType);
+				TypeDesc typeDesc = GetTypeArgDesc(inflatedArgType);
 				MethodArgDesc& argDesc = argDescs[i];
 				argDesc.type = typeDesc.type;
 				IL2CPP_ASSERT(typeDesc.stackObjectSize < 0x10000);
-				bool fullGenericSharedValueArg = IsFullGenericSharedValueTypeArg(methodInfo, argType);
-				argDesc.stackObjectSize = fullGenericSharedValueArg ? 1 : (uint16_t)typeDesc.stackObjectSize;
-				argDesc.passbyValWhenInvoke = fullGenericSharedValueArg || argType->byref || !IsValueType(argType);
+				argDesc.stackObjectSize = (uint16_t)typeDesc.stackObjectSize;
+				argDesc.passbyValWhenInvoke = inflatedArgType->byref || !IsValueType(inflatedArgType);
 			}
 		}
 		else
