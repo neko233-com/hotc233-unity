@@ -412,12 +412,12 @@ namespace interpreter
 			return;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
-		typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t);
+		typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t, MethodInfo*);
 		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
 			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidI4x5);
 		if (directPtr != nullptr)
 		{
-			((DirectInstanceV_I4_5)directPtr)(self, p0, p1, p2, p3, p4);
+			((DirectInstanceV_I4_5)directPtr)(self, p0, p1, p2, p3, p4, method);
 			return;
 		}
 		typedef void(*InterpInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t, MethodInfo*);
@@ -437,25 +437,25 @@ namespace interpreter
 	{
 		if (directPtr != nullptr)
 		{
-			typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t);
+			typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t, MethodInfo*);
 			DirectInstanceV_I4_5 directFn = (DirectInstanceV_I4_5)directPtr;
 			if (stepCount == 10)
 			{
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
 				return;
 			}
 			for (uint16_t step = 0; step < stepCount; step++)
 			{
-				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4, method);
 			}
 			return;
 		}
@@ -600,25 +600,25 @@ namespace interpreter
 		}
 		if (directPtr != nullptr)
 		{
-			typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t);
+			typedef void(*DirectInstanceV_I4_5)(void*, int32_t, int32_t, int32_t, int32_t, int32_t, MethodInfo*);
 			DirectInstanceV_I4_5 directFn = (DirectInstanceV_I4_5)directPtr;
 			while (totalSteps >= 10)
 			{
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
-				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
+				directFn(self, p0, p1, p2, p3, p4, method);
 				totalSteps -= 10;
 			}
 			while (totalSteps-- > 0)
 			{
-				directFn(self, p0, p1, p2, p3, p4);
+				directFn(self, p0, p1, p2, p3, p4, method);
 			}
 			return;
 		}
