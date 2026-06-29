@@ -260,7 +260,9 @@ namespace Hotc233
                     && message.Contains("full-generic-sharing-delegate"),
                 crashLog = message.Contains("crash-log"),
                 metadataOptimization = message.Contains("metadata-optimization")
-                    && (!message.Contains("CommercialCapabilityLoaderProbe") || message.Contains("metadata-saving-percent=")),
+                    && (!message.Contains("CommercialCapabilityLoaderProbe")
+                        || message.Contains("metadata-saving-percent=")
+                        || message.Contains("metadata-bytes=")),
                 hotfix = message.Contains("hotfix"),
                 hotReload = message.Contains("hot-reload"),
                 codeProtection = message.Contains("code-protection"),
