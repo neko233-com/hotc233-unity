@@ -26,6 +26,9 @@
 #include "hotc233/metadata/MetadataUtil.h"
 #include "hotc233/metadata/MetadataModule.h"
 #include "hotc233/interpreter/InterpreterModule.h"
+#include "hotc233/interpreter/MethodBridge.h"
+#include <cstdio>
+#include <cstring>
 
 using il2cpp::metadata::GenericMetadata;
 using il2cpp::metadata::GenericSharing;
@@ -46,6 +49,58 @@ struct FullySharedGenericMethodInfo : public MethodInfo
     InvokerMethod rawInvokerMethod;
 };
 
+static void TraceHotcGenericMethodProbe(const char* stage, const MethodInfo* method, bool isInterpMethod, bool isAotImplByInterp, bool indirectCallViaInvokers)
+{
+    if (!method)
+        return;
+
+    bool isDelegateInvoke = method->name
+        && std::strcmp(method->name, "Invoke") == 0
+        && method->klass
+        && hotc233::metadata::IsChildTypeOfMulticastDelegate(method->klass);
+    bool isInterestingMethod = isDelegateInvoke
+        || (method->klass && method->klass->name && std::strstr(method->klass->name, "LinqAggregateProbe"))
+        || (method->name && std::strstr(method->name, "VerifyAggregate"))
+        || (method->name && std::strstr(method->name, "b__"));
+
+    if (!isInterestingMethod)
+        return;
+
+    char sigName[128] = { 0 };
+    hotc233::interpreter::ComputeNative2ManagedSignature(method, true, sigName, sizeof(sigName) - 1);
+
+    const FullySharedGenericMethodInfo* sharedMethodInfo = method->has_full_generic_sharing_signature
+        ? reinterpret_cast<const FullySharedGenericMethodInfo*>(method)
+        : nullptr;
+
+    std::printf("[hotc233][GenericMethodProbe] stage=%s sig=%s method=%p %s.%s::%s retType=%d retByref=%d pcount=%d inflated=%d generic=%d fullShare=%d delegateInvoke=%d isInterp=%d isAotInterp=%d indirect=%d invoker=%p methodPtr=%p methodPtrInterp=%p virtualPtr=%p virtualPtrInterp=%p rawDirect=%p rawVirtual=%p rawInvoker=%p\n",
+        stage ? stage : "<null>",
+        sigName,
+        (void*)method,
+        method->klass && method->klass->namespaze ? method->klass->namespaze : "",
+        method->klass && method->klass->name ? method->klass->name : "",
+        method->name ? method->name : "<null>",
+        method->return_type ? (int32_t)method->return_type->type : -1,
+        method->return_type ? (int32_t)method->return_type->byref : -1,
+        (int32_t)method->parameters_count,
+        method->is_inflated ? 1 : 0,
+        method->is_generic ? 1 : 0,
+        method->has_full_generic_sharing_signature ? 1 : 0,
+        isDelegateInvoke ? 1 : 0,
+        isInterpMethod ? 1 : 0,
+        isAotImplByInterp ? 1 : 0,
+        indirectCallViaInvokers ? 1 : 0,
+        (void*)method->invoker_method,
+        (void*)method->methodPointer,
+        (void*)method->methodPointerCallByInterp,
+        (void*)method->virtualMethodPointer,
+        (void*)method->virtualMethodPointerCallByInterp,
+        sharedMethodInfo ? (void*)sharedMethodInfo->rawDirectMethodPointer : nullptr,
+        sharedMethodInfo ? (void*)sharedMethodInfo->rawVirtualMethodPointer : nullptr,
+        sharedMethodInfo ? (void*)sharedMethodInfo->rawInvokerMethod : nullptr);
+    std::fflush(stdout);
+}
+
 static size_t SizeOfGenericMethodInfo(bool hasFullGenericSignature)
 {
     if (hasFullGenericSignature)
@@ -65,6 +120,18 @@ static MethodInfo* AllocCopyGenericMethodInfo(const MethodInfo* sourceMethodInfo
     return newMethodInfo;
 }
 
+static MethodInfo BuildFullySharedRawInvokerMethodInfo(const MethodInfo* method)
+{
+    MethodInfo rawInvokerMethodInfo = *method;
+    if (method && method->genericMethod && method->genericMethod->methodDefinition)
+    {
+        const MethodInfo* methodDefinition = method->genericMethod->methodDefinition;
+        rawInvokerMethodInfo.return_type = methodDefinition->return_type;
+        rawInvokerMethodInfo.parameters = methodDefinition->parameters;
+    }
+    return rawInvokerMethodInfo;
+}
+
 static void FullySharedGenericInvokeRedirectHasAdjustorThunk(Il2CppMethodPointer methodPointer, const MethodInfo* method, void* obj, void** args, void* retVal)
 {
     IL2CPP_ASSERT(Method::IsGenericInstance(method));
@@ -73,11 +140,12 @@ static void FullySharedGenericInvokeRedirectHasAdjustorThunk(Il2CppMethodPointer
 
     const FullySharedGenericMethodInfo* sharedMethodInfo = reinterpret_cast<const FullySharedGenericMethodInfo*>(method);
     IL2CPP_ASSERT(sharedMethodInfo->rawDirectMethodPointer != sharedMethodInfo->rawVirtualMethodPointer);
+    MethodInfo rawInvokerMethodInfo = BuildFullySharedRawInvokerMethodInfo(method);
 
     if (methodPointer == sharedMethodInfo->virtualMethodPointer)
-        sharedMethodInfo->rawInvokerMethod(sharedMethodInfo->rawVirtualMethodPointer, method, obj, args, retVal);
+        sharedMethodInfo->rawInvokerMethod(sharedMethodInfo->rawVirtualMethodPointer, &rawInvokerMethodInfo, obj, args, retVal);
     else
-        sharedMethodInfo->rawInvokerMethod(sharedMethodInfo->rawDirectMethodPointer, method, obj, args, retVal);
+        sharedMethodInfo->rawInvokerMethod(sharedMethodInfo->rawDirectMethodPointer, &rawInvokerMethodInfo, obj, args, retVal);
 }
 
 static void FullySharedGenericInvokeRedirectNoAdjustorThunk(Il2CppMethodPointer methodPointer, const MethodInfo* method, void* obj, void** args, void* retVal)
@@ -88,8 +156,9 @@ static void FullySharedGenericInvokeRedirectNoAdjustorThunk(Il2CppMethodPointer 
 
     const FullySharedGenericMethodInfo* sharedMethodInfo = reinterpret_cast<const FullySharedGenericMethodInfo*>(method);
     IL2CPP_ASSERT(sharedMethodInfo->rawDirectMethodPointer == sharedMethodInfo->rawVirtualMethodPointer);
+    MethodInfo rawInvokerMethodInfo = BuildFullySharedRawInvokerMethodInfo(method);
 
-    sharedMethodInfo->rawInvokerMethod(sharedMethodInfo->rawDirectMethodPointer, method, obj, args, retVal);
+    sharedMethodInfo->rawInvokerMethod(sharedMethodInfo->rawDirectMethodPointer, &rawInvokerMethodInfo, obj, args, retVal);
 }
 
 namespace il2cpp
@@ -318,6 +387,7 @@ namespace metadata
         {
             newMethod->has_full_generic_sharing_signature = hasFullGenericSharingSignature;
         }
+        TraceHotcGenericMethodProbe("after-metadata-pointers", newMethod, isInterpMethod, false, false);
 
         ++il2cpp_runtime_stats.inflated_method_count;
 
@@ -374,6 +444,7 @@ namespace metadata
                     }
                 }
             }
+            TraceHotcGenericMethodProbe("after-fullshare-redirect", newMethod, isInterpMethod, false, indirectCallViaInvokers);
         }
         else
         {
@@ -383,7 +454,12 @@ namespace metadata
 
         bool isAotImplByInterp = hotc233::metadata::MetadataModule::IsImplementedByInterpreter(newMethod);
         bool isAdjustorThunkMethod = IS_CLASS_VALUE_TYPE(newMethod->klass) && hotc233::metadata::IsInstanceMethod(newMethod);
-        if (isInterpMethod || (isAotImplByInterp && (newMethod->methodPointer == nullptr || newMethod->methodPointer == AnUnresolvedCallStubWasNotFound || newMethod->methodPointer == (Il2CppMethodPointer)AnUnresolvedCallStubWasNotFoundValueType)))
+        bool isInterpreterBackedDelegateInvoke = isAotImplByInterp
+            && newMethod->name
+            && std::strcmp(newMethod->name, "Invoke") == 0
+            && newMethod->klass
+            && hotc233::metadata::IsChildTypeOfMulticastDelegate(newMethod->klass);
+        if (isInterpMethod || isInterpreterBackedDelegateInvoke || (isAotImplByInterp && (newMethod->methodPointer == nullptr || newMethod->methodPointer == AnUnresolvedCallStubWasNotFound || newMethod->methodPointer == (Il2CppMethodPointer)AnUnresolvedCallStubWasNotFoundValueType)))
         {
             newMethod->invoker_method = hotc233::interpreter::InterpreterModule::GetMethodInvoker(newMethod);
             newMethod->methodPointer = newMethod->methodPointerCallByInterp = hotc233::interpreter::InterpreterModule::GetMethodPointer(newMethod);
@@ -405,11 +481,13 @@ namespace metadata
             }
             newMethod->initInterpCallMethodPointer = true;
             newMethod->isInterpterImpl = true;
+            TraceHotcGenericMethodProbe("after-hotc-interp", newMethod, isInterpMethod, isAotImplByInterp, indirectCallViaInvokers);
         }
         else if (newMethod->methodPointer != AnUnresolvedCallStubWasNotFound && newMethod->methodPointer != (Il2CppMethodPointer)AnUnresolvedCallStubWasNotFoundValueType)
         {
             newMethod->methodPointerCallByInterp = newMethod->methodPointer;
             newMethod->virtualMethodPointerCallByInterp = newMethod->virtualMethodPointer;
+            TraceHotcGenericMethodProbe("after-aot-preserve", newMethod, isInterpMethod, isAotImplByInterp, indirectCallViaInvokers);
         }
         // IL2CPP_ASSERT(!indirectCallViaInvokers || !isAdjustorThunkMethod || newMethod->methodPointerCallByInterp != newMethod->virtualMethodPointerCallByInterp);
 

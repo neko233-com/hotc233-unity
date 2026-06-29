@@ -58,6 +58,16 @@ namespace Hotc233
             Def("value-tuple", "ValueTuple", FeatureCategory.CSharpLanguage, "value-tuple", true),
             Def("pattern-matching", "模式匹配 switch/is", FeatureCategory.CSharpLanguage, "pattern-matching", true),
             Def("span-like-ops", "ArraySegment / Memory", FeatureCategory.CSharpLanguage, "span-like-ops", true),
+            // HybridCLR-style C# hot-update parity shapes
+            Def("cs-action-func-delegate", "Action / Func / Predicate / Converter", FeatureCategory.CSharpLanguage, "cs-action-func-delegate", true),
+            Def("cs-multicast-delegate-order", "多播 delegate 调用顺序", FeatureCategory.CSharpLanguage, "cs-multicast-delegate-order", true),
+            Def("cs-event-add-remove", "event += / -= / Invoke", FeatureCategory.CSharpLanguage, "cs-event-add-remove", true),
+            Def("cs-in-out-ref-params", "in / out / ref 参数", FeatureCategory.CSharpLanguage, "cs-in-out-ref-params", true),
+            Def("cs-params-array", "params 可变参数", FeatureCategory.CSharpLanguage, "cs-params-array", true),
+            Def("cs-delegate-return-nested", "委托返回委托 / 嵌套调用", FeatureCategory.CSharpLanguage, "cs-delegate-return-nested", true),
+            Def("cs-generic-delegate-variance", "泛型委托协变/逆变", FeatureCategory.CSharpLanguage, "cs-generic-delegate-variance", true),
+            Def("cs-async-await-chain", "async/await 链式等待", FeatureCategory.CSharpLanguage, "cs-async-await-chain", true),
+            Def("cs-async-exception-flow", "async 异常传播 + when 过滤", FeatureCategory.CSharpLanguage, "cs-async-exception-flow", true),
             // Reflection comprehensive coverage
             Def("refl-assembly-module-type", "反射 Assembly/Module/Type 查询", FeatureCategory.CSharpLanguage, "refl-assembly-module-type", true),
             Def("refl-constructors-activator", "反射构造函数 / Activator", FeatureCategory.CSharpLanguage, "refl-constructors-activator", true),

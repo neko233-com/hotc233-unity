@@ -285,7 +285,7 @@ namespace Hotc233
                 throw new MissingMemberException($"Type not found in loaded hot update assemblies: {typeName}");
             }
 
-            var method = ResolveStaticMethod(type, methodName);
+            var method = ResolveStaticMethod(type, methodName, args);
             if (method == null)
             {
                 Hotc233RuntimeDiagnostics.Error("entry.method.missing", $"{type.FullName}.{methodName}");
@@ -338,7 +338,7 @@ namespace Hotc233
                 return (TDelegate)(object)cachedDelegate;
             }
 
-            var method = ResolveStaticMethod(type, methodName);
+            var method = ResolveStaticMethodForDelegate(type, methodName, delegateType);
             if (method == null)
             {
                 Hotc233RuntimeDiagnostics.Error("entry.method.missing", $"{type.FullName}.{methodName}");
@@ -411,21 +411,156 @@ namespace Hotc233
                 : profile.ToString();
         }
 
-        private MethodInfo ResolveStaticMethod(Type type, string methodName)
+        private MethodInfo ResolveStaticMethod(Type type, string methodName, object[] args = null)
         {
-            string cacheKey = type.FullName + "::" + methodName;
+            string cacheKey = type.FullName + "::" + methodName + "::" + BuildArgumentSignature(args);
             if (staticMethodCache.TryGetValue(cacheKey, out var cachedMethod))
             {
                 return cachedMethod;
             }
 
-            var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var method = ResolveStaticMethodUncached(type, methodName, args);
             if (method != null)
             {
                 staticMethodCache[cacheKey] = method;
             }
 
             return method;
+        }
+
+        private MethodInfo ResolveStaticMethodForDelegate(Type type, string methodName, Type delegateType)
+        {
+            string cacheKey = type.FullName + "::" + methodName + "::delegate::" + delegateType.AssemblyQualifiedName;
+            if (staticMethodCache.TryGetValue(cacheKey, out var cachedMethod))
+            {
+                return cachedMethod;
+            }
+
+            var invoke = delegateType.GetMethod("Invoke");
+            var delegateParameters = invoke?.GetParameters() ?? Array.Empty<ParameterInfo>();
+            var method = ResolveStaticMethodByParameterTypes(
+                type,
+                methodName,
+                delegateParameters.Select(parameter => parameter.ParameterType).ToArray());
+            if (method != null)
+            {
+                staticMethodCache[cacheKey] = method;
+            }
+
+            return method;
+        }
+
+        private static MethodInfo ResolveStaticMethodByParameterTypes(Type type, string methodName, Type[] parameterTypes)
+        {
+            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            foreach (var candidate in methods)
+            {
+                if (!string.Equals(candidate.Name, methodName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var parameters = candidate.GetParameters();
+                if (parameters.Length != parameterTypes.Length)
+                {
+                    continue;
+                }
+
+                bool match = true;
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    if (parameters[i].ParameterType != parameterTypes[i])
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+
+                if (match)
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private static MethodInfo ResolveStaticMethodUncached(Type type, string methodName, object[] args)
+        {
+            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            int argumentCount = args?.Length ?? 0;
+            MethodInfo fallback = null;
+            foreach (var candidate in methods)
+            {
+                if (!string.Equals(candidate.Name, methodName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var parameters = candidate.GetParameters();
+                if (parameters.Length != argumentCount)
+                {
+                    continue;
+                }
+
+                if (ArgumentsMatch(parameters, args))
+                {
+                    return candidate;
+                }
+
+                fallback ??= candidate;
+            }
+
+            return fallback;
+        }
+
+        private static bool ArgumentsMatch(ParameterInfo[] parameters, object[] args)
+        {
+            if (parameters.Length == 0)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                object value = args[i];
+                Type parameterType = parameters[i].ParameterType;
+                if (value == null)
+                {
+                    if (parameterType.IsValueType && Nullable.GetUnderlyingType(parameterType) == null)
+                    {
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                Type valueType = value.GetType();
+                if (parameterType == valueType || parameterType.IsAssignableFrom(valueType))
+                {
+                    continue;
+                }
+
+                Type nullableType = Nullable.GetUnderlyingType(parameterType);
+                if (nullableType != null && nullableType == valueType)
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private static string BuildArgumentSignature(object[] args)
+        {
+            if (args == null || args.Length == 0)
+            {
+                return "void";
+            }
+
+            return string.Join(",", args.Select(arg => arg?.GetType().AssemblyQualifiedName ?? "<null>"));
         }
     }
 

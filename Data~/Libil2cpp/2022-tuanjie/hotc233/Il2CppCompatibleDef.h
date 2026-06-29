@@ -12,6 +12,9 @@
 #include "icalls/mscorlib/System/Type.h"
 #include "gc/GarbageCollector.h"
 
+#include <cstdio>
+#include <cstring>
+
 #if HOTC233_UNITY_2020
 #include "icalls/mscorlib/System/MonoType.h"
 #elif HOTC233_UNITY_2021_OR_NEW
@@ -93,6 +96,7 @@ namespace hotc233
 	extern const char* g_placeHolderAssemblies[];
 
 	Il2CppMethodPointer InitAndGetInterpreterDirectlyCallMethodPointerSlow(MethodInfo* method);
+	Il2CppMethodPointer InitAndGetInterpreterDelegateInvokeMethodPointer(Il2CppDelegate* delegate);
 
 	inline Il2CppMethodPointer InitAndGetInterpreterDirectlyCallMethodPointer(const MethodInfo* method)
 	{
@@ -182,14 +186,28 @@ namespace hotc233
 
 	inline void ConstructDelegate(Il2CppDelegate* delegate, Il2CppObject* target, const MethodInfo* method)
 	{
-		delegate->method_ptr = InitAndGetInterpreterDirectlyCallVirtualMethodPointer(method);
+		Il2CppMethodPointer targetMethodPointer = !(method->flags & METHOD_ATTRIBUTE_STATIC)
+			? InitAndGetInterpreterDirectlyCallVirtualMethodPointer(method)
+			: InitAndGetInterpreterDirectlyCallMethodPointer(method);
 		delegate->method = method;
 		delegate->target = target;
+		delegate->method_ptr = targetMethodPointer;
+		if (target)
+		{
+			delegate->invoke_impl = delegate->method_ptr;
+			delegate->invoke_impl_this = target;
+		}
+		else
+		{
+			delegate->invoke_impl = InitAndGetInterpreterDelegateInvokeMethodPointer(delegate);
+			delegate->invoke_impl_this = (Il2CppObject*)delegate;
+		}
 #if HOTC233_ENABLE_WRITE_BARRIERS
 		if (target)
 		{
 			HOTC233_SET_WRITE_BARRIER((void**)&delegate->target);
 		}
+		HOTC233_SET_WRITE_BARRIER((void**)&delegate->invoke_impl_this);
 #endif
 		//il2cpp::vm::Type::ConstructDelegate(delegate, target, InitAndGetInterpreterDirectlyCallMethodPointer(method), method);
 	}
@@ -270,14 +288,46 @@ namespace hotc233
 	{
 		delegate->target = target;
 		delegate->method = method;
-		delegate->invoke_impl = InitAndGetInterpreterDirectlyCallVirtualMethodPointer(method);
-		delegate->invoke_impl_this = target;
+		Il2CppMethodPointer targetMethodPointer = !(method->flags & METHOD_ATTRIBUTE_STATIC)
+			? InitAndGetInterpreterDirectlyCallVirtualMethodPointer(method)
+			: InitAndGetInterpreterDirectlyCallMethodPointer(method);
+		delegate->method_ptr = targetMethodPointer;
+		if (target)
+		{
+			delegate->invoke_impl = delegate->method_ptr;
+			delegate->invoke_impl_this = target;
+		}
+		else
+		{
+			delegate->invoke_impl = InitAndGetInterpreterDelegateInvokeMethodPointer(delegate);
+			delegate->invoke_impl_this = (Il2CppObject*)delegate;
+		}
+		if (method && method->name && std::strstr(method->name, "VerifyJoin"))
+		{
+			std::printf("[hotc233][ConstructDelegateJoinProbe] del=%p klass=%s.%s target=%p method=%s.%s::%s methodPtr=%p invokeImpl=%p invokeThis=%p methodPointer=%p callByInterp=%p invoker=%p retType=%d pcount=%d\n",
+				(void*)delegate,
+				delegate->object.klass && delegate->object.klass->namespaze ? delegate->object.klass->namespaze : "",
+				delegate->object.klass && delegate->object.klass->name ? delegate->object.klass->name : "",
+				(void*)target,
+				method->klass && method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass && method->klass->name ? method->klass->name : "",
+				method->name,
+				(void*)delegate->method_ptr,
+				(void*)delegate->invoke_impl,
+				(void*)delegate->invoke_impl_this,
+				(void*)method->methodPointer,
+				(void*)method->methodPointerCallByInterp,
+				(void*)method->invoker_method,
+				method->return_type ? (int)method->return_type->type : -1,
+				(int)method->parameters_count);
+			std::fflush(stdout);
+		}
 #if HOTC233_ENABLE_WRITE_BARRIERS
 		if (target)
 		{
 			HOTC233_SET_WRITE_BARRIER((void**)&delegate->target);
-			HOTC233_SET_WRITE_BARRIER((void**)&delegate->invoke_impl_this);
 		}
+		HOTC233_SET_WRITE_BARRIER((void**)&delegate->invoke_impl_this);
 #endif
 	}
 

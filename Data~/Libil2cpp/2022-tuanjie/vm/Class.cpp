@@ -1468,6 +1468,10 @@ namespace vm
         }
         else if (klass->property_count != 0)
         {
+            // Property accessors are stored as method indexes; reflection can ask
+            // for properties before the class method table has been materialized.
+            SetupMethodsLocked(klass, lock);
+
             // klass->properties maybe inited by GetOrSetupOnePropertyLocked
             if(klass->properties == nullptr)
                 klass->properties = (const PropertyInfo**)MetadataCalloc(klass->property_count, sizeof(PropertyInfo*), IL2CPP_MSTAT_PROPERTY);
@@ -2688,6 +2692,8 @@ namespace vm
         }
         else if (klass->property_count != 0)
         {
+            SetupMethodsLocked(klass, lock);
+
             if (klass->properties == nullptr) {
                 klass->properties = (const PropertyInfo**)MetadataCalloc(klass->property_count, sizeof(PropertyInfo*), IL2CPP_MSTAT_PROPERTY);
             }

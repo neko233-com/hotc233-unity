@@ -386,7 +386,14 @@ namespace metadata
 
     inline bool IsChildTypeOfMulticastDelegate(const Il2CppClass* klass)
     {
-        return klass->parent == il2cpp_defaults.multicastdelegate_class;
+        for (const Il2CppClass* cur = klass; cur; cur = cur->parent)
+        {
+            if (cur == il2cpp_defaults.multicastdelegate_class)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     inline int32_t GetActualParamCount(const MethodInfo* methodInfo)

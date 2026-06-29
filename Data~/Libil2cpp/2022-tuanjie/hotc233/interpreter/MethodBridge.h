@@ -76,10 +76,19 @@ namespace interpreter
 	extern const Managed2NativeFunctionPointerCallData g_managed2NativeFunctionPointerCallStub[];
 	
 	void ConvertInvokeArgs(StackObject* resultArgs, const MethodInfo* method, MethodArgDesc* argDescs, void** args);
+	bool TryManaged2NativeCallByReflectionInvokeForSharedStruct(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret);
+	bool TryExecuteNative2ManagedInlineDelegateInvoker(const MethodInfo* method, StackObject* args, void* ret);
+	bool TryExecuteNative2ManagedDelegateInvoke(const MethodInfo* method, StackObject* args, void* ret);
+	bool TryExecuteNative2ManagedOpenDelegateInvoker(const MethodInfo* maybeRetAddress, StackObject* args);
+	bool TryExecuteNative2ManagedClosedDelegateTarget(const MethodInfo* method, StackObject* args, void* ret);
 
 	bool ComputeSignature(const MethodInfo* method, bool call, char* sigBuf, size_t bufferSize);
 	bool ComputeSignature(const Il2CppMethodDefinition* method, bool call, char* sigBuf, size_t bufferSize);
 	bool ComputeSignature(const Il2CppType* ret, const il2cpp::utils::dynamic_array<const Il2CppType*>& params, bool instanceCall, char* sigBuf, size_t bufferSize);
+	bool ComputeNative2ManagedSignature(const MethodInfo* method, bool call, char* sigBuf, size_t bufferSize);
+	bool ComputeNative2ManagedSignature(const Il2CppMethodDefinition* method, bool call, char* sigBuf, size_t bufferSize);
+	uintptr_t M2NFromValueOrAddressFullGenericAware(const MethodInfo* method, int32_t bridgeArgIndex, StackObject* value);
+	Il2CppMethodPointer M2NGetHiddenReturnMethodPointer(const MethodInfo* method);
 	
 	template<typename T> uint64_t N2MAsUint64ValueOrAddress(T& value)
 	{

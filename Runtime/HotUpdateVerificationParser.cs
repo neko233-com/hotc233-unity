@@ -20,6 +20,7 @@ namespace Hotc233
         {
             return IsSelfTestPassed(message)
                 && message.Contains("FeatureCompatibilityProbe passed")
+                && message.Contains("CSharpHybridClrParityProbe passed")
                 && message.Contains("ReflectionComprehensiveProbe passed")
                 && message.Contains("UnityAssetProbe passed")
                 && message.Contains("LinqAggregateProbe passed")
@@ -71,6 +72,7 @@ namespace Hotc233
         {
             return IsSelfTestPassed(message)
                 && message.Contains("FeatureCompatibilityProbe passed")
+                && message.Contains("CSharpHybridClrParityProbe passed")
                 && message.Contains("ReflectionComprehensiveProbe passed")
                 && message.Contains("UnityAssetProbe passed")
                 && message.Contains("LinqAggregateProbe passed")
@@ -107,6 +109,12 @@ namespace Hotc233
             if (!feature.passed || !feature.AllPassed())
             {
                 throw new InvalidOperationException("Feature compatibility probe failed: " + message);
+            }
+
+            var csharpParity = ParseCSharpHybridClrParity(message);
+            if (!csharpParity.passed || !csharpParity.AllPassed())
+            {
+                throw new InvalidOperationException("C# HybridCLR parity probe failed: " + message);
             }
 
             var reflection = ParseReflectionComprehensive(message);
@@ -352,6 +360,23 @@ namespace Hotc233
             }
         }
 
+        public static CSharpHybridClrParityFlags ParseCSharpHybridClrParity(string message)
+        {
+            return new CSharpHybridClrParityFlags
+            {
+                passed = message.Contains("CSharpHybridClrParityProbe passed"),
+                actionFuncDelegate = message.Contains("cs-action-func-delegate"),
+                multicastDelegateOrder = message.Contains("cs-multicast-delegate-order"),
+                eventAddRemove = message.Contains("cs-event-add-remove"),
+                inOutRefParams = message.Contains("cs-in-out-ref-params"),
+                paramsArray = message.Contains("cs-params-array"),
+                delegateReturnNested = message.Contains("cs-delegate-return-nested"),
+                genericDelegateVariance = message.Contains("cs-generic-delegate-variance"),
+                asyncAwaitChain = message.Contains("cs-async-await-chain"),
+                asyncExceptionFlow = message.Contains("cs-async-exception-flow"),
+            };
+        }
+
         [Serializable]
         public sealed class UnityAssetFlags
         {
@@ -375,6 +400,34 @@ namespace Hotc233
                     && mesh3DApi
                     && timelineApi
                     && asyncTask;
+            }
+        }
+
+        [Serializable]
+        public sealed class CSharpHybridClrParityFlags
+        {
+            public bool passed;
+            public bool actionFuncDelegate;
+            public bool multicastDelegateOrder;
+            public bool eventAddRemove;
+            public bool inOutRefParams;
+            public bool paramsArray;
+            public bool delegateReturnNested;
+            public bool genericDelegateVariance;
+            public bool asyncAwaitChain;
+            public bool asyncExceptionFlow;
+
+            public bool AllPassed()
+            {
+                return actionFuncDelegate
+                    && multicastDelegateOrder
+                    && eventAddRemove
+                    && inOutRefParams
+                    && paramsArray
+                    && delegateReturnNested
+                    && genericDelegateVariance
+                    && asyncAwaitChain
+                    && asyncExceptionFlow;
             }
         }
 

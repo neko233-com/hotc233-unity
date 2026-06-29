@@ -11,7 +11,7 @@ namespace Hotc233
     {
         public static readonly ResourceProbeEntry[] Probes =
         {
-            new ResourceProbeEntry("HotUpdatePrefabProbe", "UnityHotc.CodeHotUpdate.HotUpdatePrefabProbe", ResourceKind.Prefab, "LogCount", 1, 5.6f),
+            new ResourceProbeEntry("HotUpdatePrefabProbe", "UnityHotc.CodeHotUpdate.HotUpdatePrefabProbe", ResourceKind.Prefab, "RuntimeReadyScore", 4, 5.6f),
             new ResourceProbeEntry("HotUpdateUIPrefab", "UnityHotc.CodeHotUpdate.HotUpdateUIController", ResourceKind.Prefab, "ClickCount", 1, 0.5f, invokeMethod: "OnButtonClick"),
             new ResourceProbeEntry("HotUpdate2DPrefab", "UnityHotc.CodeHotUpdate.HotUpdateSpriteProbe", ResourceKind.Prefab, "TickCount", 1, 1.6f),
             new ResourceProbeEntry("HotUpdate3DPrefab", "UnityHotc.CodeHotUpdate.HotUpdateMeshProbe", ResourceKind.Prefab, "TickCount", 1, 1.6f),

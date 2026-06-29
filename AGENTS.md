@@ -18,6 +18,18 @@
 
 **200% 规则**：同机 14 条 base 任一行 `hotc233PercentOfHybridClr < 50%` → 架构方向错误，换桶，禁止继续细节优化。
 
+## 可量化汇报硬规则
+
+- 所有行为必须可量化：运行时、解释器、loader、metadata、ABI、transform、文档、CI、报告字段和 package 接入修改，都必须给出数字口径；禁止只说“已优化”“更快”“更稳”。
+- 修改前必须记录包内基线：当前 blocker 数、失败项、opcode profile 摘要、性能最弱行、相关报告路径、命令和关键指标；没有报告时先说明缺口并生成最小可复查基线。
+- 修改后必须用同一口径给 before/after：`指标 | 修改前 | 修改后 | 差值 | 结论 | 数据来源`，差值必须写绝对值和百分比（能计算时）。
+- 功能与兼容性必须量化：验证项总数、通过数、失败数、blocker 数、异常/崩溃数、超时数、加载的 metadata/assembly 数、热更二进制大小和 hash。
+- 性能必须量化：14 条 official base 全量行、hotc/community/Pro 三列、`hotc233PercentOfHybridClr`、Dominance 目标、最弱行排序、profiler 开/关、运行次数、平台和报告文件。
+- 解释器/transform 行为必须量化：目标 trace/instinct/fastPathKind 命中次数、通用 dispatch opcode 占比、M2N 热路径出现次数、生成 thunk 数、专用路径与通用路径耗时对比。
+- 仓库行为必须量化：改动文件数、关键新增/删除行数、生成文件数、归档文件数、`.meta` 变化数；提交前汇报子仓库与宿主仓库 `git status -sb` 摘要。
+- 如果某项无法量化，必须明确写出原因、缺失数据、替代指标和下一步补数命令；未补齐前不得把该项标为完成。
+- 向用户汇报必须包含数据来源：本地命令输出、宿主 `Assets/EditorForBuild/Generated/*.json`、包内 `benchmark-docs/results/*.json`、CI 链接或具体日志路径；禁止凭记忆或 stale 报告下结论。
+
 ## 架构与性能（商业 P0 落地后再推进，2026-06-27 起）
 
 **GodDomain（专用架构）**：性能主路径不是「把通用 opcode dispatch 做快」，而是 **识别热形状 → 专用 transform → whole-method bypass → 不进 14k 行 switch 循环**。权威说明：`benchmark-docs/god-domain-architecture.md`。旧 dispatch/M2N 桥接路线已归档：`benchmark-docs/archive/generic-dispatch-bridge-retired.md`。

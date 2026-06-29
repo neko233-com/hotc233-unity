@@ -112,7 +112,21 @@ namespace Hotc233.Editor.MethodBridge
             return sharedTypeInfo;
         }
 
-        private MethodDesc CreateMethodDesc(MethodDef methodDef, bool forceRemoveThis, TypeSig returnType, List<TypeSig> parameters)
+        private static bool IsNative2ManagedHiddenReturnCandidate(TypeSig rawReturnType)
+        {
+            if (rawReturnType == null)
+            {
+                return false;
+            }
+            rawReturnType = rawReturnType.RemovePinnedAndModifiers();
+            if (rawReturnType.IsByRef)
+            {
+                return false;
+            }
+            return rawReturnType.ElementType == ElementType.Var || rawReturnType.ElementType == ElementType.MVar;
+        }
+
+        private MethodDesc CreateMethodDesc(MethodDef methodDef, bool forceRemoveThis, TypeSig returnType, List<TypeSig> parameters, bool native2ManagedHiddenReturn = false)
         {
             var paramInfos = new List<ParamInfo>();
             if (forceRemoveThis && !methodDef.IsStatic)
@@ -136,11 +150,12 @@ namespace Hotc233.Editor.MethodBridge
                 MethodDef = methodDef,
                 ReturnInfo = new ReturnInfo() { Type = returnType != null ? GetSharedTypeInfo(returnType) : TypeInfo.s_void },
                 ParamInfos = paramInfos,
+                Native2ManagedHiddenReturn = native2ManagedHiddenReturn,
             };
             return mbs;
         }
 
-        private MethodDesc CreateMethodDesc(TypeSig returnType, List<TypeSig> parameters)
+        private MethodDesc CreateMethodDesc(TypeSig returnType, List<TypeSig> parameters, bool native2ManagedHiddenReturn = false)
         {
             var paramInfos = new List<ParamInfo>();
             if (returnType.ContainsGenericParameter)
@@ -160,6 +175,7 @@ namespace Hotc233.Editor.MethodBridge
                 MethodDef = null,
                 ReturnInfo = new ReturnInfo() { Type = returnType != null ? GetSharedTypeInfo(returnType) : TypeInfo.s_void },
                 ParamInfos = paramInfos,
+                Native2ManagedHiddenReturn = native2ManagedHiddenReturn,
             };
             return mbs;
         }
@@ -168,18 +184,44 @@ namespace Hotc233.Editor.MethodBridge
         {
             method.Init();
             _managed2nativeMethodSet.Add(method);
+
+            if (!method.ReturnInfo.IsVoid)
+            {
+                var hiddenReturnMethod = method.Clone();
+                hiddenReturnMethod.Native2ManagedHiddenReturn = true;
+                hiddenReturnMethod.Init();
+                _managed2nativeMethodSet.Add(hiddenReturnMethod);
+            }
         }
 
         private void AddNative2ManagedMethod(MethodDesc method)
         {
-            method.Init();
-            _native2managedMethodSet.Add(method);
+            var nativeMethod = method.Clone();
+            nativeMethod.InitNative2Managed();
+            _native2managedMethodSet.Add(nativeMethod);
+
+            if (!method.ReturnInfo.IsVoid)
+            {
+                var hiddenReturnMethod = method.Clone();
+                hiddenReturnMethod.Native2ManagedHiddenReturn = true;
+                hiddenReturnMethod.InitNative2Managed();
+                _native2managedMethodSet.Add(hiddenReturnMethod);
+            }
         }
 
         private void AddAdjustThunkMethod(MethodDesc method)
         {
-            method.Init();
-            _adjustThunkMethodSet.Add(method);
+            var nativeMethod = method.Clone();
+            nativeMethod.InitNative2Managed();
+            _adjustThunkMethodSet.Add(nativeMethod);
+
+            if (!method.ReturnInfo.IsVoid)
+            {
+                var hiddenReturnMethod = method.Clone();
+                hiddenReturnMethod.Native2ManagedHiddenReturn = true;
+                hiddenReturnMethod.InitNative2Managed();
+                _adjustThunkMethodSet.Add(hiddenReturnMethod);
+            }
         }
 
         private void ProcessMethod(MethodDef method, List<TypeSig> klassInst, List<TypeSig> methodInst)
@@ -197,6 +239,7 @@ namespace Hotc233.Editor.MethodBridge
             }
             ICorLibTypes corLibTypes = method.Module.CorLibTypes;
             TypeSig returnType;
+            TypeSig rawReturnType;
             List<TypeSig> parameters;
             if (klassInst == null && methodInst == null)
             {
@@ -204,12 +247,14 @@ namespace Hotc233.Editor.MethodBridge
                 {
                     throw new Exception($"[PreservedMethod] method:{method} has generic parameters");
                 }
+                rawReturnType = method.ReturnType;
                 returnType = MetaUtil.ToShareTypeSig(corLibTypes, method.ReturnType);
                 parameters = method.Parameters.Select(p => MetaUtil.ToShareTypeSig(corLibTypes, p.Type)).ToList();
             }
             else
             {
                 var gc = new GenericArgumentContext(klassInst, methodInst);
+                rawReturnType = method.ReturnType;
                 returnType = MetaUtil.ToShareTypeSig(corLibTypes, MetaUtil.Inflate(method.ReturnType, gc));
                 parameters = method.Parameters.Select(p => MetaUtil.ToShareTypeSig(corLibTypes, MetaUtil.Inflate(p.Type, gc))).ToList();
             }
@@ -503,8 +548,16 @@ namespace Hotc233.Editor.MethodBridge
                 MethodDef = method.MethodDef,
                 ReturnInfo = new ReturnInfo() { Type = ToIsomorphicType(method.ReturnInfo.Type) },
                 ParamInfos = paramInfos,
+                Native2ManagedHiddenReturn = method.Native2ManagedHiddenReturn,
             };
-            mbs.Init();
+            if (mbs.Native2ManagedHiddenReturn)
+            {
+                mbs.InitNative2Managed();
+            }
+            else
+            {
+                mbs.Init();
+            }
             return mbs;
         }
 
@@ -1146,7 +1199,7 @@ const Native2ManagedMethodInfo hotc233::interpreter::g_native2managedStub[] =
 
             foreach (var method in methods)
             {
-                lines.Add($"\t{{\"{method.CreateInvokeSigName()}\", (Il2CppMethodPointer)__N2M_{method.CreateInvokeSigName()}}},");
+                lines.Add($"\t{{\"{method.CreateNative2ManagedSigName()}\", (Il2CppMethodPointer)__N2M_{method.CreateNative2ManagedSigName()}}},");
             }
 
             lines.Add($"\t{{nullptr, nullptr}},");
@@ -1162,15 +1215,19 @@ const NativeAdjustThunkMethodInfo hotc233::interpreter::g_adjustThunkStub[] =
 
             foreach (var method in methods)
             {
-                lines.Add($"\t{{\"{method.CreateInvokeSigName()}\", (Il2CppMethodPointer)__N2M_AdjustorThunk_{method.CreateCallSigName()}}},");
+                lines.Add($"\t{{\"{method.CreateNative2ManagedSigName()}\", (Il2CppMethodPointer)__N2M_AdjustorThunk_{method.CreateNative2ManagedSigName()}}},");
             }
 
             lines.Add($"\t{{nullptr, nullptr}},");
             lines.Add("};");
         }
 
-        private string GetManaged2NativePassParam(TypeInfo type, string varName)
+        private string GetManaged2NativePassParam(TypeInfo type, string varName, int bridgeArgIndex, bool fullGenericAware)
         {
+            if (fullGenericAware && type.PorType == ParamOrReturnType.U)
+            {
+                return $"M2NFromValueOrAddressFullGenericAware(method, {bridgeArgIndex}, {varName})";
+            }
             return $"M2NFromValueOrAddress<{type.GetTypeName()}>({varName})";
         }
 
@@ -1181,14 +1238,23 @@ const NativeAdjustThunkMethodInfo hotc233::interpreter::g_adjustThunkStub[] =
 
         private void GenerateManaged2NativeMethod(MethodDesc method, List<string> lines)
         {
-            string paramListStr = string.Join(", ", method.ParamInfos.Select(p => $"{p.Type.GetTypeName()} __arg{p.Index}").Concat(new string[] { "const MethodInfo* method" }));
-            string paramNameListStr = string.Join(", ", method.ParamInfos.Select(p => GetManaged2NativePassParam(p.Type, $"localVarBase+argVarIndexs[{p.Index}]")).Concat(new string[] { "method" }));
+            bool hiddenReturn = method.Native2ManagedHiddenReturn;
+            string nativeReturnTypeName = hiddenReturn ? "void" : method.ReturnInfo.Type.GetTypeName();
+            string hiddenReturnParameter = hiddenReturn ? "Il2CppFullySharedGenericAny* __returnAddress" : null;
+            string paramListStr = string.Join(", ", method.ParamInfos.Select(p => $"{p.Type.GetTypeName()} __arg{p.Index}").Concat(new[] { hiddenReturnParameter, "const MethodInfo* method" }.Where(p => p != null)));
+            string paramNameListStr = string.Join(", ", method.ParamInfos.Select(p => GetManaged2NativePassParam(p.Type, $"localVarBase+argVarIndexs[{p.Index}]", p.Index, true)).Concat(new[] { hiddenReturn ? "(Il2CppFullySharedGenericAny*)ret" : null, "method" }.Where(p => p != null)));
+            string nativeTarget = hiddenReturn ? "M2NGetHiddenReturnMethodPointer(method)" : "method->methodPointerCallByInterp";
+            string sharedStructFallback = method.ParamInfos.Any(p => p.Type.IsStruct)
+                ? string.Empty
+                : hiddenReturn
+                    ? string.Empty
+                : "    if (TryManaged2NativeCallByReflectionInvokeForSharedStruct(method, argVarIndexs, localVarBase, ret)) { return; }\n";
 
             lines.Add($@"
 static void __M2N_{method.CreateCallSigName()}(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 {{
-    typedef {method.ReturnInfo.Type.GetTypeName()} (*NativeMethod)({paramListStr});
-    {(!method.ReturnInfo.IsVoid ? $"*({method.ReturnInfo.Type.GetTypeName()}*)ret = " : "")}((NativeMethod)(method->methodPointerCallByInterp))({paramNameListStr});
+{sharedStructFallback}    typedef {nativeReturnTypeName} (*NativeMethod)({paramListStr});
+    {(!method.ReturnInfo.IsVoid && !hiddenReturn ? $"*({method.ReturnInfo.Type.GetTypeName()}*)ret = " : "")}((NativeMethod)({nativeTarget}))({paramNameListStr});
 }}
 ");
         }
@@ -1207,26 +1273,68 @@ static void __M2N_{method.CreateCallSigName()}(const MethodInfo* method, uint16_
             return s.ToString();
         }
 
-        private string GenerateCopyArgumentToInterpreterStack(List<ParamInfo> paramInfos)            
+        private static bool ShouldWidenNative2ManagedDelegateValueArg(MethodDesc method, ParamInfo param)
+        {
+            if (param.Index == 0 || method.ParamInfos.Count < 2)
+            {
+                return false;
+            }
+            if (method.ReturnInfo.Type.PorType != ParamOrReturnType.U || method.ParamInfos[0].Type.PorType != ParamOrReturnType.U)
+            {
+                return false;
+            }
+            switch (param.Type.PorType)
+            {
+                case ParamOrReturnType.I1:
+                case ParamOrReturnType.U1:
+                case ParamOrReturnType.I2:
+                case ParamOrReturnType.U2:
+                case ParamOrReturnType.I4:
+                case ParamOrReturnType.U4:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static string GetNative2ManagedParameterTypeName(MethodDesc method, ParamInfo param)
+        {
+            return ShouldWidenNative2ManagedDelegateValueArg(method, param) ? "uintptr_t" : param.Type.GetTypeName();
+        }
+
+        private static bool UsesNative2ManagedHiddenReturn(MethodDesc method)
+        {
+            return method.Native2ManagedHiddenReturn;
+        }
+
+        private string GenerateCopyArgumentToInterpreterStack(MethodDesc method)
         {
             StringBuilder s = new StringBuilder();
             int index = 0;
-            foreach (var param in paramInfos)
+            foreach (var param in method.ParamInfos)
             {
+                string copyTypeName = ShouldWidenNative2ManagedDelegateValueArg(method, param) ? "uintptr_t" : param.Type.GetTypeName();
                 if (param.Type.IsPrimitiveType)
                 {
                     if (param.Type.NeedExpandValue())
                     {
-                        s.AppendLine($"\targs[__ARG_OFFSET_{index}__].u64 = __arg{index};");
+                        if (ShouldWidenNative2ManagedDelegateValueArg(method, param))
+                        {
+                            s.AppendLine($"\t*(uintptr_t*)(args + __ARG_OFFSET_{index}__) = __arg{index};");
+                        }
+                        else
+                        {
+                            s.AppendLine($"\targs[__ARG_OFFSET_{index}__].u64 = __arg{index};");
+                        }
                     }
                     else
                     {
-                        s.AppendLine($"\t*({param.Type.GetTypeName()}*)(args + __ARG_OFFSET_{index}__) = __arg{index};");
+                        s.AppendLine($"\t*({copyTypeName}*)(args + __ARG_OFFSET_{index}__) = __arg{index};");
                     }
                 }
                 else
                 {
-                    s.AppendLine($"\t*({param.Type.GetTypeName()}*)(args + __ARG_OFFSET_{index}__) = __arg{index};");
+                    s.AppendLine($"\t*({copyTypeName}*)(args + __ARG_OFFSET_{index}__) = __arg{index};");
                 }
                 index++;
             }
@@ -1235,15 +1343,33 @@ static void __M2N_{method.CreateCallSigName()}(const MethodInfo* method, uint16_
 
         private void GenerateNative2ManagedMethod0(MethodDesc method, bool adjustorThunk, List<string> lines)
         {
-            string paramListStr = string.Join(", ", method.ParamInfos.Select(p => $"{p.Type.GetTypeName()} __arg{p.Index}").Concat(new string[] { "const MethodInfo* method" }));
+            bool hiddenReturn = UsesNative2ManagedHiddenReturn(method);
+            string returnTypeName = hiddenReturn ? "void" : method.ReturnInfo.Type.GetTypeName();
+            string hiddenReturnParameter = hiddenReturn ? "Il2CppFullySharedGenericAny* __returnAddress" : null;
+            string paramListStr = string.Join(", ", method.ParamInfos.Select(p => $"{GetNative2ManagedParameterTypeName(method, p)} __arg{p.Index}").Concat(new[] { hiddenReturnParameter, "const MethodInfo* method" }.Where(p => p != null)));
+            string inlineDelegateVoidCall = "";
+            string inlineDelegateReturnCall = "";
+            string body;
+            if (method.ReturnInfo.IsVoid)
+            {
+                body = $"{inlineDelegateVoidCall}if (TryExecuteNative2ManagedDelegateInvoke(method, args, nullptr)) {{ return; }}\n    if (TryExecuteNative2ManagedClosedDelegateTarget(method, args, nullptr)) {{ return; }}\n    if (TryExecuteNative2ManagedOpenDelegateInvoker(method, args)) {{ return; }}\n    Interpreter::Execute(method, args, nullptr);";
+            }
+            else if (hiddenReturn)
+            {
+                body = $"{inlineDelegateReturnCall}if (TryExecuteNative2ManagedDelegateInvoke(method, args, __returnAddress)) {{ return; }} if (TryExecuteNative2ManagedClosedDelegateTarget(method, args, __returnAddress)) {{ return; }} if (TryExecuteNative2ManagedOpenDelegateInvoker((const MethodInfo*)__returnAddress, args)) {{ return; }} Interpreter::Execute(method, args, __returnAddress); return;";
+            }
+            else
+            {
+                body = $"{method.ReturnInfo.Type.GetTypeName()} ret = {{}}; {inlineDelegateReturnCall}if (TryExecuteNative2ManagedDelegateInvoke(method, args, &ret)) {{ return ret; }} if (TryExecuteNative2ManagedClosedDelegateTarget(method, args, &ret)) {{ return ret; }} if (TryExecuteNative2ManagedOpenDelegateInvoker(method, args)) {{ return ret; }} Interpreter::Execute(method, args, &ret); return ret;";
+            }
             lines.Add($@"
-static {method.ReturnInfo.Type.GetTypeName()} __N2M_{(adjustorThunk ? "AdjustorThunk_" : "")}{method.CreateCallSigName()}({paramListStr})
+static {returnTypeName} __N2M_{(adjustorThunk ? "AdjustorThunk_" : "")}{method.CreateNative2ManagedSigName()}({paramListStr})
 {{
     {(adjustorThunk ? "__arg0 += sizeof(Il2CppObject);" : "")}
 {GenerateArgumentSizeAndOffset(method.ParamInfos)}
     StackObject args[__TOTAL_ARG_SIZE__];
-{GenerateCopyArgumentToInterpreterStack(method.ParamInfos)}
-    {(method.ReturnInfo.IsVoid ? "Interpreter::Execute(method, args, nullptr);" : $"{method.ReturnInfo.Type.GetTypeName()} ret; Interpreter::Execute(method, args, &ret); return ret;")}
+{GenerateCopyArgumentToInterpreterStack(method)}
+    {body}
 }}
 ");
         }
@@ -1262,7 +1388,7 @@ static {method.ReturnInfo.Type.GetTypeName()} __N2M_{(adjustorThunk ? "AdjustorT
         {
             MethodDesc method = methodInfo.Method;
             string paramListStr = string.Join(", ", method.ParamInfos.Select(p => $"{p.Type.GetTypeName()} __arg{p.Index}"));
-            string paramNameListStr = string.Join(", ", method.ParamInfos.Select(p => GetManaged2NativePassParam(p.Type, $"localVarBase+argVarIndexs[{p.Index}]")));
+            string paramNameListStr = string.Join(", ", method.ParamInfos.Select(p => GetManaged2NativePassParam(p.Type, $"localVarBase+argVarIndexs[{p.Index}]", p.Index, false)));
             string il2cppCallConventionName = GetIl2cppCallConventionName(methodInfo.Callvention);
             lines.Add($@"
 static void __M2NF_{methodInfo.Signature}(Il2CppMethodPointer methodPointer, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)

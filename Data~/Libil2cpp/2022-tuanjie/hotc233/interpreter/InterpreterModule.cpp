@@ -4,14 +4,19 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <cstdio>
+#include <cstring>
 
 #include "Baselib.h"
 #include "vm/GlobalMetadata.h"
 #include "vm/MetadataCache.h"
 #include "vm/MetadataLock.h"
 #include "vm/Class.h"
+#include "vm/Array.h"
 #include "vm/Object.h"
 #include "vm/Method.h"
+#include "vm/Field.h"
+#include "metadata/GenericMetadata.h"
 
 #include "../metadata/MetadataModule.h"
 #include "../metadata/MetadataUtil.h"
@@ -43,6 +48,13 @@ namespace interpreter
 	static std::unordered_map<void*, bool> s_functionPointerMap;
 
 	static baselib::ReentrantLock s_reversePInvokeMethodLock;
+
+	struct FullySharedGenericMethodInfoForHotc : MethodInfo
+	{
+		Il2CppMethodPointer rawVirtualMethodPointer;
+		Il2CppMethodPointer rawDirectMethodPointer;
+		InvokerMethod rawInvokerMethod;
+	};
 
 	const MethodInfo* InterpreterModule::GetMethodInfoByReversePInvokeWrapperIndex(int32_t index)
 	{
@@ -230,20 +242,571 @@ namespace interpreter
 		il2cpp::vm::Exception::Raise(il2cpp::vm::Exception::GetExecutionEngineException("NotSupportManaged2NativeFunctionMethod"));
 	}
 
+	static void CopyMethodParameterStackArgs(const MethodInfo* method, StackObject* dst, StackObject* src)
+	{
+		InterpMethodInfo* imi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+		const bool isInstanceMethod = metadata::IsInstanceMethod(method);
+		MethodArgDesc* argDescs = imi->args + isInstanceMethod;
+		uint32_t dstIndex = isInstanceMethod ? 1 : 0;
+		uint32_t srcIndex = 0;
+		for (uint8_t i = 0; i < method->parameters_count; i++)
+		{
+			const uint16_t stackObjectSize = argDescs[i].stackObjectSize;
+#if SUPPORT_MEMORY_NOT_ALIGMENT_ACCESS
+			CopyStackObject(dst + dstIndex, src + srcIndex, stackObjectSize);
+#else
+			std::memcpy(dst + dstIndex, src + srcIndex, stackObjectSize * sizeof(StackObject));
+#endif
+			dstIndex += stackObjectSize;
+			srcIndex += stackObjectSize;
+		}
+	}
+
+	static void CopyClosedStaticDelegateTargetArg(const MethodInfo* method, StackObject* dst, Il2CppObject* target)
+	{
+		const Il2CppType* firstArgType = GET_METHOD_PARAMETER_TYPE(method->parameters[0]);
+		if (!firstArgType->byref && metadata::IsValueType(firstArgType))
+		{
+			Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(firstArgType);
+			std::memcpy(dst, il2cpp::vm::Object::Unbox(target), il2cpp::vm::Class::GetValueSize(klass, nullptr));
+			return;
+		}
+		dst->obj = target;
+	}
+
+	static void CopyFullySharedDelegateArgs(const MethodInfo* method, StackObject* dst, StackObject* src)
+	{
+		InterpMethodInfo* imi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+		const bool isInstanceMethod = metadata::IsInstanceMethod(method);
+		MethodArgDesc* argDescs = imi->args + isInstanceMethod;
+		uint32_t dstIndex = isInstanceMethod ? 1 : 0;
+		uint32_t srcIndex = 0;
+		for (uint8_t i = 0; i < method->parameters_count; i++)
+		{
+			const Il2CppType* argType = GET_METHOD_PARAMETER_TYPE(method->parameters[i]);
+			const uint16_t stackObjectSize = argDescs[i].stackObjectSize;
+			if (!argType->byref && metadata::IsValueType(argType))
+			{
+				Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(argType);
+				uint32_t byteSize = il2cpp::vm::Class::GetValueSize(klass, nullptr);
+				uintptr_t srcAddress = (uintptr_t)src[srcIndex].ptr;
+				void* srcData = srcAddress > 0x10000 ? src[srcIndex].ptr : (void*)(src + srcIndex);
+				std::memset(dst + dstIndex, 0, stackObjectSize * sizeof(StackObject));
+				std::memcpy(dst + dstIndex, srcData, byteSize);
+			}
+			else
+			{
+				dst[dstIndex].ptr = src[srcIndex].ptr;
+			}
+			dstIndex += stackObjectSize;
+			srcIndex += stackObjectSize;
+		}
+	}
+
+	static void* GetHiddenFullSharedDelegateReturnBuffer(const MethodInfo* invokeMethod, StackObject* args, void* ret)
+	{
+		if (ret || !invokeMethod || metadata::IsReturnVoidMethod(invokeMethod))
+		{
+			return ret;
+		}
+
+		return args[1 + invokeMethod->parameters_count].ptr;
+	}
+
+	static void TraceHiddenDelegateReturn(const char* phase, const MethodInfo* invokeMethod, const MethodInfo* targetMethod, StackObject* args, void* ret)
+	{
+		static int32_t s_traceCount = 0;
+		if (!ret || s_traceCount >= 64)
+		{
+			return;
+		}
+
+		++s_traceCount;
+		std::printf("[hotc233][N2MHiddenRetProbe] %s invoke=%s.%s::%s target=%s.%s::%s invokeParams=%u targetParams=%u ret=%p retU64=%llu arg1=%p arg2=%p\n",
+			phase,
+			invokeMethod && invokeMethod->klass ? invokeMethod->klass->namespaze : "<null>",
+			invokeMethod && invokeMethod->klass ? invokeMethod->klass->name : "<null>",
+			invokeMethod ? invokeMethod->name : "<null>",
+			targetMethod && targetMethod->klass ? targetMethod->klass->namespaze : "<null>",
+			targetMethod && targetMethod->klass ? targetMethod->klass->name : "<null>",
+			targetMethod ? targetMethod->name : "<null>",
+			invokeMethod ? invokeMethod->parameters_count : 0,
+			targetMethod ? targetMethod->parameters_count : 0,
+			ret,
+			(unsigned long long)*(uint64_t*)ret,
+			args ? args[1].ptr : nullptr,
+			(args && invokeMethod && invokeMethod->parameters_count > 0) ? args[2].ptr : nullptr);
+		std::fflush(stdout);
+	}
+
+	static const Il2CppType* InflateMethodParameterTypeIfNeeded(const MethodInfo* method, const Il2CppType* type);
+	static bool IsValueTypeForInvoke(const Il2CppType* type);
+	static bool ShouldBoxDelegateTargetReturn(const MethodInfo* invokeMethod, const MethodInfo* targetMethod);
+	static int32_t GetDelegateTargetReturnStorageSize(const MethodInfo* targetMethod);
+	static void BoxDelegateTargetReturnToExpectedSlot(const MethodInfo* targetMethod, void* sourceRet, void* expectedRet);
+
+	bool TryExecuteNative2ManagedOpenDelegateInvoker(const MethodInfo* maybeRetAddress, StackObject* args)
+	{
+		static int32_t s_openDelegateSkipTraceCount = 0;
+		static int32_t s_openDelegateExecTraceCount = 0;
+		if (InterpreterModule::IsMethodInfoPointer((void*)maybeRetAddress))
+		{
+			const MethodInfo* maybeMethod = (const MethodInfo*)maybeRetAddress;
+			if (maybeMethod->name && maybeMethod->klass)
+			{
+				if (s_openDelegateSkipTraceCount < 16)
+				{
+					std::printf("[hotc233][N2MOpenDelegateProbe] skip-real-method slot=%p method=%s.%s::%s args0=%p\n",
+						(void*)maybeRetAddress,
+						maybeMethod->klass->namespaze ? maybeMethod->klass->namespaze : "",
+						maybeMethod->klass->name ? maybeMethod->klass->name : "",
+						maybeMethod->name,
+						args ? args[0].ptr : nullptr);
+					std::fflush(stdout);
+					s_openDelegateSkipTraceCount++;
+				}
+				return false;
+			}
+		}
+		Il2CppDelegate* del = (Il2CppDelegate*)args[0].obj;
+		if (!del || !del->method)
+		{
+			if (s_openDelegateExecTraceCount < 128)
+			{
+				std::printf("[hotc233][N2MOpenDelegateProbe] missing-delegate ret=%p del=%p args0=%p\n",
+					(void*)maybeRetAddress,
+					(void*)del,
+					args ? args[0].ptr : nullptr);
+				std::fflush(stdout);
+				s_openDelegateExecTraceCount++;
+			}
+			return false;
+		}
+		const MethodInfo* curMethod = del->method;
+		if (s_openDelegateExecTraceCount < 128)
+		{
+			std::printf("[hotc233][N2MOpenDelegateProbe] exec ret=%p del=%p klass=%s.%s target=%p method=%s.%s::%s interp=%d methodPtr=%p invokeImpl=%p invokeThis=%p interpMethod=%p interpInvoke=%p virtual=%d pcount=%d retType=%d\n",
+				(void*)maybeRetAddress,
+				(void*)del,
+				del->object.klass && del->object.klass->namespaze ? del->object.klass->namespaze : "",
+				del->object.klass && del->object.klass->name ? del->object.klass->name : "",
+				(void*)del->target,
+				curMethod->klass && curMethod->klass->namespaze ? curMethod->klass->namespaze : "",
+				curMethod->klass && curMethod->klass->name ? curMethod->klass->name : "",
+				curMethod->name ? curMethod->name : "<null>",
+				curMethod->interpData ? 1 : 0,
+				(void*)del->method_ptr,
+				(void*)del->invoke_impl,
+				(void*)del->invoke_impl_this,
+				(void*)del->interp_method,
+				(void*)del->interp_invoke_impl,
+				del->method_is_virtual ? 1 : 0,
+				(int)curMethod->parameters_count,
+				curMethod->return_type ? (int)curMethod->return_type->type : -1);
+			std::fflush(stdout);
+			s_openDelegateExecTraceCount++;
+		}
+		InterpMethodInfo* imi = curMethod->interpData ? (InterpMethodInfo*)curMethod->interpData : InterpreterModule::GetInterpMethodInfo(curMethod);
+		StackObject* curArgs = (StackObject*)alloca(sizeof(StackObject) * imi->argStackObjectSize);
+		if (metadata::IsInstanceMethod(curMethod))
+		{
+			Il2CppObject* target = del->target;
+			if (!target)
+			{
+				il2cpp::vm::Exception::RaiseNullReferenceException();
+				return true;
+			}
+			curArgs[0].ptr = (uint8_t*)target + (IS_CLASS_VALUE_TYPE(curMethod->klass) ? sizeof(Il2CppObject) : 0);
+		}
+		CopyFullySharedDelegateArgs(curMethod, curArgs, args + 1);
+		Interpreter::Execute(curMethod, curArgs, (void*)maybeRetAddress);
+		return true;
+	}
+
+	bool TryExecuteNative2ManagedClosedDelegateTarget(const MethodInfo* method, StackObject* args, void* ret)
+	{
+		if (!method || !InterpreterModule::IsMethodInfoPointer((void*)method) || metadata::IsInstanceMethod(method) || !args || method->parameters_count == 0)
+		{
+			return false;
+		}
+
+		const Il2CppType* firstArgType = GET_METHOD_PARAMETER_TYPE(method->parameters[0]);
+		if (!firstArgType || firstArgType->byref || metadata::IsValueType(firstArgType))
+		{
+			return false;
+		}
+
+		Il2CppDelegate* del = (Il2CppDelegate*)args[0].obj;
+		if (!del || !del->object.klass || !metadata::IsChildTypeOfMulticastDelegate(del->object.klass) || del->method != method)
+		{
+			return false;
+		}
+		InterpMethodInfo* imi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
+		StackObject* curArgs = (StackObject*)alloca(sizeof(StackObject) * imi->argStackObjectSize);
+		CopyMethodParameterStackArgs(method, curArgs, args + 1);
+		Interpreter::Execute(method, curArgs, ret);
+		return true;
+	}
+
+	static bool ExecuteNative2ManagedDelegateInvoke(Il2CppMulticastDelegate* del, const MethodInfo* invokeMethod, StackObject* invokeArgs, void* ret)
+	{
+		if (!del)
+		{
+			il2cpp::vm::Exception::RaiseNullReferenceException();
+			return true;
+		}
+
+		Il2CppDelegate** firstSubDel;
+		int32_t subDelCount;
+		if (del->delegates)
+		{
+			firstSubDel = (Il2CppDelegate**)il2cpp::vm::Array::GetFirstElementAddress(del->delegates);
+			subDelCount = il2cpp::vm::Array::GetLength(del->delegates);
+		}
+		else
+		{
+			firstSubDel = (Il2CppDelegate**)&del;
+			firstSubDel[0] = &del->delegate;
+			subDelCount = 1;
+		}
+
+		for (int32_t i = 0; i < subDelCount; i++)
+		{
+			Il2CppDelegate* cur = firstSubDel[i];
+			const MethodInfo* curMethod = cur->method;
+			Il2CppObject* curTarget = cur->target;
+			if (!curMethod)
+			{
+				RaiseExecutionEngineException("bad delegate method");
+				return true;
+			}
+			const int paramDelta = (int)invokeMethod->parameters_count - (int)curMethod->parameters_count;
+			const bool boxReturnToExpectedSlot = ret && ShouldBoxDelegateTargetReturn(invokeMethod, curMethod);
+			void* curRet = ret;
+			if (boxReturnToExpectedSlot)
+			{
+				const int32_t retStorageSize = GetDelegateTargetReturnStorageSize(curMethod);
+				curRet = alloca((size_t)retStorageSize);
+				std::memset(curRet, 0, (size_t)retStorageSize);
+			}
+			switch (paramDelta)
+			{
+			case 0:
+			{
+				if (metadata::IsInstanceMethod(curMethod))
+				{
+					if (!curTarget)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+						return true;
+					}
+					InterpMethodInfo* imi = curMethod->interpData ? (InterpMethodInfo*)curMethod->interpData : InterpreterModule::GetInterpMethodInfo(curMethod);
+					StackObject* curArgs = (StackObject*)alloca(sizeof(StackObject) * imi->argStackObjectSize);
+					curArgs[0].ptr = (uint8_t*)curTarget + (IS_CLASS_VALUE_TYPE(curMethod->klass) ? sizeof(Il2CppObject) : 0);
+					CopyMethodParameterStackArgs(curMethod, curArgs, invokeArgs);
+					Interpreter::Execute(curMethod, curArgs, curRet);
+				}
+				else
+				{
+					Interpreter::Execute(curMethod, invokeArgs, curRet);
+				}
+				break;
+			}
+			case -1:
+			{
+				if (metadata::IsInstanceMethod(curMethod))
+				{
+					RaiseExecutionEngineException("bad delegate method");
+					return true;
+				}
+				InterpMethodInfo* imi = curMethod->interpData ? (InterpMethodInfo*)curMethod->interpData : InterpreterModule::GetInterpMethodInfo(curMethod);
+				StackObject* curArgs = (StackObject*)alloca(sizeof(StackObject) * imi->argStackObjectSize);
+				CopyClosedStaticDelegateTargetArg(curMethod, curArgs, curTarget);
+				CopyMethodParameterStackArgs(curMethod, curArgs + 1, invokeArgs);
+				Interpreter::Execute(curMethod, curArgs, curRet);
+				break;
+			}
+			case 1:
+			{
+				if (!metadata::IsInstanceMethod(curMethod))
+				{
+					RaiseExecutionEngineException("bad delegate method");
+					return true;
+				}
+				Il2CppObject* openTarget = invokeArgs[0].obj;
+				if (!openTarget)
+				{
+					il2cpp::vm::Exception::RaiseNullReferenceException();
+					return true;
+				}
+				InterpMethodInfo* imi = curMethod->interpData ? (InterpMethodInfo*)curMethod->interpData : InterpreterModule::GetInterpMethodInfo(curMethod);
+				StackObject* curArgs = (StackObject*)alloca(sizeof(StackObject) * imi->argStackObjectSize);
+				curArgs[0].ptr = (uint8_t*)openTarget + (IS_CLASS_VALUE_TYPE(curMethod->klass) ? sizeof(Il2CppObject) : 0);
+				CopyMethodParameterStackArgs(curMethod, curArgs, invokeArgs + 1);
+				Interpreter::Execute(curMethod, curArgs, curRet);
+				break;
+			}
+			default:
+			{
+				RaiseExecutionEngineException("bad delegate method");
+				return true;
+			}
+			}
+			if (boxReturnToExpectedSlot)
+			{
+				BoxDelegateTargetReturnToExpectedSlot(curMethod, curRet, ret);
+			}
+		}
+		return true;
+	}
+
+	bool TryExecuteNative2ManagedInlineDelegateInvoker(const MethodInfo* method, StackObject* args, void* ret)
+	{
+		return false;
+		if (!method || !args)
+		{
+			return false;
+		}
+
+		Il2CppMulticastDelegate* del = (Il2CppMulticastDelegate*)args[0].obj;
+		if (!del || !del->delegate.object.klass || !metadata::IsChildTypeOfMulticastDelegate(del->delegate.object.klass))
+		{
+			return false;
+		}
+		if (method->klass && metadata::IsChildTypeOfMulticastDelegate(method->klass))
+		{
+			return false;
+		}
+
+		const MethodInfo* invokeMethod = il2cpp::vm::Class::GetMethodFromName(del->delegate.object.klass, "Invoke", -1);
+		if (!invokeMethod)
+		{
+			RaiseExecutionEngineException("delegate Invoke method missing");
+			return true;
+		}
+
+		if (!del->delegates && del->delegate.method != method)
+		{
+			return false;
+		}
+
+		void* actualRet = GetHiddenFullSharedDelegateReturnBuffer(invokeMethod, args, ret);
+		if (!ret && actualRet)
+		{
+			TraceHiddenDelegateReturn("inline-before", invokeMethod, method, args, actualRet);
+		}
+		bool handled = ExecuteNative2ManagedDelegateInvoke(del, invokeMethod, args + 1, actualRet);
+		if (!ret && actualRet)
+		{
+			TraceHiddenDelegateReturn("inline-after", invokeMethod, method, args, actualRet);
+		}
+		return handled;
+	}
+
+	bool TryExecuteNative2ManagedDelegateInvoke(const MethodInfo* method, StackObject* args, void* ret)
+	{
+		if (!method || !args || !InterpreterModule::IsMethodInfoPointer((void*)method) || !method->name || std::strcmp(method->name, "Invoke") != 0 || !method->klass)
+		{
+			return false;
+		}
+		if (!metadata::IsChildTypeOfMulticastDelegate(method->klass))
+		{
+			return false;
+		}
+		const MethodInfo* invokeMethod = method;
+
+		Il2CppMulticastDelegate* del = (Il2CppMulticastDelegate*)args[0].obj;
+		if (!del || !del->delegate.object.klass || !metadata::IsChildTypeOfMulticastDelegate(del->delegate.object.klass))
+		{
+			return false;
+		}
+		void* actualRet = GetHiddenFullSharedDelegateReturnBuffer(invokeMethod, args, ret);
+		if (del && del->delegate.method && del->delegate.method->name && std::strstr(del->delegate.method->name, "b__14"))
+		{
+			std::printf("[hotc233][DelegateInvokeJoinProbe] entry invoke=%s.%s::%s target=%s.%s::%s del=%p arg0=%p arg1=%p ret=%p actualRet=%p retI4Before=%d\n",
+				invokeMethod && invokeMethod->klass && invokeMethod->klass->namespaze ? invokeMethod->klass->namespaze : "",
+				invokeMethod && invokeMethod->klass && invokeMethod->klass->name ? invokeMethod->klass->name : "",
+				invokeMethod && invokeMethod->name ? invokeMethod->name : "<null>",
+				del->delegate.method->klass && del->delegate.method->klass->namespaze ? del->delegate.method->klass->namespaze : "",
+				del->delegate.method->klass && del->delegate.method->klass->name ? del->delegate.method->klass->name : "",
+				del->delegate.method->name,
+				(void*)del,
+				args ? args[0].ptr : nullptr,
+				args ? args[1].ptr : nullptr,
+				ret,
+				actualRet,
+				actualRet ? *(int32_t*)actualRet : 0);
+			std::fflush(stdout);
+		}
+		if (!ret && actualRet)
+		{
+			TraceHiddenDelegateReturn("invoke-before", invokeMethod, method, args, actualRet);
+		}
+		bool handled = ExecuteNative2ManagedDelegateInvoke(del, invokeMethod, args + 1, actualRet);
+		if (del && del->delegate.method && del->delegate.method->name && std::strstr(del->delegate.method->name, "b__14"))
+		{
+			std::printf("[hotc233][DelegateInvokeJoinProbe] exit invoke=%s.%s::%s target=%s.%s::%s handled=%d actualRet=%p retI4After=%d retU64=%llu\n",
+				invokeMethod && invokeMethod->klass && invokeMethod->klass->namespaze ? invokeMethod->klass->namespaze : "",
+				invokeMethod && invokeMethod->klass && invokeMethod->klass->name ? invokeMethod->klass->name : "",
+				invokeMethod && invokeMethod->name ? invokeMethod->name : "<null>",
+				del->delegate.method->klass && del->delegate.method->klass->namespaze ? del->delegate.method->klass->namespaze : "",
+				del->delegate.method->klass && del->delegate.method->klass->name ? del->delegate.method->klass->name : "",
+				del->delegate.method->name,
+				handled ? 1 : 0,
+				actualRet,
+				actualRet ? *(int32_t*)actualRet : 0,
+				actualRet ? (unsigned long long)*(uint64_t*)actualRet : 0ULL);
+			std::fflush(stdout);
+		}
+		if (!ret && actualRet)
+		{
+			TraceHiddenDelegateReturn("invoke-after", invokeMethod, method, args, actualRet);
+		}
+		return handled;
+	}
+
 	template<typename T>
 	const Managed2NativeCallMethod GetManaged2NativeMethod(const T* method, bool forceStatic)
 	{
 		char sigName[kMaxSignatureNameLength];
-		ComputeSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
+		if (IsFullGenericVariableValueTypeReturn(method))
+		{
+			char callSigName[kMaxSignatureNameLength];
+			ComputeSignature(method, !forceStatic, callSigName, sizeof(callSigName) - 1);
+			std::snprintf(sigName, sizeof(sigName), "h%s", callSigName);
+		}
+		else
+		{
+			ComputeSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
+		}
 		auto it = s_managed2natives.find(sigName);
 		return it != s_managed2natives.end() ? it->second : nullptr;
+	}
+
+	static bool IsInterestingNative2ManagedSignature(const char* sigName)
+	{
+		return sigName
+			&& (std::strstr(sigName, "i4us41s41")
+				|| std::strstr(sigName, "i4us46s46")
+				|| std::strstr(sigName, "hi4us41s41")
+				|| std::strstr(sigName, "hi4us46s46"));
+	}
+
+	static void TraceNative2ManagedBinding(const Il2CppMethodDefinition* method, const char* sigName)
+	{
+		static int32_t s_n2mDefinitionBindingTraceCount = 0;
+		if (!method || !sigName || s_n2mDefinitionBindingTraceCount >= 256)
+		{
+			return;
+		}
+		Il2CppClass* declaringClass = il2cpp::vm::GlobalMetadata::GetTypeInfoFromTypeDefinitionIndex(method->declaringType);
+		const char* methodName = il2cpp::vm::GlobalMetadata::GetStringFromIndex(method->nameIndex);
+		bool interestingSignature = IsInterestingNative2ManagedSignature(sigName);
+		bool interestingMethod = declaringClass
+			&& ((declaringClass->name && std::strstr(declaringClass->name, "LinqAggregateProbe"))
+				|| (methodName && std::strstr(methodName, "VerifyAggregate"))
+				|| (methodName && std::strstr(methodName, "b__"))
+				|| (methodName && std::strcmp(methodName, "Invoke") == 0));
+		if (!interestingSignature && !interestingMethod)
+		{
+			return;
+		}
+		const Il2CppType* rawReturnType = hotc233::metadata::MetadataModule::GetIl2CppTypeFromEncodeIndex(method->returnType);
+		const Il2CppType* p0 = method->parameterCount > 0
+			? hotc233::metadata::MetadataModule::GetIl2CppTypeFromEncodeIndex(il2cpp::vm::GlobalMetadata::GetParameterDefinitionFromIndex(method, method->parameterStart)->typeIndex)
+			: nullptr;
+		const Il2CppType* p1 = method->parameterCount > 1
+			? hotc233::metadata::MetadataModule::GetIl2CppTypeFromEncodeIndex(il2cpp::vm::GlobalMetadata::GetParameterDefinitionFromIndex(method, method->parameterStart + 1)->typeIndex)
+			: nullptr;
+		std::printf("[hotc233][N2MDefinitionBindingProbe] sig=%s methodDef=%p %s.%s::%s retType=%d retByref=%d pcount=%d p0=%d/%d p1=%d/%d flags=0x%x token=0x%x\n",
+			sigName,
+			(void*)method,
+			declaringClass && declaringClass->namespaze ? declaringClass->namespaze : "",
+			declaringClass && declaringClass->name ? declaringClass->name : "",
+			methodName ? methodName : "<null>",
+			rawReturnType ? (int32_t)rawReturnType->type : -1,
+			rawReturnType ? (int32_t)rawReturnType->byref : -1,
+			(int32_t)method->parameterCount,
+			p0 ? (int32_t)p0->type : -1,
+			p0 ? (int32_t)p0->byref : -1,
+			p1 ? (int32_t)p1->type : -1,
+			p1 ? (int32_t)p1->byref : -1,
+			(uint32_t)method->flags,
+			(uint32_t)method->token);
+		std::fflush(stdout);
+		s_n2mDefinitionBindingTraceCount++;
+	}
+
+	static void TraceNative2ManagedBinding(const MethodInfo* method, const char* sigName)
+	{
+		static int32_t s_n2mBindingTraceCount = 0;
+		if (!method || !sigName || s_n2mBindingTraceCount >= 64)
+		{
+			return;
+		}
+		bool interestingSignature = IsInterestingNative2ManagedSignature(sigName);
+		bool interestingMethod = method->klass
+			&& ((method->klass->namespaze && std::strstr(method->klass->namespaze, "UnityHotc"))
+				|| (method->klass->name && std::strstr(method->klass->name, "LinqAggregateProbe"))
+				|| (method->name && std::strstr(method->name, "VerifyAggregate"))
+				|| (method->name && std::strstr(method->name, "b__"))
+				|| (method->name && std::strcmp(method->name, "Invoke") == 0));
+		if (!interestingSignature && !interestingMethod)
+		{
+			return;
+		}
+		int32_t p0Type = -1;
+		int32_t p1Type = -1;
+		int32_t p0Byref = -1;
+		int32_t p1Byref = -1;
+		if (method->parameters_count > 0)
+		{
+			const Il2CppType* p0 = GET_METHOD_PARAMETER_TYPE(method->parameters[0]);
+			p0Type = p0 ? (int32_t)p0->type : -1;
+			p0Byref = p0 ? (int32_t)p0->byref : -1;
+		}
+		if (method->parameters_count > 1)
+		{
+			const Il2CppType* p1 = GET_METHOD_PARAMETER_TYPE(method->parameters[1]);
+			p1Type = p1 ? (int32_t)p1->type : -1;
+			p1Byref = p1 ? (int32_t)p1->byref : -1;
+		}
+		bool isDelegateInvoke = method->name
+			&& std::strcmp(method->name, "Invoke") == 0
+			&& method->klass
+			&& hotc233::metadata::IsChildTypeOfMulticastDelegate(method->klass);
+		std::printf("[hotc233][N2MBindingProbe] sig=%s method=%p %s.%s::%s retType=%d retByref=%d pcount=%d p0=%d/%d p1=%d/%d inflated=%d generic=%d fullShare=%d delegateInvoke=%d genericMethod=%p rgctx=%p invoker=%p methodPtr=%p interpPtr=%p\n",
+			sigName,
+			(void*)method,
+			method->klass && method->klass->namespaze ? method->klass->namespaze : "",
+			method->klass && method->klass->name ? method->klass->name : "",
+			method->name ? method->name : "<null>",
+			method->return_type ? (int32_t)method->return_type->type : -1,
+			method->return_type ? (int32_t)method->return_type->byref : -1,
+			(int32_t)method->parameters_count,
+			p0Type,
+			p0Byref,
+			p1Type,
+			p1Byref,
+			method->is_inflated ? 1 : 0,
+			method->is_generic ? 1 : 0,
+			method->has_full_generic_sharing_signature ? 1 : 0,
+			isDelegateInvoke ? 1 : 0,
+			method->is_inflated ? (void*)method->genericMethod : nullptr,
+			method->is_inflated ? (void*)method->rgctx_data : nullptr,
+			(void*)method->invoker_method,
+			(void*)method->methodPointer,
+			(void*)method->methodPointerCallByInterp);
+		std::fflush(stdout);
+		s_n2mBindingTraceCount++;
 	}
 
 	template<typename T>
 	const Il2CppMethodPointer GetNative2ManagedMethod(const T* method, bool forceStatic)
 	{
 		char sigName[kMaxSignatureNameLength];
-		ComputeSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
+		ComputeNative2ManagedSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
+		TraceNative2ManagedBinding(method, sigName);
 		auto it = s_native2manageds.find(sigName);
 		return it != s_native2manageds.end() ? it->second : InterpreterModule::NotSupportNative2Managed;
 	}
@@ -252,7 +815,7 @@ namespace interpreter
 	const Il2CppMethodPointer GetNativeAdjustMethodMethod(const T* method, bool forceStatic)
 	{
 		char sigName[kMaxSignatureNameLength];
-		ComputeSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
+		ComputeNative2ManagedSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
 		auto it = s_adjustThunks.find(sigName);
 		return it != s_adjustThunks.end() ? it->second : InterpreterModule::NotSupportAdjustorThunk;
 	}
@@ -268,6 +831,131 @@ namespace interpreter
 		Il2CppClass* klass = il2cpp::vm::GlobalMetadata::GetTypeInfoFromTypeDefinitionIndex(method->declaringType);
 		TEMP_FORMAT(errMsg, "%s. %s.%s::%s", desc, klass->namespaze, klass->name, il2cpp::vm::GlobalMetadata::GetStringFromIndex(method->nameIndex));
 		il2cpp::vm::Exception::Raise(il2cpp::vm::Exception::GetExecutionEngineException(errMsg));
+	}
+
+	static const Il2CppType* InflateMethodParameterTypeIfNeeded(const MethodInfo* method, const Il2CppType* type)
+	{
+		if (!method || !type)
+		{
+			return type;
+		}
+		if (type->type != IL2CPP_TYPE_VAR && type->type != IL2CPP_TYPE_MVAR)
+		{
+			return type;
+		}
+		const Il2CppGenericContext* context = nullptr;
+		if (method->is_inflated && method->genericMethod)
+		{
+			context = &method->genericMethod->context;
+		}
+		else if (method->klass && method->klass->generic_class)
+		{
+			context = &method->klass->generic_class->context;
+		}
+		return context ? il2cpp::metadata::GenericMetadata::InflateIfNeeded(type, context, true) : type;
+	}
+
+	static bool IsValueTypeForInvoke(const Il2CppType* type)
+	{
+		if (!type)
+		{
+			return false;
+		}
+		if (hotc233::metadata::IsValueType(type))
+		{
+			return true;
+		}
+		if (type->type == IL2CPP_TYPE_GENERICINST)
+		{
+			Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(type);
+			return klass && IS_CLASS_VALUE_TYPE(klass);
+		}
+		return false;
+	}
+
+	static bool IsReferenceReturnForDelegateInvoke(const MethodInfo* method)
+	{
+		if (!method || !method->return_type || metadata::IsVoidType(method->return_type))
+		{
+			return false;
+		}
+		const Il2CppType* returnType = InflateMethodParameterTypeIfNeeded(method, method->return_type);
+		return returnType && !returnType->byref && !IsValueTypeForInvoke(returnType);
+	}
+
+	static bool ShouldBoxDelegateTargetReturn(const MethodInfo* invokeMethod, const MethodInfo* targetMethod)
+	{
+		if (!IsReferenceReturnForDelegateInvoke(invokeMethod) || !targetMethod || !targetMethod->return_type || metadata::IsVoidType(targetMethod->return_type))
+		{
+			return false;
+		}
+		const Il2CppType* targetReturnType = InflateMethodParameterTypeIfNeeded(targetMethod, targetMethod->return_type);
+		return targetReturnType && !targetReturnType->byref && IsValueTypeForInvoke(targetReturnType);
+	}
+
+	static int32_t GetDelegateTargetReturnStorageSize(const MethodInfo* targetMethod)
+	{
+		int32_t retStorageSize = sizeof(StackObject);
+		if (!targetMethod || !targetMethod->return_type)
+		{
+			return retStorageSize;
+		}
+		const Il2CppType* targetReturnType = InflateMethodParameterTypeIfNeeded(targetMethod, targetMethod->return_type);
+		if (targetReturnType && !targetReturnType->byref && IsValueTypeForInvoke(targetReturnType))
+		{
+			int32_t valueSize = metadata::GetTypeValueSize(targetReturnType);
+			if (valueSize > retStorageSize)
+			{
+				retStorageSize = valueSize;
+			}
+		}
+		return retStorageSize;
+	}
+
+	static void BoxDelegateTargetReturnToExpectedSlot(const MethodInfo* targetMethod, void* sourceRet, void* expectedRet)
+	{
+		if (!targetMethod || !sourceRet || !expectedRet)
+		{
+			return;
+		}
+		const Il2CppType* targetReturnType = InflateMethodParameterTypeIfNeeded(targetMethod, targetMethod->return_type);
+		if (!targetReturnType || targetReturnType->byref || !IsValueTypeForInvoke(targetReturnType))
+		{
+			return;
+		}
+		*(Il2CppObject**)expectedRet = TranslateNativeValueToBoxValue(targetReturnType, sourceRet);
+	}
+
+	static bool ShouldUseInvokerForSharedStructM2N(const MethodInfo* method, const char* sigName)
+	{
+		if (!method)
+		{
+			return false;
+		}
+#if HOTC233_UNITY_2021_OR_NEW
+		if (method->has_full_generic_sharing_signature)
+		{
+			return false;
+		}
+#endif
+		const Il2CppType* returnType = InflateMethodParameterTypeIfNeeded(method, method->return_type);
+		if (returnType && !returnType->byref && IsValueTypeForInvoke(returnType))
+		{
+			return true;
+		}
+		if (std::strchr(sigName, 's'))
+		{
+			return false;
+		}
+		for (uint8_t i = 0; i < method->parameters_count; i++)
+		{
+			const Il2CppType* paramType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i]));
+			if (!paramType->byref && (IsValueTypeForInvoke(paramType) || paramType->type == IL2CPP_TYPE_VAR || paramType->type == IL2CPP_TYPE_MVAR))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	Il2CppMethodPointer InterpreterModule::GetMethodPointer(const Il2CppMethodDefinition* method)
@@ -292,12 +980,196 @@ namespace interpreter
 		return GetNativeAdjustMethodMethod(method, false);
 	}
 
+	static int32_t GetManaged2NativeReturnStorageSize(const MethodInfo* method)
+	{
+		if (!method || !method->return_type || metadata::IsVoidType(method->return_type))
+		{
+			return 0;
+		}
+
+		int32_t clearSize = sizeof(StackObject);
+		if (method->return_type->type != IL2CPP_TYPE_VAR && method->return_type->type != IL2CPP_TYPE_MVAR)
+		{
+			int32_t valueSize = metadata::GetTypeValueSize(method->return_type);
+			if (valueSize > clearSize)
+			{
+				clearSize = valueSize;
+			}
+		}
+		return clearSize;
+	}
+
+	static void ClearManaged2NativeReturnStorage(const MethodInfo* method, void* ret)
+	{
+		if (!ret)
+		{
+			return;
+		}
+		int32_t clearSize = GetManaged2NativeReturnStorageSize(method);
+		if (clearSize <= 0)
+		{
+			return;
+		}
+		std::memset(ret, 0, (size_t)clearSize);
+	}
+
+	static bool IsAddressRangeOverlap(void* left, int32_t leftSize, void* right, int32_t rightSize)
+	{
+		if (!left || !right || leftSize <= 0 || rightSize <= 0)
+		{
+			return false;
+		}
+		uintptr_t leftBegin = (uintptr_t)left;
+		uintptr_t rightBegin = (uintptr_t)right;
+		return leftBegin < rightBegin + (uintptr_t)rightSize && rightBegin < leftBegin + (uintptr_t)leftSize;
+	}
+
+	static void NormalizeFullGenericValueTypeReturn(const MethodInfo* method, void* ret, bool rawInvokerWroteHiddenReturn)
+	{
+		if (!method || !ret || !method->return_type || !method->has_full_generic_sharing_signature)
+		{
+			return;
+		}
+		const Il2CppType* rawReturnType = method->return_type;
+		if (method->genericMethod && method->genericMethod->methodDefinition)
+		{
+			rawReturnType = method->genericMethod->methodDefinition->return_type;
+		}
+		if (!rawReturnType || (rawReturnType->type != IL2CPP_TYPE_VAR && rawReturnType->type != IL2CPP_TYPE_MVAR))
+		{
+			return;
+		}
+		const Il2CppType* inflatedReturnType = InflateMethodParameterTypeIfNeeded(method, method->return_type);
+		if (!inflatedReturnType || inflatedReturnType->byref || !IsValueTypeForInvoke(inflatedReturnType))
+		{
+			return;
+		}
+		int32_t valueSize = metadata::GetTypeValueSize(inflatedReturnType);
+		if (valueSize <= 0)
+		{
+			return;
+		}
+		if (rawInvokerWroteHiddenReturn)
+		{
+			return;
+		}
+		uintptr_t rawRetWord = *(uintptr_t*)ret;
+		if (rawRetWord <= 0x10000 && valueSize <= (int32_t)sizeof(uintptr_t))
+		{
+			return;
+		}
+		Il2CppObject* boxed = *(Il2CppObject**)ret;
+		if (!boxed)
+		{
+			std::memset(ret, 0, (size_t)GetManaged2NativeReturnStorageSize(method));
+			return;
+		}
+		Il2CppClass* returnKlass = il2cpp::vm::Class::FromIl2CppType(inflatedReturnType);
+		if (returnKlass && valueSize > 0)
+		{
+			std::memcpy(ret, il2cpp::vm::Object::Unbox(boxed), (size_t)valueSize);
+		}
+	}
+
+	static bool IsFullGenericVariableValueTypeReturn(const MethodInfo* method)
+	{
+		if (!method || !method->return_type || !method->has_full_generic_sharing_signature)
+		{
+			return false;
+		}
+		const Il2CppType* rawReturnType = method->return_type;
+		if (method->genericMethod && method->genericMethod->methodDefinition)
+		{
+			rawReturnType = method->genericMethod->methodDefinition->return_type;
+		}
+		if (!rawReturnType || (rawReturnType->type != IL2CPP_TYPE_VAR && rawReturnType->type != IL2CPP_TYPE_MVAR))
+		{
+			return false;
+		}
+		const Il2CppType* inflatedReturnType = InflateMethodParameterTypeIfNeeded(method, method->return_type);
+		return inflatedReturnType && !inflatedReturnType->byref && IsValueTypeForInvoke(inflatedReturnType);
+	}
+
+	static bool TryInvokeFullGenericVariableValueReturn(const MethodInfo* method, void* thisPtr, void** invokeParams, void* ret)
+	{
+		if (!ret || !IsFullGenericVariableValueTypeReturn(method) || !method->genericMethod || !method->genericMethod->methodDefinition)
+		{
+			return false;
+		}
+		const FullySharedGenericMethodInfoForHotc* sharedMethod = reinterpret_cast<const FullySharedGenericMethodInfoForHotc*>(method);
+		if (!sharedMethod->rawInvokerMethod || !sharedMethod->rawDirectMethodPointer)
+		{
+			return false;
+		}
+		MethodInfo rawInvokerMethodInfo = *method;
+		rawInvokerMethodInfo.return_type = method->genericMethod->methodDefinition->return_type;
+		rawInvokerMethodInfo.parameters = method->genericMethod->methodDefinition->parameters;
+		sharedMethod->rawInvokerMethod(sharedMethod->rawDirectMethodPointer, &rawInvokerMethodInfo, thisPtr, invokeParams, ret);
+		return true;
+	}
+
 	void InterpreterModule::Managed2NativeCallByReflectionInvoke(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
-		if (hotc233::metadata::IsInterpreterImplement(method))
+		bool tracePerformanceEntry = method
+			&& method->name
+			&& (!std::strcmp(method->name, "RunPerformanceOnlyJson") || !std::strcmp(method->name, "RunPerformanceSuiteJson"))
+			&& method->klass
+			&& method->klass->name
+			&& !std::strcmp(method->klass->name, "HotUpdateApp");
+		if (hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method))
 		{
-			Interpreter::Execute(method,  localVarBase + argVarIndexs[0], ret);
+			StackObject* argBase = (hotc233::metadata::IsInstanceMethod(method) || method->parameters_count > 0)
+				? localVarBase + argVarIndexs[0]
+				: localVarBase;
+			if (tracePerformanceEntry)
+			{
+				std::printf("[hotc233][M2NReflectionProbe] direct-interpreter-enter %s.%s::%s method=%p argBase=%p local=%p arg0=%u pcount=%d ret=%p\n",
+					method->klass->namespaze ? method->klass->namespaze : "",
+					method->klass->name ? method->klass->name : "",
+					method->name,
+					(void*)method,
+					(void*)argBase,
+					(void*)localVarBase,
+					(uint32_t)(argVarIndexs ? argVarIndexs[0] : 0),
+					(int)method->parameters_count,
+					ret);
+				std::fflush(stdout);
+			}
+			Interpreter::Execute(method, argBase, ret);
+			if (tracePerformanceEntry)
+			{
+				std::printf("[hotc233][M2NReflectionProbe] direct-interpreter-exit %s.%s::%s method=%p ret=%p\n",
+					method->klass->namespaze ? method->klass->namespaze : "",
+					method->klass->name ? method->klass->name : "",
+					method->name,
+					(void*)method,
+					ret);
+				std::fflush(stdout);
+			}
 			return;
+		}
+		bool traceDictionarySetItem = method && method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary");
+		bool traceColorOp = method
+			&& method->name
+			&& (!std::strcmp(method->name, "op_Inequality") || !std::strcmp(method->name, "op_Equality"))
+			&& method->klass
+			&& method->klass->namespaze
+			&& method->klass->name
+			&& !std::strcmp(method->klass->namespaze, "UnityEngine")
+			&& !std::strcmp(method->klass->name, "Color");
+		if (traceDictionarySetItem)
+		{
+			std::printf("[hotc233][M2NReflectionProbe] enter %s.%s::%s method=%p methodPointer=%p interpPointer=%p invoker=%p pcount=%d ret=%p\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				method->name,
+				(void*)method,
+				(void*)method->methodPointer,
+				(void*)method->methodPointerCallByInterp,
+				(void*)method->invoker_method,
+				(int)method->parameters_count,
+				ret);
+			std::fflush(stdout);
 		}
 		if (method->invoker_method == nullptr)
 		{
@@ -307,9 +1179,35 @@ namespace interpreter
 			TEMP_FORMAT(errMsg, "GetManaged2NativeMethodPointer. sinature:%s not support.", sigName);
 			RaiseMethodNotSupportException(method, errMsg);
 		}
+		if (traceDictionarySetItem)
+		{
+			std::printf("[hotc233][M2NReflectionProbe] before-init method=%p interpPointer=%p invoker=%p\n",
+				(void*)method,
+				(void*)method->methodPointerCallByInterp,
+				(void*)method->invoker_method);
+			std::fflush(stdout);
+		}
 		if (!InitAndGetInterpreterDirectlyCallMethodPointer(method))
 		{
+			if (traceDictionarySetItem)
+			{
+				std::printf("[hotc233][M2NReflectionProbe] init-failed method=%p methodPointer=%p interpPointer=%p invoker=%p\n",
+					(void*)method,
+					(void*)method->methodPointer,
+					(void*)method->methodPointerCallByInterp,
+					(void*)method->invoker_method);
+				std::fflush(stdout);
+			}
 			RaiseAOTGenericMethodNotInstantiatedException(method);
+		}
+		if (traceDictionarySetItem)
+		{
+			std::printf("[hotc233][M2NReflectionProbe] after-init method=%p methodPointer=%p interpPointer=%p invoker=%p\n",
+				(void*)method,
+				(void*)method->methodPointer,
+				(void*)method->methodPointerCallByInterp,
+				(void*)method->invoker_method);
+			std::fflush(stdout);
 		}
 		void* thisPtr;
 		uint16_t* argVarIndexBase;
@@ -326,9 +1224,9 @@ namespace interpreter
 		void* invokeParams[256];
 		for (uint8_t i = 0; i < method->parameters_count; i++)
 		{
-			const Il2CppType* argType = GET_METHOD_PARAMETER_TYPE(method->parameters[i]);
+			const Il2CppType* argType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i]));
 			StackObject* argValue = localVarBase + argVarIndexBase[i];
-			if (!argType->byref && hotc233::metadata::IsValueType(argType))
+			if (!argType->byref && IsValueTypeForInvoke(argType))
 			{
 				invokeParams[i] = argValue;
 			}
@@ -336,11 +1234,148 @@ namespace interpreter
 			{
 				invokeParams[i] = argValue->ptr;
 			}
+			if (traceDictionarySetItem)
+			{
+				Il2CppClass* argKlass = argType ? il2cpp::vm::Class::FromIl2CppType(argType) : nullptr;
+				std::printf("[hotc233][M2NReflectionProbe] arg%d var=%u type=%d byref=%d value=%d klass=%s.%s stack=%p param=%p ptr=%p obj=%p\n",
+					(int)i,
+					(uint32_t)argVarIndexBase[i],
+					argType ? (int)argType->type : -1,
+					argType && argType->byref ? 1 : 0,
+					argType && IsValueTypeForInvoke(argType) ? 1 : 0,
+					argKlass && argKlass->namespaze ? argKlass->namespaze : "",
+					argKlass && argKlass->name ? argKlass->name : "",
+					(void*)argValue,
+					invokeParams[i],
+					argValue->ptr,
+					(void*)argValue->obj);
+				std::fflush(stdout);
+			}
+			if (traceColorOp && argValue && i < 2)
+			{
+				float* c = (float*)(void*)argValue;
+				std::printf("[hotc233][ColorOpProbe] before %s arg%d stack=%p invokeParam=%p rgba=(%.6f,%.6f,%.6f,%.6f)\n",
+					method->name,
+					(int)i,
+					(void*)argValue,
+					invokeParams[i],
+					c[0],
+					c[1],
+					c[2],
+					c[3]);
+				std::fflush(stdout);
+			}
 		}
+		if (traceDictionarySetItem)
+		{
+			std::printf("[hotc233][M2NReflectionProbe] before-invoker this=%p methodPointer=%p interpPointer=%p invoker=%p\n",
+				thisPtr,
+				(void*)method->methodPointer,
+				(void*)method->methodPointerCallByInterp,
+				(void*)method->invoker_method);
+			std::fflush(stdout);
+		}
+		bool traceGroupingKey = method
+			&& method->name
+			&& !std::strcmp(method->name, "get_Key")
+			&& method->klass
+			&& method->klass->name
+			&& std::strstr(method->klass->name, "Grouping");
+		if (traceGroupingKey)
+		{
+			std::printf("[hotc233][M2NGroupingKeyProbe] before %s.%s::%s full=%d retType=%d ret=%p retU64=%llu this=%p pcount=%d\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				method->name,
+				method->has_full_generic_sharing_signature ? 1 : 0,
+				method->return_type ? (int)method->return_type->type : -1,
+				ret,
+				ret ? (unsigned long long)*(uint64_t*)ret : 0ULL,
+				thisPtr,
+				(int)method->parameters_count);
+			std::fflush(stdout);
+		}
+		void* actualRet = ret;
+		int32_t retStorageSize = GetManaged2NativeReturnStorageSize(method);
+		if (ret && retStorageSize > 0)
+		{
+			for (uint8_t i = 0; i < method->parameters_count; i++)
+			{
+				const Il2CppType* argType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i]));
+				if (!argType || argType->byref || !IsValueTypeForInvoke(argType))
+				{
+					continue;
+				}
+				int32_t argSize = metadata::GetTypeValueSize(argType);
+				if (IsAddressRangeOverlap(ret, retStorageSize, invokeParams[i], argSize))
+				{
+					actualRet = alloca((size_t)retStorageSize);
+					break;
+				}
+			}
+		}
+		ClearManaged2NativeReturnStorage(method, actualRet);
 #if HOTC233_UNITY_2021_OR_NEW
-		method->invoker_method(method->methodPointerCallByInterp, method, thisPtr, invokeParams, ret);
+		Il2CppMethodPointer invokerTarget = method->methodPointer != nullptr ? method->methodPointer : method->methodPointerCallByInterp;
+		if (method->has_full_generic_sharing_signature && method->methodPointerCallByInterp != nullptr)
+		{
+			invokerTarget = method->methodPointerCallByInterp;
+		}
+		bool fullGenericVariableValueReturnHandled = TryInvokeFullGenericVariableValueReturn(method, thisPtr, invokeParams, actualRet);
+		if (!fullGenericVariableValueReturnHandled)
+		{
+			method->invoker_method(invokerTarget, method, thisPtr, invokeParams, actualRet);
+		}
+		NormalizeFullGenericValueTypeReturn(method, actualRet, fullGenericVariableValueReturnHandled);
+		if (actualRet != ret && ret && retStorageSize > 0)
+		{
+			std::memcpy(ret, actualRet, (size_t)retStorageSize);
+		}
+		if (traceColorOp)
+		{
+			std::printf("[hotc233][ColorOpProbe] after %s target=%p methodPointer=%p interpPointer=%p ret=%p retI4=%d retU64=%llu\n",
+				method->name,
+				(void*)invokerTarget,
+				(void*)method->methodPointer,
+				(void*)method->methodPointerCallByInterp,
+				ret,
+				ret ? *(int32_t*)ret : 0,
+				ret ? (unsigned long long)*(uint64_t*)ret : 0ULL);
+			std::fflush(stdout);
+		}
+		if (traceGroupingKey)
+		{
+			std::printf("[hotc233][M2NGroupingKeyProbe] after %s.%s::%s target=%p methodPointer=%p interpPointer=%p ret=%p retU64=%llu retI4=%d\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				method->name,
+				(void*)invokerTarget,
+				(void*)method->methodPointer,
+				(void*)method->methodPointerCallByInterp,
+				ret,
+				ret ? (unsigned long long)*(uint64_t*)ret : 0ULL,
+				ret ? *(int32_t*)ret : 0);
+			std::fflush(stdout);
+		}
+		if (traceDictionarySetItem)
+		{
+			std::printf("[hotc233][M2NReflectionProbe] after-invoker this=%p method=%p ret=%p\n",
+				thisPtr,
+				(void*)method,
+				ret);
+			std::fflush(stdout);
+		}
 #else
 		void* retObj = method->invoker_method(method->methodPointerCallByInterp, method, thisPtr, invokeParams);
+		if (traceDictionarySetItem)
+		{
+			std::printf("[hotc233][M2NReflectionProbe] after-invoker this=%p method=%p retObj=%p ret=%p\n",
+				thisPtr,
+				(void*)method,
+				retObj,
+				ret);
+			std::fflush(stdout);
+		}
 		if (ret)
 		{
 			const Il2CppType* returnType = method->return_type;
@@ -364,13 +1399,83 @@ namespace interpreter
 #endif
 	}
 
+	bool TryManaged2NativeCallByReflectionInvokeForSharedStruct(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!method)
+		{
+			return false;
+		}
+		const Il2CppType* returnType = InflateMethodParameterTypeIfNeeded(method, method->return_type);
+		if (IsFullGenericVariableValueTypeReturn(method))
+		{
+			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+			return true;
+		}
+		if (returnType && !returnType->byref && IsValueTypeForInvoke(returnType))
+		{
+			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+			return true;
+		}
+		bool shouldTraceM2N =
+			method->name
+			&& method->klass
+			&& method->klass->name
+			&& ((!std::strcmp(method->name, "set_Item") && std::strstr(method->klass->name, "Dictionary"))
+				|| (!std::strcmp(method->name, "Compare") && std::strstr(method->klass->name, "NullableComparer")));
+		if (shouldTraceM2N)
+		{
+			std::printf("[hotc233][M2NBridgeProbe] %s.%s pcount=%d\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				(int)method->parameters_count);
+			std::fflush(stdout);
+		}
+		for (uint8_t i = 0; i < method->parameters_count; i++)
+		{
+			const Il2CppType* paramType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i]));
+			if (method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary"))
+			{
+				Il2CppClass* paramKlass = paramType ? il2cpp::vm::Class::FromIl2CppType(paramType) : nullptr;
+				std::printf("[hotc233][M2NBridgeProbe] param%d type=%d klass=%s.%s value=%d generated-bridge=1\n",
+					(int)i,
+					paramType ? (int)paramType->type : -1,
+					paramKlass && paramKlass->namespaze ? paramKlass->namespaze : "",
+					paramKlass && paramKlass->name ? paramKlass->name : "",
+					paramType && IsValueTypeForInvoke(paramType) ? 1 : 0);
+				std::fflush(stdout);
+				continue;
+			}
+			if (method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary"))
+			{
+				Il2CppClass* paramKlass = paramType ? il2cpp::vm::Class::FromIl2CppType(paramType) : nullptr;
+				std::printf("[hotc233][M2NBridgeProbe] param%d type=%d klass=%s.%s value=%d\n",
+					(int)i,
+					paramType ? (int)paramType->type : -1,
+					paramKlass && paramKlass->namespaze ? paramKlass->namespaze : "",
+					paramKlass && paramKlass->name ? paramKlass->name : "",
+					paramType && IsValueTypeForInvoke(paramType) ? 1 : 0);
+				std::fflush(stdout);
+			}
+			if (!paramType->byref && IsValueTypeForInvoke(paramType))
+			{
+				InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+				return true;
+			}
+		}
+		return false;
+	}
+
 	Managed2NativeCallMethod InterpreterModule::GetManaged2NativeMethodPointer(const MethodInfo* method, bool forceStatic)
 	{
-		if (method->methodPointerCallByInterp == NotSupportNative2Managed 
-#if HOTC233_UNITY_2021_OR_NEW
-			|| method->has_full_generic_sharing_signature
-#endif
-			)
+		if (IsFullGenericVariableValueTypeReturn(method))
+		{
+			return Managed2NativeCallByReflectionInvoke;
+		}
+		if (method->methodPointerCallByInterp == NotSupportNative2Managed)
+		{
+			InitAndGetInterpreterDirectlyCallMethodPointer(method);
+		}
+		if (method->methodPointerCallByInterp == NotSupportNative2Managed)
 		{
 			return Managed2NativeCallByReflectionInvoke;
 		}
@@ -378,6 +1483,73 @@ namespace interpreter
 		ComputeSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
 		auto it = s_managed2natives.find(sigName);
 		Managed2NativeCallMethod bridge = it != s_managed2natives.end() ? it->second : Managed2NativeCallByReflectionInvoke;
+		if (method->name
+			&& method->klass
+			&& method->klass->name
+			&& ((!std::strcmp(method->name, "set_Item") && std::strstr(method->klass->name, "Dictionary"))
+				|| (!std::strcmp(method->name, "Compare") && std::strstr(method->klass->name, "NullableComparer"))
+				|| (!std::strcmp(method->name, "Invoke") && method->klass->namespaze && std::strstr(method->klass->namespaze, "System.Reflection"))))
+		{
+			std::printf("[hotc233][M2NProbe] %s.%s sig=%s inflated=%d generic=%d full=%d bridge=%p reflection=%p methodPointer=%p callByInterp=%p invoker=%p pcount=%d\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				sigName,
+				method->is_inflated ? 1 : 0,
+				method->is_generic ? 1 : 0,
+				method->has_full_generic_sharing_signature ? 1 : 0,
+				(void*)bridge,
+				(void*)Managed2NativeCallByReflectionInvoke,
+				(void*)method->methodPointer,
+				(void*)method->methodPointerCallByInterp,
+				(void*)method->invoker_method,
+				(int)method->parameters_count);
+			for (uint8_t i = 0; i < method->parameters_count; i++)
+			{
+				const Il2CppType* rawType = GET_METHOD_PARAMETER_TYPE(method->parameters[i]);
+				const Il2CppType* inflatedType = InflateMethodParameterTypeIfNeeded(method, rawType);
+				Il2CppClass* inflatedKlass = inflatedType ? il2cpp::vm::Class::FromIl2CppType(inflatedType) : nullptr;
+				std::printf("[hotc233][M2NProbe] param%d raw=%d inflated=%d byref=%d value=%d\n",
+					(int)i,
+					rawType ? (int)rawType->type : -1,
+					inflatedType ? (int)inflatedType->type : -1,
+					rawType && rawType->byref ? 1 : 0,
+					inflatedType && IsValueTypeForInvoke(inflatedType) ? 1 : 0);
+				std::printf("[hotc233][M2NProbe] param%d klass=%s.%s valuetype=%d\n",
+					(int)i,
+					inflatedKlass && inflatedKlass->namespaze ? inflatedKlass->namespaze : "",
+					inflatedKlass && inflatedKlass->name ? inflatedKlass->name : "",
+					inflatedKlass && IS_CLASS_VALUE_TYPE(inflatedKlass) ? 1 : 0);
+				if (inflatedKlass && inflatedKlass->name && std::strcmp(inflatedKlass->name, "Nullable`1") == 0)
+				{
+					void* fieldIter = nullptr;
+					FieldInfo* field = nullptr;
+					while ((field = il2cpp::vm::Class::GetFields(inflatedKlass, &fieldIter)) != nullptr)
+					{
+						std::printf("[hotc233][M2NProbe] param%d field=%s offset=%zu\n",
+							(int)i,
+							il2cpp::vm::Field::GetName(field),
+							il2cpp::vm::Field::GetOffset(field));
+					}
+				}
+			}
+			std::fflush(stdout);
+		}
+		if (method->name
+			&& method->klass
+			&& method->klass->name
+			&& !std::strcmp(method->name, "Compare")
+			&& std::strstr(method->klass->name, "NullableComparer")
+#if HOTC233_UNITY_2021_OR_NEW
+			&& method->has_full_generic_sharing_signature
+#endif
+			)
+		{
+			return Managed2NativeCallByReflectionInvoke;
+		}
+		if (bridge != Managed2NativeCallByReflectionInvoke && ShouldUseInvokerForSharedStructM2N(method, sigName))
+		{
+			bridge = Managed2NativeCallByReflectionInvoke;
+		}
 #if HOTC233_ENABLE_AOT_CODE_PRETOUCH
 		// Fault-in the marshalling bridge thunk page now (transform time, before the timed first
 		// call). For struct/multi-arg signatures the interp->AOT path runs through this generic
@@ -427,11 +1599,68 @@ namespace interpreter
 	}
 
 	#ifdef HOTC233_UNITY_2021_OR_NEW
+
+	static int32_t GetNativeReturnClearSize(const MethodInfo* method)
+	{
+		if (!method || !method->return_type || metadata::IsVoidType(method->return_type))
+		{
+			return 0;
+		}
+		if (method->return_type->type == IL2CPP_TYPE_VAR || method->return_type->type == IL2CPP_TYPE_MVAR)
+		{
+			return 0;
+		}
+		return metadata::GetTypeValueSize(method->return_type);
+	}
+
+	static void ClearNativeReturnStorage(const MethodInfo* method, void* ret, bool hiddenReturnSlot)
+	{
+		if (!ret)
+		{
+			return;
+		}
+
+		int32_t clearSize = GetNativeReturnClearSize(method);
+		if (clearSize <= 0)
+		{
+			return;
+		}
+
+		if (hiddenReturnSlot && clearSize <= (int32_t)sizeof(StackObject))
+		{
+			clearSize = sizeof(StackObject);
+		}
+		std::memset(ret, 0, (size_t)clearSize);
+	}
 	
 	static void InterpreterInvoke(Il2CppMethodPointer methodPointer, const MethodInfo* method, void* __this, void** __args, void* __ret)
 	{
 		InterpMethodInfo* imi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
 		bool isInstanceMethod = metadata::IsInstanceMethod(method);
+		bool traceLinqLambda = method
+			&& method->klass
+			&& method->name
+			&& (std::strstr(method->name, "VerifyJoin")
+				|| std::strstr(method->name, "b__14"));
+		if (traceLinqLambda)
+		{
+			std::printf("[hotc233][InterpreterInvokeJoinProbe] enter %s.%s::%s method=%p methodPtr=%p this=%p args=%p arg0=%p arg1=%p ret=%p retBefore=%llu returnType=%d pcount=%d instance=%d\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				method->name,
+				(void*)method,
+				(void*)methodPointer,
+				__this,
+				__args,
+				__args && method->parameters_count > 0 ? __args[0] : nullptr,
+				__args && method->parameters_count > 1 ? __args[1] : nullptr,
+				__ret,
+				__ret ? (unsigned long long)*(uint64_t*)__ret : 0ULL,
+				method->return_type ? (int)method->return_type->type : -1,
+				(int)method->parameters_count,
+				isInstanceMethod ? 1 : 0);
+			std::fflush(stdout);
+		}
 		StackObject* args = (StackObject*)alloca(sizeof(StackObject) * imi->argStackObjectSize);
 		if (isInstanceMethod)
 		{
@@ -444,12 +1673,49 @@ namespace interpreter
 		
 		MethodArgDesc* argDescs = imi->args + isInstanceMethod;
 		ConvertInvokeArgs(args + isInstanceMethod, method, argDescs, __args);
+		ClearNativeReturnStorage(method, __ret, false);
 		Interpreter::Execute(method, args, __ret);
+		if (traceLinqLambda)
+		{
+			std::printf("[hotc233][InterpreterInvokeJoinProbe] exit %s.%s::%s ret=%p retAfter=%llu retI4=%d arg0StackPtr=%p arg0StackU64=%llu\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				method->name,
+				__ret,
+				__ret ? (unsigned long long)*(uint64_t*)__ret : 0ULL,
+				__ret ? *(int32_t*)__ret : 0,
+				(void*)args[isInstanceMethod ? 1 : 0].ptr,
+				(unsigned long long)args[isInstanceMethod ? 1 : 0].u64);
+			std::fflush(stdout);
+		}
 	}
 
-	static void InterpreterDelegateInvoke(Il2CppMethodPointer, const MethodInfo* method, void* __this, void** __args, void* __ret)
+	static void InterpreterDelegateInvoke(Il2CppMethodPointer methodPointer, const MethodInfo* method, void* __this, void** __args, void* __ret)
 	{
-		Il2CppMulticastDelegate* del = (Il2CppMulticastDelegate*)__this;
+		Il2CppMulticastDelegate* del = (methodPointer != method->methodPointerCallByInterp && methodPointer != method->methodPointer)
+			? (Il2CppMulticastDelegate*)methodPointer
+			: (Il2CppMulticastDelegate*)__this;
+		const MethodInfo* invokeMethod = del && del->delegate.object.klass
+			? il2cpp::vm::Class::GetMethodFromName(del->delegate.object.klass, "Invoke", -1)
+			: method;
+		void* actualRet = __ret;
+		if (!actualRet && invokeMethod && !metadata::IsReturnVoidMethod(invokeMethod))
+		{
+			actualRet = __args[invokeMethod->parameters_count];
+			static int32_t s_invokerHiddenRetTraceCount = 0;
+			if (actualRet && s_invokerHiddenRetTraceCount < 64)
+			{
+				++s_invokerHiddenRetTraceCount;
+				std::printf("[hotc233][InvokerHiddenRetProbe] invoke=%s.%s::%s params=%u ret=%p retU64=%llu\n",
+					invokeMethod->klass ? invokeMethod->klass->namespaze : "<null>",
+					invokeMethod->klass ? invokeMethod->klass->name : "<null>",
+					invokeMethod->name,
+					invokeMethod->parameters_count,
+					actualRet,
+					(unsigned long long)*(uint64_t*)actualRet);
+				std::fflush(stdout);
+			}
+		}
 		Il2CppDelegate** firstSubDel;
 		int32_t subDelCount;
 		if (del->delegates)
@@ -477,7 +1743,15 @@ namespace interpreter
 			{
 				RaiseAOTGenericMethodNotInstantiatedException(curMethod);
 			}
-			switch ((int)(method->parameters_count - curMethod->parameters_count))
+			const bool boxReturnToExpectedSlot = actualRet && ShouldBoxDelegateTargetReturn(invokeMethod, curMethod);
+			void* curRet = actualRet;
+			if (boxReturnToExpectedSlot)
+			{
+				const int32_t retStorageSize = GetDelegateTargetReturnStorageSize(curMethod);
+				curRet = alloca((size_t)retStorageSize);
+				std::memset(curRet, 0, (size_t)retStorageSize);
+			}
+			switch ((int)(invokeMethod->parameters_count - curMethod->parameters_count))
 			{
 			case 0:
 			{
@@ -486,7 +1760,8 @@ namespace interpreter
 					il2cpp::vm::Exception::RaiseNullReferenceException();
 				}
 				curTarget += (IS_CLASS_VALUE_TYPE(curMethod->klass));
-				curMethod->invoker_method(curMethod->methodPointerCallByInterp, curMethod, curTarget, __args, __ret);
+				ClearNativeReturnStorage(curMethod, curRet, true);
+				curMethod->invoker_method(curMethod->methodPointerCallByInterp, curMethod, curTarget, __args, curRet);
 				break;
 			}
 			case -1:
@@ -498,7 +1773,8 @@ namespace interpreter
 				{
 					newArgs[k + 1] = __args[k];
 				}
-				curMethod->invoker_method(curMethod->methodPointerCallByInterp, curMethod, nullptr, newArgs, __ret);
+				ClearNativeReturnStorage(curMethod, curRet, true);
+				curMethod->invoker_method(curMethod->methodPointerCallByInterp, curMethod, nullptr, newArgs, curRet);
 				break;
 			}
 			case 1:
@@ -509,7 +1785,8 @@ namespace interpreter
 				{
 					il2cpp::vm::Exception::RaiseNullReferenceException();
 				}
-				curMethod->invoker_method(curMethod->methodPointerCallByInterp, curMethod, curTarget, __args + 1, __ret);
+				ClearNativeReturnStorage(curMethod, curRet, true);
+				curMethod->invoker_method(curMethod->methodPointerCallByInterp, curMethod, curTarget, __args + 1, curRet);
 				break;
 			}
 			default:
@@ -517,6 +1794,10 @@ namespace interpreter
 				RaiseExecutionEngineException("bad delegate method");
 				break;
 			}
+			}
+			if (boxReturnToExpectedSlot)
+			{
+				BoxDelegateTargetReturnToExpectedSlot(curMethod, curRet, actualRet);
 			}
 		}
 	}
@@ -549,9 +1830,14 @@ namespace interpreter
 		}
 	}
 
-	static void* InterpreterDelegateInvoke(Il2CppMethodPointer, const MethodInfo* method, void* __this, void** __args)
+	static void* InterpreterDelegateInvoke(Il2CppMethodPointer methodPointer, const MethodInfo* method, void* __this, void** __args)
 	{
-		Il2CppMulticastDelegate* del = (Il2CppMulticastDelegate*)__this;
+		Il2CppMulticastDelegate* del = (methodPointer != method->methodPointerCallByInterp && methodPointer != method->methodPointer)
+			? (Il2CppMulticastDelegate*)methodPointer
+			: (Il2CppMulticastDelegate*)__this;
+		const MethodInfo* invokeMethod = del && del->delegate.object.klass
+			? il2cpp::vm::Class::GetMethodFromName(del->delegate.object.klass, "Invoke", -1)
+			: method;
 		Il2CppDelegate** firstSubDel;
 		int32_t subDelCount;
 		if (del->delegates)
@@ -579,7 +1865,7 @@ namespace interpreter
 			{
 				RaiseAOTGenericMethodNotInstantiatedException(curMethod);
 			}
-			switch ((int)(method->parameters_count - curMethod->parameters_count))
+			switch ((int)(invokeMethod->parameters_count - curMethod->parameters_count))
 			{
 			case 0:
 			{

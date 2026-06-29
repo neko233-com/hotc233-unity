@@ -19,6 +19,8 @@ namespace Hotc233.Editor.ABI
 
         public List<ParamInfo> ParamInfos { get; set; }
 
+        public bool Native2ManagedHiddenReturn { get; set; }
+
         public void Init()
         {
             for(int i = 0; i < ParamInfos.Count; i++)
@@ -26,6 +28,26 @@ namespace Hotc233.Editor.ABI
                 ParamInfos[i].Index = i;
             }
             Sig = CreateCallSigName();
+        }
+
+        public void InitNative2Managed()
+        {
+            for (int i = 0; i < ParamInfos.Count; i++)
+            {
+                ParamInfos[i].Index = i;
+            }
+            Sig = CreateNative2ManagedSigName();
+        }
+
+        public MethodDesc Clone()
+        {
+            return new MethodDesc()
+            {
+                MethodDef = MethodDef,
+                ReturnInfo = ReturnInfo,
+                ParamInfos = ParamInfos.Select(p => new ParamInfo() { Index = p.Index, Type = p.Type }).ToList(),
+                Native2ManagedHiddenReturn = Native2ManagedHiddenReturn,
+            };
         }
 
         public void TransfromSigTypes(Func<TypeInfo, bool, TypeInfo> transformer)
@@ -40,6 +62,10 @@ namespace Hotc233.Editor.ABI
         public string CreateCallSigName()
         {
             var n = new StringBuilder();
+            if (Native2ManagedHiddenReturn)
+            {
+                n.Append('h');
+            }
             n.Append(ReturnInfo.Type.CreateSigName());
             foreach(var param in ParamInfos)
             {
@@ -57,6 +83,12 @@ namespace Hotc233.Editor.ABI
                 n.Append(param.Type.CreateSigName());
             }
             return n.ToString();
+        }
+
+        public string CreateNative2ManagedSigName()
+        {
+            string sigName = CreateInvokeSigName();
+            return Native2ManagedHiddenReturn ? $"h{sigName}" : sigName;
         }
 
         public override bool Equals(object obj)

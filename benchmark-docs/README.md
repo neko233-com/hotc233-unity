@@ -50,7 +50,7 @@ P0 全绿后才开始 P1 架构性能（`local-benchmark` + `HOTC233_ENFORCE_PER
 ```powershell
 # 全自动架构自审（商业 P0 + 14 条 base + Dominance 队列）
 go run . arch-self-review -project .. -loader-profile RuntimeFast `
-  -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo
+  -hybridclr-project ..\..\Benchmarks\hybridclr-benchmark-demo
 
 # P0 商业门禁（默认）
 go run . validate-reports -project ..
@@ -67,8 +67,8 @@ Remove-Item Env:\HOTC233_ENFORCE_PERFORMANCE -ErrorAction SilentlyContinue
 # 最小正确性闸
 $env:HOTC233_LOCAL_OFFICIAL_COUNT='1'
 go run ./hotc233ctl local-benchmark -project .. `
-  -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo `
-  -loader-profile RuntimeFast
+  -hybridclr-project ..\..\Benchmarks\hybridclr-benchmark-demo `
+  -loader-profile RuntimeFast -force-rebuild
 Remove-Item Env:\HOTC233_LOCAL_OFFICIAL_COUNT -ErrorAction SilentlyContinue
 
 # M2N 弱项快速迭代（只跑 3 条 + 跳过 HybridCLR 重建 + 跳过 AB 全验证）
@@ -76,20 +76,20 @@ $env:HOTC233_LOCAL_OFFICIAL_COUNT='1'
 $env:HOTC233_LOCAL_BENCHMARK_FILTER='quaternion-op,call-aot-static,set-transform-position'
 $env:HOTC233_LOCAL_PERF_FAST='1'
 go run ./hotc233ctl local-benchmark -project .. `
-  -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo `
+  -hybridclr-project ..\..\Benchmarks\hybridclr-benchmark-demo `
   -loader-profile RuntimeFast -skip-hybridclr -force-rebuild
 Remove-Item Env:\HOTC233_LOCAL_OFFICIAL_COUNT,Env:\HOTC233_LOCAL_BENCHMARK_FILTER,Env:\HOTC233_LOCAL_PERF_FAST -ErrorAction SilentlyContinue
 
 # 正式同机对标（默认含 10 条 business-realworld-* + 自动生成 性能报告.md）
 go run ./hotc233ctl local-benchmark -project .. `
-  -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo `
-  -loader-profile RuntimeFast
+  -hybridclr-project ..\..\Benchmarks\hybridclr-benchmark-demo `
+  -loader-profile RuntimeFast -force-rebuild
 
 # 仅官方 14 条 base（不含业务场景）
 $env:HOTC233_INCLUDE_BUSINESS_BENCHMARK='0'
 go run ./hotc233ctl local-benchmark -project .. `
-  -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo `
-  -loader-profile RuntimeFast
+  -hybridclr-project ..\..\Benchmarks\hybridclr-benchmark-demo `
+  -loader-profile RuntimeFast -force-rebuild
 Remove-Item Env:\HOTC233_INCLUDE_BUSINESS_BENCHMARK -ErrorAction SilentlyContinue
 
 # xLua 未安装时先执行
@@ -104,8 +104,8 @@ WebGL/小游戏只在需要平台结论时顺序跑：
 
 ```powershell
 go run ./hotc233ctl benchmark -project .. `
-  -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo `
-  -loader-profile RuntimeFast -skip-unity
+  -hybridclr-project ..\..\Benchmarks\hybridclr-benchmark-demo `
+  -loader-profile RuntimeFast -force-rebuild
 ```
 
 ## 判定口径

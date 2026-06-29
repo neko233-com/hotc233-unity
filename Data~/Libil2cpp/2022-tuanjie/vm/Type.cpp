@@ -1319,11 +1319,7 @@ namespace vm
         const MethodInfo* ctor = Class::GetMethodFromName(delegate->object.klass, ".ctor", 2);
         if (ctor->methodPointer == nullptr || ctor->isInterpterImpl)
         {
-            delegate->target = target;
-            delegate->method = method;
-            delegate->invoke_impl = hotc233::InitAndGetInterpreterDirectlyCallMethodPointer(method);
-            delegate->invoke_impl_this = target;
-            //il2cpp::vm::Exception::Raise(il2cpp::vm::Exception::GetNotSupportedException("interperter delegate can't be constructed by InvokeDelegateConstructor"));
+            hotc233::ConstructDelegate(delegate, target, method);
             return;
         }
         void* ctorArgs[2] = { target, (void*)&method };

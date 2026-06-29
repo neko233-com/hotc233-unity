@@ -2,6 +2,7 @@
 
 #include "vm/Object.h"
 #include "vm/Class.h"
+#include "vm/GlobalMetadata.h"
 #include "metadata/GenericMetadata.h"
 
 #include "../metadata/MetadataModule.h"
@@ -15,6 +16,12 @@ namespace hotc233
 {
 namespace interpreter
 {
+	struct FullySharedGenericMethodInfoForBridge : MethodInfo
+	{
+		Il2CppMethodPointer rawVirtualMethodPointer;
+		Il2CppMethodPointer rawDirectMethodPointer;
+		InvokerMethod rawInvokerMethod;
+	};
 
 	void ConvertInvokeArgs(StackObject* resultArgs, const MethodInfo* method, MethodArgDesc* argDescs, void** args)
 	{
@@ -273,6 +280,58 @@ namespace interpreter
 		return false;
 	}
 
+	static const Il2CppType* InflateMethodTypeForSignature(const MethodInfo* method, const Il2CppType* type)
+	{
+		if (!method || !type || !method->is_inflated || !method->genericMethod)
+		{
+			return type;
+		}
+		return il2cpp::metadata::GenericMetadata::InflateIfNeeded(type, &method->genericMethod->context, true);
+	}
+
+	static bool IsMethodSignatureValueType(const Il2CppType* type)
+	{
+		if (!type)
+		{
+			return false;
+		}
+		if (hotc233::metadata::IsValueType(type))
+		{
+			return true;
+		}
+		if (type->type == IL2CPP_TYPE_GENERICINST)
+		{
+			Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(type);
+			return klass && IS_CLASS_VALUE_TYPE(klass);
+		}
+		return false;
+	}
+
+	static bool IsFullGenericSharedValueTypeParameter(const MethodInfo* method, const Il2CppType* rawType, const Il2CppType* inflatedType)
+	{
+		if (!method || !method->has_full_generic_sharing_signature || !rawType || rawType->byref)
+		{
+			return false;
+		}
+		if (rawType->type == IL2CPP_TYPE_VAR || rawType->type == IL2CPP_TYPE_MVAR)
+		{
+			return IsMethodSignatureValueType(inflatedType);
+		}
+		return false;
+	}
+
+	static const Il2CppType* GetRawMethodParameterTypeForBridge(const MethodInfo* method, uint8_t index)
+	{
+		if (method
+			&& method->genericMethod
+			&& method->genericMethod->methodDefinition
+			&& index < method->genericMethod->methodDefinition->parameters_count)
+		{
+			return GET_METHOD_PARAMETER_TYPE(method->genericMethod->methodDefinition->parameters[index]);
+		}
+		return method && index < method->parameters_count ? GET_METHOD_PARAMETER_TYPE(method->parameters[index]) : nullptr;
+	}
+
 	bool ComputeSignature(const MethodInfo* method, bool call, char* sigBuf, size_t bufferSize)
 	{
 		size_t pos = 0;
@@ -282,7 +341,7 @@ namespace interpreter
 			return true;
 		}
 
-		AppendSignature(method->return_type, sigBuf, bufferSize, pos);
+		AppendSignature(InflateMethodTypeForSignature(method, method->return_type), sigBuf, bufferSize, pos);
 
 		if (call && metadata::IsInstanceMethod(method))
 		{
@@ -291,10 +350,103 @@ namespace interpreter
 
 		for (uint8_t i = 0; i < method->parameters_count; i++)
 		{
-			AppendSignature(GET_METHOD_PARAMETER_TYPE(method->parameters[i]), sigBuf, bufferSize, pos);
+			const Il2CppType* rawParamType = GetRawMethodParameterTypeForBridge(method, i);
+			const Il2CppType* paramType = InflateMethodTypeForSignature(method, rawParamType);
+			if (IsFullGenericSharedValueTypeParameter(method, rawParamType, paramType))
+			{
+				AppendSignatureObjOrRefOrPointer(sigBuf, bufferSize, pos);
+			}
+			else
+			{
+				AppendSignature(paramType, sigBuf, bufferSize, pos);
+			}
 		}
 		sigBuf[pos] = 0;
 		return true;
+	}
+
+	static bool IsNative2ManagedHiddenReturnSignature(const MethodInfo* method)
+	{
+		if (!method || !method->return_type || method->return_type->byref)
+		{
+			return false;
+		}
+		const Il2CppType* rawReturnType = method->return_type;
+		if (rawReturnType->type == IL2CPP_TYPE_VOID)
+		{
+			return false;
+		}
+		if (rawReturnType->type == IL2CPP_TYPE_VAR || rawReturnType->type == IL2CPP_TYPE_MVAR)
+		{
+			const Il2CppType* inflatedReturnType = InflateMethodTypeForSignature(method, rawReturnType);
+			return IsMethodSignatureValueType(inflatedReturnType);
+		}
+		return false;
+	}
+
+	static bool IsNative2ManagedHiddenReturnSignature(const Il2CppMethodDefinition* method)
+	{
+		if (!method)
+		{
+			return false;
+		}
+		const Il2CppType* rawReturnType = hotc233::metadata::MetadataModule::GetIl2CppTypeFromEncodeIndex(method->returnType);
+		if (!rawReturnType || rawReturnType->byref || rawReturnType->type == IL2CPP_TYPE_VOID)
+		{
+			return false;
+		}
+		return rawReturnType->type == IL2CPP_TYPE_VAR || rawReturnType->type == IL2CPP_TYPE_MVAR;
+	}
+
+	bool ComputeNative2ManagedSignature(const MethodInfo* method, bool call, char* sigBuf, size_t bufferSize)
+	{
+		size_t pos = 0;
+		if (IsNative2ManagedHiddenReturnSignature(method))
+		{
+			AppendString(sigBuf, bufferSize, pos, "h");
+		}
+		return ComputeSignature(method, call, sigBuf + pos, bufferSize - pos);
+	}
+
+	bool ComputeNative2ManagedSignature(const Il2CppMethodDefinition* method, bool call, char* sigBuf, size_t bufferSize)
+	{
+		size_t pos = 0;
+		if (IsNative2ManagedHiddenReturnSignature(method))
+		{
+			AppendString(sigBuf, bufferSize, pos, "h");
+		}
+		return ComputeSignature(method, call, sigBuf + pos, bufferSize - pos);
+	}
+
+	uintptr_t M2NFromValueOrAddressFullGenericAware(const MethodInfo* method, int32_t bridgeArgIndex, StackObject* value)
+	{
+		if (method && method->has_full_generic_sharing_signature && bridgeArgIndex >= 0 && bridgeArgIndex < method->parameters_count)
+		{
+			const Il2CppType* rawType = GetRawMethodParameterTypeForBridge(method, (uint8_t)bridgeArgIndex);
+			const Il2CppType* inflatedType = InflateMethodTypeForSignature(method, rawType);
+			if (method
+				&& rawType
+				&& (rawType->type == IL2CPP_TYPE_VAR || rawType->type == IL2CPP_TYPE_MVAR)
+				&& !rawType->byref
+				&& IsMethodSignatureValueType(inflatedType))
+			{
+				return (uintptr_t)value;
+			}
+		}
+		return M2NFromValueOrAddress<uintptr_t>(value);
+	}
+
+	Il2CppMethodPointer M2NGetHiddenReturnMethodPointer(const MethodInfo* method)
+	{
+		if (method && method->has_full_generic_sharing_signature)
+		{
+			const FullySharedGenericMethodInfoForBridge* sharedMethod = reinterpret_cast<const FullySharedGenericMethodInfoForBridge*>(method);
+			if (sharedMethod->rawDirectMethodPointer)
+			{
+				return sharedMethod->rawDirectMethodPointer;
+			}
+		}
+		return method ? method->methodPointerCallByInterp : nullptr;
 	}
 
 }

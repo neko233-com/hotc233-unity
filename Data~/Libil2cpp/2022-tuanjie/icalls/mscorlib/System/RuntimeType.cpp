@@ -742,8 +742,7 @@ namespace System
 
     Il2CppObject* RuntimeType::GetCorrespondingInflatedConstructor(Il2CppReflectionRuntimeType* thisPtr, Il2CppObject* generic)
     {
-        NOT_SUPPORTED_IL2CPP(MonoType::GetCorrespondingInflatedConstructor, "This icall is only used by System.Reflection.Emit.TypeBuilder.");
-        return 0;
+        return generic;
     }
 
     Il2CppReflectionMethod* RuntimeType::get_DeclaringMethod(Il2CppReflectionRuntimeType* thisPtr)
@@ -754,8 +753,7 @@ namespace System
 
     Il2CppObject* RuntimeType::GetCorrespondingInflatedMethod(Il2CppReflectionRuntimeType* thisPtr, Il2CppObject* generic)
     {
-        NOT_SUPPORTED_IL2CPP(MonoType::GetCorrespondingInflatedMethod, "This icall is only used by System.Reflection.Emit.TypeBuilder.");
-        return 0;
+        return generic;
     }
 
     Il2CppString* RuntimeType::get_Name(Il2CppReflectionRuntimeType* _type)

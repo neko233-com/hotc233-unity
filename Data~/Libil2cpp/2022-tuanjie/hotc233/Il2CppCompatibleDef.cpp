@@ -1,6 +1,7 @@
 #include "Il2CppCompatibleDef.h"
 
 #include "vm/Runtime.h"
+#include "vm/Class.h"
 
 #include "metadata/MetadataModule.h"
 #include "interpreter/InterpreterModule.h"
@@ -51,5 +52,16 @@ namespace hotc233
 			method->isInterpterImpl = true;
 		}
 		return method->methodPointerCallByInterp;
+	}
+
+	Il2CppMethodPointer InitAndGetInterpreterDelegateInvokeMethodPointer(Il2CppDelegate* delegate)
+	{
+		const MethodInfo* invokeMethod = il2cpp::vm::Class::GetMethodFromName(delegate->object.klass, "Invoke", -1);
+		if (!invokeMethod)
+		{
+			RaiseExecutionEngineException("delegate Invoke method missing");
+			return (Il2CppMethodPointer)interpreter::InterpreterModule::NotSupportNative2Managed;
+		}
+		return interpreter::InterpreterModule::GetMethodPointer(invokeMethod);
 	}
 }

@@ -1402,16 +1402,24 @@ Il2CppMetadataPropertyInfo il2cpp::vm::GlobalMetadata::GetPropertyInfo(const Il2
     IL2CPP_ASSERT(typeDefintion->propertyStart != kPropertyIndexInvalid);
 
     const Il2CppPropertyDefinition* propertyDefintion = GetPropertyDefinitionFromIndex(klass->image, typeDefintion->propertyStart + index);
+    const MethodInfo* getter = NULL;
+    const MethodInfo* setter = NULL;
+#if !IL2CPP_ENABLE_LAZY_INIT
+    if (propertyDefintion->get != kMethodIndexInvalid && propertyDefintion->get >= 0 && propertyDefintion->get < typeDefintion->method_count)
+        getter = klass->methods[propertyDefintion->get];
+    if (propertyDefintion->set != kMethodIndexInvalid && propertyDefintion->set >= 0 && propertyDefintion->set < typeDefintion->method_count)
+        setter = klass->methods[propertyDefintion->set];
+#else
+    if (propertyDefintion->get != kMethodIndexInvalid && propertyDefintion->get >= 0 && propertyDefintion->get < typeDefintion->method_count)
+        getter = Class::GetOrSetupOneMethod(const_cast<Il2CppClass*>(klass), propertyDefintion->get);
+    if (propertyDefintion->set != kMethodIndexInvalid && propertyDefintion->set >= 0 && propertyDefintion->set < typeDefintion->method_count)
+        setter = Class::GetOrSetupOneMethod(const_cast<Il2CppClass*>(klass), propertyDefintion->set);
+#endif
 
     return {
             GetStringFromIndex(propertyDefintion->nameIndex),
-#if !IL2CPP_ENABLE_LAZY_INIT
-            propertyDefintion->get != kMethodIndexInvalid ? klass->methods[propertyDefintion->get] : NULL,
-            propertyDefintion->set != kMethodIndexInvalid ? klass->methods[propertyDefintion->set] : NULL,
-#else
-            propertyDefintion->get != kMethodIndexInvalid ? Class::GetOrSetupOneMethod(const_cast<Il2CppClass*>(klass),propertyDefintion->get) : NULL,
-            propertyDefintion->set != kMethodIndexInvalid ? Class::GetOrSetupOneMethod(const_cast<Il2CppClass*>(klass),propertyDefintion->set) : NULL,
-#endif
+            getter,
+            setter,
             propertyDefintion->attrs,
             propertyDefintion->token,
     };

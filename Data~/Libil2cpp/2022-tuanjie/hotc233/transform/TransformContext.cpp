@@ -45,6 +45,67 @@ namespace transform
 #endif
 	}
 
+	static bool IsFullGenericSharedValueTypeArg(const MethodInfo* method, const Il2CppType* type)
+	{
+		if (!method
+#if HOTC233_UNITY_2021_OR_NEW
+			|| !method->has_full_generic_sharing_signature
+#endif
+			|| !type
+			|| type->byref)
+		{
+			return false;
+		}
+		const Il2CppType* inflatedType = type;
+		if ((type->type == IL2CPP_TYPE_VAR || type->type == IL2CPP_TYPE_MVAR) && method->genericMethod)
+		{
+			inflatedType = il2cpp::metadata::GenericMetadata::InflateIfNeeded(type, &method->genericMethod->context, true);
+			if (!inflatedType)
+			{
+				inflatedType = type;
+			}
+		}
+		type = inflatedType;
+		if (IsValueType(type))
+		{
+			return true;
+		}
+		if (type->type == IL2CPP_TYPE_GENERICINST)
+		{
+			Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(type);
+			return klass && IS_CLASS_VALUE_TYPE(klass);
+		}
+		return false;
+	}
+
+	static uint32_t GetMethodArgStackObjectCount(const MethodInfo* method, const Il2CppType* type)
+	{
+		return IsFullGenericSharedValueTypeArg(method, type)
+			? 1u
+			: (uint32_t)GetTypeValueStackObjectCount(type);
+	}
+
+	static const Il2CppType* InflateMethodTypeForTransform(const MethodInfo* method, const Il2CppType* type)
+	{
+		if (!method || !type)
+		{
+			return type;
+		}
+		const Il2CppGenericContext* context = nullptr;
+		if (method->genericMethod)
+		{
+			context = &method->genericMethod->context;
+		}
+		else if (method->klass && method->klass->generic_class)
+		{
+			context = &method->klass->generic_class->context;
+		}
+		const Il2CppType* inflatedType = context
+			? il2cpp::metadata::GenericMetadata::InflateIfNeeded(type, context, true)
+			: type;
+		return inflatedType ? inflatedType : type;
+	}
+
 	template<typename T>
 	void AllocResolvedData(il2cpp::utils::dynamic_array<uint64_t>& resolvedDatas, int32_t size, int32_t& index, T*& buf)
 	{
@@ -7530,6 +7591,30 @@ else \
 		return false;
 	}
 
+	static bool HasFullGenericSharedValueTypeBoundary(const MethodInfo* method)
+	{
+		if (!method
+#if HOTC233_UNITY_2021_OR_NEW
+			|| !method->has_full_generic_sharing_signature
+#endif
+			)
+		{
+			return false;
+		}
+		if (method->return_type && !IsVoidType(method->return_type) && IsFullGenericSharedValueTypeArg(method, method->return_type))
+		{
+			return true;
+		}
+		for (uint8_t i = 0; i < method->parameters_count; i++)
+		{
+			if (IsFullGenericSharedValueTypeArg(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i])))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	static bool ShouldBeInlined(const MethodInfo* method, int32_t depth)
 	{
 		if (depth >= RuntimeConfig::GetMaxMethodInlineDepth())
@@ -7541,6 +7626,10 @@ else \
 			return false;
 		}
 		if (IsUnityKernelInlineBarrier(method))
+		{
+			return false;
+		}
+		if (HasFullGenericSharedValueTypeBoundary(method))
 		{
 			return false;
 		}
@@ -7645,7 +7734,7 @@ else \
 				self.type = IS_CLASS_VALUE_TYPE(self.klass) ? &self.klass->this_arg : &self.klass->byval_arg;
 				self.argOffset = idx;
 				self.argLocOffset = localVarOffset + totalArgSize;
-				totalArgSize += GetTypeValueStackObjectCount(self.type);
+				totalArgSize += GetMethodArgStackObjectCount(methodInfo, self.type);
 				idx = 1;
 			}
 
@@ -7657,7 +7746,7 @@ else \
 				arg.argOffset = idx + i;
 				arg.argLocOffset = localVarOffset + totalArgSize;
 				il2cpp::vm::Class::SetupFields(arg.klass);
-				totalArgSize += GetTypeValueStackObjectCount(arg.type);
+				totalArgSize += GetMethodArgStackObjectCount(methodInfo, arg.type);
 			}
 		}
 
@@ -8143,7 +8232,7 @@ else \
 							typeLoad->ret = ldtoken->runtimeHandle;
 							typeLoad->typeObject = GetOrAddResolveDataIndex(typeObject);
 							PopStackN(resolvedTotalArgNum);
-							PushStackByType(shareMethod->return_type);
+							PushStackByType(InflateMethodTypeForTransform(shareMethod, shareMethod->return_type));
 							IL2CPP_ASSERT(GetEvalStackTopOffset() == typeLoad->ret);
 							continue;
 						}
@@ -8151,7 +8240,7 @@ else \
 				}
 				uint32_t methodDataIndex = GetOrAddResolveDataIndex(shareMethod);
 
-				if (hotc233::metadata::IsInterpreterImplement(shareMethod))
+				if (hotc233::metadata::IsInterpreterImplement(shareMethod) && hotc233::metadata::IsInterpreterMethod(shareMethod))
 				{
 					uint16_t argBaseOffset = (uint16_t)GetEvalStackOffset(callArgEvalStackIdxBase);
 
@@ -8188,7 +8277,8 @@ else \
 						}
 						else
 						{
-							interpreter::LocationDataType locDataType = GetLocationDataTypeByType(shareMethod->return_type);
+							const Il2CppType* inflatedReturnType = InflateMethodTypeForTransform(shareMethod, shareMethod->return_type);
+							interpreter::LocationDataType locDataType = GetLocationDataTypeByType(inflatedReturnType);
 							if (interpreter::IsNeedExpandLocationType(locDataType))
 							{
 								CreateAddIR(ir, CallPInvoke_ret_expand);
@@ -8256,7 +8346,7 @@ else \
 					PopStackN(resolvedTotalArgNum);
 					if (!IsReturnVoidMethod(shareMethod))
 					{
-						PushStackByType(shareMethod->return_type);
+						PushStackByType(InflateMethodTypeForTransform(shareMethod, shareMethod->return_type));
 					}
 					continue;
 				}
@@ -8294,8 +8384,9 @@ else \
 
 				if (!IsReturnVoidMethod(shareMethod))
 				{
-					PushStackByType(shareMethod->return_type);
-					interpreter::LocationDataType locDataType = GetLocationDataTypeByType(shareMethod->return_type);
+					const Il2CppType* inflatedReturnType = InflateMethodTypeForTransform(shareMethod, shareMethod->return_type);
+					PushStackByType(inflatedReturnType);
+					interpreter::LocationDataType locDataType = GetLocationDataTypeByType(inflatedReturnType);
 					if (interpreter::IsNeedExpandLocationType(locDataType))
 					{
 						CreateAddIR(ir, CallNativeInstance_ret_expand);
@@ -8346,7 +8437,7 @@ else \
 				uint32_t methodDataIndex = GetOrAddResolveDataIndex(shareMethod);
 
 				bool isMultiDelegate = IsChildTypeOfMulticastDelegate(shareMethod->klass);
-				if (!isMultiDelegate && IsInterpreterMethod(shareMethod) && !IsInterface(shareMethod->klass->flags))
+				if (!isMultiDelegate && IsInterpreterImplement(shareMethod) && IsInterpreterMethod(shareMethod) && !IsInterface(shareMethod->klass->flags))
 				{
 					PopStackN(resolvedTotalArgNum);
 
@@ -8363,7 +8454,7 @@ else \
 						ir->method = methodDataIndex;
 						ir->argBase = argBaseOffset;
 						ir->ret = argBaseOffset;
-						PushStackByType(shareMethod->return_type);
+						PushStackByType(InflateMethodTypeForTransform(shareMethod, shareMethod->return_type));
 					}
 					continue;
 				}
@@ -8387,7 +8478,7 @@ else \
 
 				PopStackN(resolvedTotalArgNum);
 
-				const Il2CppType* returnType = shareMethod->return_type;
+				const Il2CppType* returnType = InflateMethodTypeForTransform(shareMethod, shareMethod->return_type);
 				int32_t retIdx;
 
 				if (returnType->type != IL2CPP_TYPE_VOID)
@@ -8606,6 +8697,7 @@ else \
 			case OpcodeValue::RET:
 			{
 				bool isVoidReturnType = methodInfo->return_type->type == IL2CPP_TYPE_VOID;
+				const Il2CppType* inflatedReturnType = isVoidReturnType ? methodInfo->return_type : InflateMethodTypeForTransform(methodInfo, methodInfo->return_type);
 				if (inMethodInlining)
 				{
 					if (!isVoidReturnType)
@@ -8613,7 +8705,7 @@ else \
 						uint16_t retVarIdx = GetEvalStackTopOffset();
 						if (retVarIdx != localVarOffset)
 						{
-							IRCommon* ir = CreateAssignVarVar(pool, localVarOffset, retVarIdx, GetTypeValueSize(methodInfo->return_type));
+							IRCommon* ir = CreateAssignVarVar(pool, localVarOffset, retVarIdx, GetTypeValueSize(inflatedReturnType));
 							AddInst(ir);
 						}
 					}
@@ -8626,7 +8718,7 @@ else \
 				{
 					// ms.ret = nullptr;
 					IL2CPP_ASSERT(evalStackTop == 1);
-					int32_t size = GetTypeValueSize(methodInfo->return_type);
+					int32_t size = GetTypeValueSize(inflatedReturnType);
 					switch (size)
 					{
 					case 1:
@@ -9488,7 +9580,7 @@ else \
 
 				uint32_t methodDataIndex = GetOrAddResolveDataIndex(shareMethod);
 
-				if (IsInterpreterImplement(shareMethod))
+				if (IsInterpreterImplement(shareMethod) && IsInterpreterMethod(shareMethod))
 				{
 					if (IS_CLASS_VALUE_TYPE(klass))
 					{
@@ -11800,8 +11892,9 @@ ir->ele = ele.locOffset;
 				MethodArgDesc& argDesc = argDescs[i];
 				argDesc.type = typeDesc.type;
 				IL2CPP_ASSERT(typeDesc.stackObjectSize < 0x10000);
-				argDesc.stackObjectSize = (uint16_t)typeDesc.stackObjectSize;
-				argDesc.passbyValWhenInvoke = argType->byref || !IsValueType(argType);
+				bool fullGenericSharedValueArg = IsFullGenericSharedValueTypeArg(methodInfo, argType);
+				argDesc.stackObjectSize = fullGenericSharedValueArg ? 1 : (uint16_t)typeDesc.stackObjectSize;
+				argDesc.passbyValWhenInvoke = fullGenericSharedValueArg || argType->byref || !IsValueType(argType);
 			}
 		}
 		else
@@ -11812,7 +11905,7 @@ ir->ele = ele.locOffset;
 		result.args = argDescs;
 		result.argCount = actualParamCount;
 		result.argStackObjectSize = totalArgSize;
-		result.retStackObjectSize = IsVoidType(methodInfo->return_type) ? 0 : GetTypeArgDesc(methodInfo->return_type).stackObjectSize;
+		result.retStackObjectSize = IsVoidType(methodInfo->return_type) ? 0 : GetTypeArgDesc(InflateMethodTypeForTransform(methodInfo, methodInfo->return_type)).stackObjectSize;
 		result.codes = tranCodes;
 		result.codeLength = totalIRSize;
 		result.evalStackBaseOffset = evalStackBaseOffset;

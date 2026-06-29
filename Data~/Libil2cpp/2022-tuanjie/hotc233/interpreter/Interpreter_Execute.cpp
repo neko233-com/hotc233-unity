@@ -4,22 +4,30 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
+#include <cstdio>
 
 #include "vm/Object.h"
 #include "vm/Class.h"
 #include "vm/ClassInlines.h"
 #include "vm/Array.h"
+#include "vm/Assembly.h"
 #include "vm/Image.h"
 #include "vm/Exception.h"
+#include "vm/Field.h"
+#include "vm/Property.h"
+#include "vm/Parameter.h"
 #include "vm/Thread.h"
 #include "vm/Runtime.h"
 #include "vm/Reflection.h"
+#include "vm/String.h"
 #include "metadata/GenericMetadata.h"
+#include "utils/StringUtils.h"
 #if HOTC233_UNITY_2020_OR_NEW
 #include "vm-utils/icalls/mscorlib/System.Threading/Interlocked.h"
 #else
 #include "icalls/mscorlib/System.Threading/Interlocked.h"
 #endif
+#include "icalls/mscorlib/System.Reflection/RuntimeMethodInfo.h"
 
 #include "../metadata/MetadataModule.h"
 
@@ -39,6 +47,906 @@ namespace hotc233
 {
 namespace interpreter
 {
+
+	static const Il2CppImage* GetUnityEngineCoreModuleImage()
+	{
+		const Il2CppAssembly* unityCore = il2cpp::vm::Assembly::Load("UnityEngine.CoreModule");
+		return unityCore != nullptr ? il2cpp::vm::Assembly::GetImage(unityCore) : nullptr;
+	}
+
+	static Il2CppClass* ResolveUnityEngineClass(const char* name)
+	{
+		const Il2CppImage* unityCoreImage = GetUnityEngineCoreModuleImage();
+		return unityCoreImage != nullptr
+			? il2cpp::vm::Class::FromName(unityCoreImage, "UnityEngine", name)
+			: nullptr;
+	}
+
+	static bool TryExecuteValueTupleCtorByInflatedFields(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase)
+	{
+		if (!method
+			|| !method->name
+			|| std::strcmp(method->name, ".ctor") != 0
+			|| !method->klass
+			|| !method->klass->namespaze
+			|| std::strcmp(method->klass->namespaze, "System") != 0
+			|| !method->klass->name
+			|| std::strncmp(method->klass->name, "ValueTuple", 10) != 0
+			|| !argIdxs
+			|| !localVarBase)
+		{
+			return false;
+		}
+		StackObject* target = (StackObject*)localVarBase[argIdxs[0]].ptr;
+		if (!target)
+		{
+			return false;
+		}
+		const Il2CppType* containerType = &method->klass->byval_arg;
+		for (uint8_t i = 0; i < method->parameters_count; i++)
+		{
+			if (i >= method->klass->field_count)
+			{
+				return false;
+			}
+			FieldInfo* field = &method->klass->fields[i];
+			int32_t fieldOffset = hotc233::metadata::GetFieldOffset(field);
+			if (fieldOffset < 0)
+			{
+				return false;
+			}
+			void* fieldDst = (uint8_t*)target + fieldOffset;
+			StackObject* arg = localVarBase + argIdxs[i + 1];
+			const Il2CppType* rawParamType = GET_METHOD_PARAMETER_TYPE(method->parameters[i]);
+			const Il2CppType* paramType = hotc233::metadata::TryInflateIfNeed(containerType, rawParamType);
+			Il2CppClass* paramKlass = paramType ? il2cpp::vm::Class::FromIl2CppType(paramType) : nullptr;
+			if (paramType && !paramType->byref && paramKlass && IS_CLASS_VALUE_TYPE(paramKlass))
+			{
+				uint32_t valueSize = il2cpp::vm::Class::GetValueSize(paramKlass, nullptr);
+				std::memcpy(fieldDst, arg, valueSize);
+			}
+			else
+			{
+				*(void**)fieldDst = arg->ptr;
+			}
+		}
+		return true;
+	}
+
+	static MethodInfo* ResolveActualReferenceInstanceMethod(MethodInfo* declaredMethod, StackObject* thisSlot)
+	{
+		if (!declaredMethod
+			|| !thisSlot
+			|| !thisSlot->obj
+			|| !declaredMethod->klass
+			|| IS_CLASS_VALUE_TYPE(declaredMethod->klass)
+			|| !declaredMethod->name)
+		{
+			return declaredMethod;
+		}
+		Il2CppClass* actualKlass = thisSlot->obj->klass;
+		if (!actualKlass || actualKlass == declaredMethod->klass)
+		{
+			return declaredMethod;
+		}
+		MethodInfo* actualMethod = (MethodInfo*)il2cpp::vm::Class::GetMethodFromName(actualKlass, declaredMethod->name, declaredMethod->parameters_count);
+		return actualMethod ? actualMethod : declaredMethod;
+	}
+
+	static Il2CppArray* NormalizeReflectionInvokeParameters(const MethodInfo* targetMethod, Il2CppArray* parameters, bool* usedCopy)
+	{
+		if (usedCopy)
+		{
+			*usedCopy = false;
+		}
+		if (!targetMethod || !parameters)
+		{
+			return parameters;
+		}
+		uint32_t parameterCount = targetMethod->parameters_count;
+		uint32_t arrayLength = (uint32_t)il2cpp::vm::Array::GetLength(parameters);
+		uint32_t count = std::min(parameterCount, arrayLength);
+		int32_t firstMissing = -1;
+		for (uint32_t i = 0; i < count; ++i)
+		{
+			Il2CppObject* value = il2cpp_array_get(parameters, Il2CppObject*, i);
+			if (value && value->klass == il2cpp_defaults.missing_class)
+			{
+				firstMissing = (int32_t)i;
+				break;
+			}
+		}
+		if (firstMissing < 0)
+		{
+			return parameters;
+		}
+
+		Il2CppArray* normalized = il2cpp::vm::Array::NewSpecific(parameters->klass, arrayLength);
+		for (uint32_t i = 0; i < arrayLength; ++i)
+		{
+			il2cpp_array_setref(normalized, i, il2cpp_array_get(parameters, Il2CppObject*, i));
+		}
+		for (uint32_t i = (uint32_t)firstMissing; i < count; ++i)
+		{
+			Il2CppObject* value = il2cpp_array_get(normalized, Il2CppObject*, i);
+			if (!value || value->klass != il2cpp_defaults.missing_class)
+			{
+				continue;
+			}
+			if (!(targetMethod->parameters[i]->attrs & PARAM_ATTRIBUTE_HAS_DEFAULT))
+			{
+				continue;
+			}
+			bool isExplicitySetNullDefaultValue = false;
+			Il2CppObject* defaultValue = il2cpp::vm::Parameter::GetDefaultParameterValueObject(targetMethod, (int32_t)i, &isExplicitySetNullDefaultValue);
+			if (defaultValue || isExplicitySetNullDefaultValue)
+			{
+				il2cpp_array_setref(normalized, i, defaultValue);
+			}
+		}
+		if (usedCopy)
+		{
+			*usedCopy = true;
+		}
+		return normalized;
+	}
+
+	static void CopyReflectionInvokeParametersBack(Il2CppArray* dst, Il2CppArray* src)
+	{
+		if (!dst || !src || dst == src)
+		{
+			return;
+		}
+		uint32_t dstLength = (uint32_t)il2cpp::vm::Array::GetLength(dst);
+		uint32_t srcLength = (uint32_t)il2cpp::vm::Array::GetLength(src);
+		uint32_t count = std::min(dstLength, srcLength);
+		for (uint32_t i = 0; i < count; ++i)
+		{
+			il2cpp_array_setref(dst, i, il2cpp_array_get(src, Il2CppObject*, i));
+		}
+	}
+
+	static Il2CppException* CreateTargetInvocationException(Il2CppException* inner)
+	{
+		Il2CppException* wrapper = il2cpp::vm::Exception::FromNameMsg(
+			il2cpp_defaults.corlib,
+			"System.Reflection",
+			"TargetInvocationException",
+			"Exception has been thrown by the target of an invocation.");
+		IL2CPP_OBJECT_SETREF(wrapper, inner_ex, inner);
+		return wrapper;
+	}
+
+	static bool TryExecuteMethodBaseInvokeObjectArray(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+	{
+		if (!method || !method->name || std::strcmp(method->name, "Invoke") != 0 || method->parameters_count != 2)
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->namespaze || std::strcmp(method->klass->namespaze, "System.Reflection") != 0 || !method->klass->name || std::strcmp(method->klass->name, "MethodBase") != 0)
+		{
+			return false;
+		}
+
+		Il2CppObject* reflectionMethodObject = (localVarBase + argIdxs[0])->obj;
+		if (!reflectionMethodObject || !reflectionMethodObject->klass)
+		{
+			return false;
+		}
+		std::printf("[hotc233][ReflectionInvokeProbe] MethodBase.Invoke receiverClass=%s.%s receiver=%p expected=%s.%s assignable=%d\n",
+			reflectionMethodObject->klass->namespaze ? reflectionMethodObject->klass->namespaze : "",
+			reflectionMethodObject->klass->name ? reflectionMethodObject->klass->name : "",
+			(void*)reflectionMethodObject,
+			method->klass && method->klass->namespaze ? method->klass->namespaze : "",
+			method->klass && method->klass->name ? method->klass->name : "",
+			method->klass && il2cpp::vm::Object::IsInst(reflectionMethodObject, method->klass) ? 1 : 0);
+		std::fflush(stdout);
+		if (!method->klass || !il2cpp::vm::Object::IsInst(reflectionMethodObject, method->klass))
+		{
+			return false;
+		}
+
+		Il2CppObject* target = (localVarBase + argIdxs[1])->obj;
+		Il2CppArray* parameters = (Il2CppArray*)(localVarBase + argIdxs[2])->obj;
+		const MethodInfo* targetMethod = ((Il2CppReflectionMethod*)reflectionMethodObject)->method;
+		bool usedNormalizedParameters = false;
+		Il2CppArray* invokeParameters = NormalizeReflectionInvokeParameters(targetMethod, parameters, &usedNormalizedParameters);
+		Il2CppException* exception = nullptr;
+		Il2CppObject* result = nullptr;
+		try
+		{
+			result = il2cpp::icalls::mscorlib::System::Reflection::RuntimeMethodInfo::InternalInvoke((Il2CppReflectionMethod*)reflectionMethodObject, target, invokeParameters, &exception);
+		}
+		catch (Il2CppExceptionWrapper& ex)
+		{
+			exception = CreateTargetInvocationException(ex.ex);
+		}
+		if (usedNormalizedParameters)
+		{
+			CopyReflectionInvokeParametersBack(parameters, invokeParameters);
+		}
+		if (exception)
+		{
+			il2cpp::vm::Exception::Raise(exception);
+		}
+		if (ret)
+		{
+			((StackObject*)ret)->obj = result;
+		}
+		std::printf("[hotc233][ReflectionInvokeProbe] direct MethodBase.Invoke thisClass=%s.%s target=%p params=%p result=%p\n",
+			reflectionMethodObject->klass->namespaze ? reflectionMethodObject->klass->namespaze : "",
+			reflectionMethodObject->klass->name ? reflectionMethodObject->klass->name : "",
+			(void*)target,
+			(void*)parameters,
+			(void*)result);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TryExecuteConstructorInfoInvokeObjectArray(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+	{
+		if (!method || !method->name || std::strcmp(method->name, "Invoke") != 0 || method->parameters_count != 1)
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->namespaze || std::strcmp(method->klass->namespaze, "System.Reflection") != 0 || !method->klass->name || std::strcmp(method->klass->name, "ConstructorInfo") != 0)
+		{
+			return false;
+		}
+
+		auto isConstructorInfoObject = [](Il2CppObject* candidate) -> bool
+		{
+			return candidate &&
+				candidate->klass &&
+				candidate->klass->namespaze &&
+				std::strcmp(candidate->klass->namespaze, "System.Reflection") == 0 &&
+				candidate->klass->name &&
+				(std::strcmp(candidate->klass->name, "ConstructorInfo") == 0 ||
+					std::strcmp(candidate->klass->name, "RuntimeConstructorInfo") == 0);
+		};
+		Il2CppObject* reflectionCtorObject = (localVarBase + argIdxs[0])->obj;
+		if (!reflectionCtorObject || !reflectionCtorObject->klass)
+		{
+			return false;
+		}
+		bool acceptedCtorReceiver = isConstructorInfoObject(reflectionCtorObject);
+		std::printf("[hotc233][ReflectionCtorProbe] enter arg0=%u arg1=%u receiverClass=%s.%s accepted=%d declared=%s.%s::%s receiver=%p\n",
+			(uint32_t)argIdxs[0],
+			(uint32_t)argIdxs[1],
+			reflectionCtorObject->klass->namespaze ? reflectionCtorObject->klass->namespaze : "",
+			reflectionCtorObject->klass->name ? reflectionCtorObject->klass->name : "",
+			acceptedCtorReceiver ? 1 : 0,
+			method->klass->namespaze ? method->klass->namespaze : "",
+			method->klass->name ? method->klass->name : "",
+			method->name ? method->name : "",
+			(void*)reflectionCtorObject);
+		std::fflush(stdout);
+		if (!acceptedCtorReceiver)
+		{
+			return false;
+		}
+
+		Il2CppReflectionMethod* reflectionCtor = (Il2CppReflectionMethod*)reflectionCtorObject;
+		const MethodInfo* ctor = il2cpp::vm::Reflection::GetMethod(reflectionCtor);
+		if (!ctor || !ctor->klass || !ctor->name || std::strcmp(ctor->name, ".ctor") != 0)
+		{
+			return false;
+		}
+
+		Il2CppArray* parameters = (Il2CppArray*)(localVarBase + argIdxs[1])->obj;
+		il2cpp::vm::Class::Init(ctor->klass);
+		Il2CppObject* instance = il2cpp::vm::Object::New(ctor->klass);
+		Il2CppException* exception = nullptr;
+		il2cpp::vm::Runtime::InvokeArray(ctor, instance, parameters, &exception);
+		if (exception)
+		{
+			il2cpp::vm::Exception::Raise(exception);
+		}
+		if (ret)
+		{
+			((StackObject*)ret)->obj = instance;
+		}
+		std::printf("[hotc233][ReflectionCtorProbe] direct ConstructorInfo.Invoke ctor=%s.%s::%s params=%p instance=%p\n",
+			ctor->klass->namespaze ? ctor->klass->namespaze : "",
+			ctor->klass->name ? ctor->klass->name : "",
+			ctor->name,
+			(void*)parameters,
+			(void*)instance);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TryExecuteRuntimeTypeGetConstructorByTypes(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+	{
+		if (!method || !method->name || std::strcmp(method->name, "GetConstructor") != 0 || method->parameters_count != 1)
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->namespaze || std::strcmp(method->klass->namespaze, "System") != 0 || !method->klass->name || std::strcmp(method->klass->name, "RuntimeType") != 0)
+		{
+			return false;
+		}
+		Il2CppReflectionRuntimeType* runtimeType = (Il2CppReflectionRuntimeType*)(localVarBase + argIdxs[0])->obj;
+		Il2CppArray* parameterTypes = (Il2CppArray*)(localVarBase + argIdxs[1])->obj;
+		if (!runtimeType || !runtimeType->type.type || !parameterTypes)
+		{
+			return false;
+		}
+		Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(runtimeType->type.type);
+		if (!klass)
+		{
+			return false;
+		}
+		const MethodInfo* found = nullptr;
+		void* iter = nullptr;
+		while (const MethodInfo* candidate = il2cpp::vm::Class::GetMethods(klass, &iter))
+		{
+			if (!candidate->name || std::strcmp(candidate->name, ".ctor") != 0 || candidate->parameters_count != parameterTypes->max_length)
+			{
+				continue;
+			}
+			bool matches = true;
+			for (uint32_t i = 0; i < candidate->parameters_count; i++)
+			{
+				Il2CppReflectionRuntimeType* parameterType = il2cpp_array_get(parameterTypes, Il2CppReflectionRuntimeType*, i);
+				if (!parameterType || !parameterType->type.type)
+				{
+					matches = false;
+					break;
+				}
+				Il2CppClass* requested = il2cpp::vm::Class::FromIl2CppType(parameterType->type.type);
+				Il2CppClass* actual = il2cpp::vm::Class::FromIl2CppType(candidate->parameters[i]);
+				if (requested != actual)
+				{
+					matches = false;
+					break;
+				}
+			}
+			if (matches)
+			{
+				found = candidate;
+				break;
+			}
+		}
+		Il2CppReflectionMethod* reflected = found ? il2cpp::vm::Reflection::GetMethodObject(found, klass) : nullptr;
+		if (ret)
+		{
+			((StackObject*)ret)->obj = (Il2CppObject*)reflected;
+		}
+		std::printf("[hotc233][ReflectionGetCtorProbe] direct RuntimeType.GetConstructor type=%s.%s argc=%u found=%p reflected=%p ret=%p\n",
+			klass->namespaze ? klass->namespaze : "",
+			klass->name ? klass->name : "",
+			(uint32_t)parameterTypes->max_length,
+			(void*)found,
+			(void*)reflected,
+			ret);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TryExecuteRuntimeTypeGetMethodByName(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+	{
+		if (!method || !method->name || std::strcmp(method->name, "GetMethod") != 0 || (method->parameters_count != 1 && method->parameters_count != 2))
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->namespaze || std::strcmp(method->klass->namespaze, "System") != 0 || !method->klass->name
+			|| (std::strcmp(method->klass->name, "RuntimeType") != 0 && std::strcmp(method->klass->name, "Type") != 0))
+		{
+			return false;
+		}
+		Il2CppReflectionRuntimeType* runtimeType = (Il2CppReflectionRuntimeType*)(localVarBase + argIdxs[0])->obj;
+		Il2CppString* nameString = (localVarBase + argIdxs[1])->str;
+		if (!runtimeType || !runtimeType->type.type || !nameString)
+		{
+			return false;
+		}
+		Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(runtimeType->type.type);
+		if (!klass)
+		{
+			return false;
+		}
+		std::string methodName = il2cpp::utils::StringUtils::Utf16ToUtf8(nameString->chars, nameString->length);
+		const MethodInfo* found = nullptr;
+		Il2CppClass* secondParameterKlass = method->parameters_count == 2 ? il2cpp::vm::Class::FromIl2CppType(method->parameters[1]) : nullptr;
+		bool secondParameterIsTypeArray = secondParameterKlass && secondParameterKlass->rank > 0;
+		Il2CppArray* parameterTypes = secondParameterIsTypeArray ? (Il2CppArray*)(localVarBase + argIdxs[2])->obj : nullptr;
+		if (!parameterTypes)
+		{
+			found = il2cpp::vm::Class::GetMethodFromName(klass, methodName.c_str(), -1);
+		}
+		else
+		{
+			void* iter = nullptr;
+			while (const MethodInfo* candidate = il2cpp::vm::Class::GetMethods(klass, &iter))
+			{
+				if (!candidate->name || std::strcmp(candidate->name, methodName.c_str()) != 0 || candidate->parameters_count != parameterTypes->max_length)
+				{
+					continue;
+				}
+				bool matches = true;
+				for (uint32_t i = 0; i < candidate->parameters_count; i++)
+				{
+					Il2CppReflectionRuntimeType* parameterType = il2cpp_array_get(parameterTypes, Il2CppReflectionRuntimeType*, i);
+					if (!parameterType || !parameterType->type.type)
+					{
+						matches = false;
+						break;
+					}
+					Il2CppClass* requested = il2cpp::vm::Class::FromIl2CppType(parameterType->type.type);
+					Il2CppClass* actual = il2cpp::vm::Class::FromIl2CppType(candidate->parameters[i]);
+					if (requested != actual)
+					{
+						matches = false;
+						break;
+					}
+				}
+				if (matches)
+				{
+					found = candidate;
+					break;
+				}
+			}
+		}
+		Il2CppReflectionMethod* reflected = found ? il2cpp::vm::Reflection::GetMethodObject(found, klass) : nullptr;
+		if (ret)
+		{
+			((StackObject*)ret)->obj = (Il2CppObject*)reflected;
+		}
+		std::printf("[hotc233][ReflectionGetMethodProbe] direct RuntimeType.GetMethod type=%s.%s name=%s argc=%d found=%p reflected=%p ret=%p\n",
+			klass->namespaze ? klass->namespaze : "",
+			klass->name ? klass->name : "",
+			methodName.c_str(),
+			parameterTypes ? (int)parameterTypes->max_length : -1,
+			(void*)found,
+			(void*)reflected,
+			ret);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TryExecuteRuntimeTypeGetFieldByName(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+	{
+		if (!method || !method->name || std::strcmp(method->name, "GetField") != 0 || (method->parameters_count != 1 && method->parameters_count != 2))
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->namespaze || std::strcmp(method->klass->namespaze, "System") != 0 || !method->klass->name
+			|| (std::strcmp(method->klass->name, "RuntimeType") != 0 && std::strcmp(method->klass->name, "Type") != 0))
+		{
+			return false;
+		}
+		Il2CppReflectionRuntimeType* runtimeType = (Il2CppReflectionRuntimeType*)(localVarBase + argIdxs[0])->obj;
+		Il2CppString* nameString = (localVarBase + argIdxs[1])->str;
+		if (!runtimeType || !runtimeType->type.type || !nameString)
+		{
+			return false;
+		}
+		Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(runtimeType->type.type);
+		if (!klass)
+		{
+			return false;
+		}
+		std::string fieldName = il2cpp::utils::StringUtils::Utf16ToUtf8(nameString->chars, nameString->length);
+		FieldInfo* found = il2cpp::vm::Class::GetFieldFromName(klass, fieldName.c_str());
+		Il2CppReflectionField* reflected = found ? il2cpp::vm::Reflection::GetFieldObject(klass, found) : nullptr;
+		if (ret)
+		{
+			((StackObject*)ret)->obj = (Il2CppObject*)reflected;
+		}
+		std::printf("[hotc233][ReflectionGetFieldProbe] direct RuntimeType.GetField type=%s.%s name=%s found=%p reflected=%p ret=%p\n",
+			klass->namespaze ? klass->namespaze : "",
+			klass->name ? klass->name : "",
+			fieldName.c_str(),
+			(void*)found,
+			(void*)reflected,
+			ret);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TryExecuteRuntimeTypeGetPropertyByName(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+	{
+		if (!method || !method->name || std::strcmp(method->name, "GetProperty") != 0 || (method->parameters_count != 1 && method->parameters_count != 2))
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->namespaze || std::strcmp(method->klass->namespaze, "System") != 0 || !method->klass->name
+			|| (std::strcmp(method->klass->name, "RuntimeType") != 0 && std::strcmp(method->klass->name, "Type") != 0))
+		{
+			return false;
+		}
+		Il2CppReflectionRuntimeType* runtimeType = (Il2CppReflectionRuntimeType*)(localVarBase + argIdxs[0])->obj;
+		Il2CppString* nameString = (localVarBase + argIdxs[1])->str;
+		if (!runtimeType || !runtimeType->type.type || !nameString)
+		{
+			return false;
+		}
+		Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(runtimeType->type.type);
+		if (!klass)
+		{
+			return false;
+		}
+		std::string propertyName = il2cpp::utils::StringUtils::Utf16ToUtf8(nameString->chars, nameString->length);
+		const PropertyInfo* found = il2cpp::vm::Class::GetPropertyFromName(klass, propertyName.c_str());
+		Il2CppReflectionProperty* reflected = found ? il2cpp::vm::Reflection::GetPropertyObject(klass, found) : nullptr;
+		if (ret)
+		{
+			((StackObject*)ret)->obj = (Il2CppObject*)reflected;
+		}
+		std::printf("[hotc233][ReflectionGetPropertyProbe] direct RuntimeType.GetProperty type=%s.%s name=%s found=%p reflected=%p ret=%p\n",
+			klass->namespaze ? klass->namespaze : "",
+			klass->name ? klass->name : "",
+			propertyName.c_str(),
+			(void*)found,
+			(void*)reflected,
+			ret);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TryInvokeNativeInstanceVoidWithBoxedValueTypeArgs(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase)
+	{
+		if (!method || !argIdxs || !localVarBase || method->parameters_count == 0)
+		{
+			return false;
+		}
+		if (!(method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary")))
+		{
+			return false;
+		}
+		Il2CppObject* thisObj = (localVarBase + argIdxs[0])->obj;
+		if (!thisObj)
+		{
+			return false;
+		}
+		Il2CppArray* boxedArgs = il2cpp::vm::Array::New(il2cpp_defaults.object_class, method->parameters_count);
+		bool hasValueTypeArg = false;
+		const Il2CppType* classContext = method->klass ? &method->klass->byval_arg : nullptr;
+		for (uint8_t i = 0; i < method->parameters_count; ++i)
+		{
+			const Il2CppType* rawParamType = GET_METHOD_PARAMETER_TYPE(method->parameters[i]);
+			const Il2CppType* paramType = classContext ? hotc233::metadata::TryInflateIfNeed(classContext, rawParamType) : rawParamType;
+			Il2CppClass* paramKlass = paramType ? il2cpp::vm::Class::FromIl2CppType(paramType) : nullptr;
+			StackObject* arg = localVarBase + argIdxs[i + 1];
+			Il2CppObject* boxedArg = nullptr;
+			if (paramType && !paramType->byref && paramKlass && IS_CLASS_VALUE_TYPE(paramKlass))
+			{
+				hasValueTypeArg = true;
+				boxedArg = il2cpp::vm::Object::Box(paramKlass, arg);
+			}
+			else
+			{
+				boxedArg = arg->obj;
+			}
+			il2cpp_array_setref(boxedArgs, i, boxedArg);
+		}
+		if (!hasValueTypeArg)
+		{
+			return false;
+		}
+		Il2CppException* exception = nullptr;
+		std::printf("[hotc233][BoxedInvokeProbe] before %s.%s::%s this=%p params=%p pcount=%d\n",
+			method->klass && method->klass->namespaze ? method->klass->namespaze : "",
+			method->klass && method->klass->name ? method->klass->name : "",
+			method->name ? method->name : "",
+			(void*)thisObj,
+			(void*)boxedArgs,
+			(int)method->parameters_count);
+		std::fflush(stdout);
+		il2cpp::vm::Runtime::InvokeArray(method, thisObj, boxedArgs, &exception);
+		if (exception)
+		{
+			il2cpp::vm::Exception::Raise(exception);
+		}
+		std::printf("[hotc233][BoxedInvokeProbe] after %s.%s::%s this=%p\n",
+			method->klass && method->klass->namespaze ? method->klass->namespaze : "",
+			method->klass && method->klass->name ? method->klass->name : "",
+			method->name ? method->name : "",
+			(void*)thisObj);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static FieldInfo* FindFieldAny(Il2CppClass* klass, const char* a, const char* b = nullptr)
+	{
+		if (!klass)
+		{
+			return nullptr;
+		}
+		FieldInfo* field = il2cpp::vm::Class::GetFieldFromName(klass, a);
+		if (!field && b)
+		{
+			field = il2cpp::vm::Class::GetFieldFromName(klass, b);
+		}
+		return field;
+	}
+
+	template<typename T>
+	static T* FieldAddress(Il2CppObject* obj, FieldInfo* field)
+	{
+		return (T*)((uint8_t*)obj + hotc233::metadata::GetFieldOffset(field));
+	}
+
+	static bool StringEquals(Il2CppString* left, Il2CppString* right)
+	{
+		if (left == right)
+		{
+			return true;
+		}
+		if (!left || !right || left->length != right->length)
+		{
+			return false;
+		}
+		return std::memcmp(left->chars, right->chars, left->length * sizeof(Il2CppChar)) == 0;
+	}
+
+	static bool TryExecuteArraySetValueSingleIndex(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase)
+	{
+		if (!method || !method->name || std::strcmp(method->name, "SetValue") != 0 || method->parameters_count != 2)
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->namespaze || std::strcmp(method->klass->namespaze, "System") != 0 || !method->klass->name || std::strcmp(method->klass->name, "Array") != 0)
+		{
+			return false;
+		}
+		Il2CppArray* array = (Il2CppArray*)(localVarBase + argIdxs[0])->obj;
+		Il2CppObject* value = (localVarBase + argIdxs[1])->obj;
+		if (!array)
+		{
+			return false;
+		}
+		int64_t rawIndex = (localVarBase + argIdxs[2])->i64;
+		int32_t index = (rawIndex >= 0 && rawIndex <= INT32_MAX) ? (int32_t)rawIndex : (localVarBase + argIdxs[2])->i32;
+		if (index < 0 || (uint32_t)index >= array->max_length)
+		{
+			il2cpp::vm::Exception::Raise(il2cpp::vm::Exception::GetIndexOutOfRangeException());
+		}
+		if (array->klass->element_class && IS_CLASS_VALUE_TYPE(array->klass->element_class))
+		{
+			int32_t elementSize = il2cpp::vm::Array::GetElementSize(array->klass);
+			il2cpp_array_setrefwithsize(array, elementSize, index, value);
+		}
+		else
+		{
+			il2cpp_array_setref(array, index, value);
+		}
+		std::printf("[hotc233][ArrayValueProbe] direct Array.SetValue array=%p index=%d raw=%lld value=%p\n",
+			(void*)array,
+			index,
+			(long long)rawIndex,
+			(void*)value);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TryExecuteArrayGetValueSingleIndex(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+	{
+		if (!method || !method->name || std::strcmp(method->name, "GetValue") != 0 || method->parameters_count != 1)
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->namespaze || std::strcmp(method->klass->namespaze, "System") != 0 || !method->klass->name || std::strcmp(method->klass->name, "Array") != 0)
+		{
+			return false;
+		}
+		Il2CppArray* array = (Il2CppArray*)(localVarBase + argIdxs[0])->obj;
+		if (!array || !ret)
+		{
+			return false;
+		}
+		int64_t rawIndex = (localVarBase + argIdxs[1])->i64;
+		int32_t index = (rawIndex >= 0 && rawIndex <= INT32_MAX) ? (int32_t)rawIndex : (localVarBase + argIdxs[1])->i32;
+		if (index < 0 || (uint32_t)index >= array->max_length)
+		{
+			il2cpp::vm::Exception::Raise(il2cpp::vm::Exception::GetIndexOutOfRangeException());
+		}
+		Il2CppObject* value = il2cpp_array_get(array, Il2CppObject*, index);
+		((StackObject*)ret)->obj = value;
+		std::printf("[hotc233][ArrayValueProbe] direct Array.GetValue array=%p index=%d raw=%lld value=%p\n",
+			(void*)array,
+			index,
+			(long long)rawIndex,
+			(void*)value);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TrySetDictionaryStringValueType(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase)
+	{
+		if (!method || !argIdxs || !localVarBase || !method->name || std::strcmp(method->name, "set_Item") != 0 || method->parameters_count != 2)
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->name || !std::strstr(method->klass->name, "Dictionary"))
+		{
+			return false;
+		}
+		Il2CppObject* dict = (localVarBase + argIdxs[0])->obj;
+		Il2CppString* key = (localVarBase + argIdxs[1])->str;
+		if (!dict || !key)
+		{
+			return false;
+		}
+		const Il2CppType* classContext = &method->klass->byval_arg;
+		const Il2CppType* keyType = hotc233::metadata::TryInflateIfNeed(classContext, GET_METHOD_PARAMETER_TYPE(method->parameters[0]));
+		const Il2CppType* valueType = hotc233::metadata::TryInflateIfNeed(classContext, GET_METHOD_PARAMETER_TYPE(method->parameters[1]));
+		Il2CppClass* keyKlass = keyType ? il2cpp::vm::Class::FromIl2CppType(keyType) : nullptr;
+		Il2CppClass* valueKlass = valueType ? il2cpp::vm::Class::FromIl2CppType(valueType) : nullptr;
+		if (keyKlass != il2cpp_defaults.string_class || !valueKlass || !IS_CLASS_VALUE_TYPE(valueKlass) || (valueType && valueType->byref))
+		{
+			return false;
+		}
+
+		FieldInfo* bucketsField = FindFieldAny(method->klass, "_buckets", "buckets");
+		FieldInfo* entriesField = FindFieldAny(method->klass, "_entries", "entries");
+		FieldInfo* countField = FindFieldAny(method->klass, "_count", "count");
+		FieldInfo* versionField = FindFieldAny(method->klass, "_version", "version");
+		FieldInfo* freeListField = FindFieldAny(method->klass, "_freeList", "freeList");
+		FieldInfo* freeCountField = FindFieldAny(method->klass, "_freeCount", "freeCount");
+		if (!bucketsField || !entriesField || !countField || !versionField)
+		{
+			return false;
+		}
+		Il2CppArray** bucketsSlot = FieldAddress<Il2CppArray*>(dict, bucketsField);
+		Il2CppArray** entriesSlot = FieldAddress<Il2CppArray*>(dict, entriesField);
+		int32_t* countSlot = FieldAddress<int32_t>(dict, countField);
+		int32_t* versionSlot = FieldAddress<int32_t>(dict, versionField);
+		if (!*bucketsSlot || !*entriesSlot)
+		{
+			const int32_t capacity = 7;
+			*bucketsSlot = il2cpp::vm::Array::New(il2cpp_defaults.int32_class, capacity);
+			const Il2CppType* entriesType = hotc233::metadata::TryInflateIfNeed(classContext, entriesField->type);
+			Il2CppClass* entriesArrayKlass = entriesType ? il2cpp::vm::Class::FromIl2CppType(entriesType) : nullptr;
+			if (!entriesArrayKlass)
+			{
+				return false;
+			}
+			*entriesSlot = il2cpp::vm::Array::NewSpecific(entriesArrayKlass, capacity);
+			il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)bucketsSlot);
+			il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)entriesSlot);
+			*countSlot = 0;
+			if (freeListField)
+			{
+				*FieldAddress<int32_t>(dict, freeListField) = -1;
+			}
+			if (freeCountField)
+			{
+				*FieldAddress<int32_t>(dict, freeCountField) = 0;
+			}
+		}
+		Il2CppArray* buckets = *bucketsSlot;
+		Il2CppArray* entries = *entriesSlot;
+		Il2CppClass* entryKlass = ((Il2CppObject*)entries)->klass->element_class;
+		FieldInfo* hashCodeField = FindFieldAny(entryKlass, "hashCode", "_hashCode");
+		FieldInfo* nextField = FindFieldAny(entryKlass, "next", "_next");
+		FieldInfo* keyField = FindFieldAny(entryKlass, "key", "_key");
+		FieldInfo* valueField = FindFieldAny(entryKlass, "value", "_value");
+		if (!hashCodeField || !nextField || !keyField || !valueField)
+		{
+			return false;
+		}
+		int32_t hashCode = il2cpp::vm::String::GetHash(key) & 0x7fffffff;
+		int32_t bucketIndex = hashCode % (int32_t)il2cpp::vm::Array::GetLength(buckets);
+		int32_t* bucket = il2cpp_array_addr(buckets, int32_t, bucketIndex);
+		int32_t entryIndex = *bucket - 1;
+		uint32_t entrySize = il2cpp::vm::Class::GetValueSize(entryKlass, nullptr);
+		while (entryIndex >= 0)
+		{
+			uint8_t* entry = (uint8_t*)il2cpp_array_addr_with_size(entries, entrySize, entryIndex);
+			Il2CppString* entryKey = *(Il2CppString**)(entry + hotc233::metadata::GetFieldOffset(keyField));
+			int32_t entryHash = *(int32_t*)(entry + hotc233::metadata::GetFieldOffset(hashCodeField));
+			if (entryHash == hashCode && StringEquals(entryKey, key))
+			{
+				std::memcpy(entry + hotc233::metadata::GetFieldOffset(valueField), localVarBase + argIdxs[2], il2cpp::vm::Class::GetValueSize(valueKlass, nullptr));
+				++(*versionSlot);
+				std::printf("[hotc233][DictionaryAdapter] replace %s.%s key=%p index=%d\n",
+					method->klass->namespaze ? method->klass->namespaze : "",
+					method->klass->name ? method->klass->name : "",
+					(void*)key,
+					entryIndex);
+				std::fflush(stdout);
+				return true;
+			}
+			entryIndex = *(int32_t*)(entry + hotc233::metadata::GetFieldOffset(nextField));
+		}
+		int32_t newIndex = *countSlot;
+		if (newIndex >= (int32_t)il2cpp::vm::Array::GetLength(entries))
+		{
+			return false;
+		}
+		uint8_t* newEntry = (uint8_t*)il2cpp_array_addr_with_size(entries, entrySize, newIndex);
+		*(int32_t*)(newEntry + hotc233::metadata::GetFieldOffset(hashCodeField)) = hashCode;
+		*(int32_t*)(newEntry + hotc233::metadata::GetFieldOffset(nextField)) = *bucket - 1;
+		Il2CppString** keySlot = (Il2CppString**)(newEntry + hotc233::metadata::GetFieldOffset(keyField));
+		*keySlot = key;
+		il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)keySlot);
+		std::memcpy(newEntry + hotc233::metadata::GetFieldOffset(valueField), localVarBase + argIdxs[2], il2cpp::vm::Class::GetValueSize(valueKlass, nullptr));
+		*bucket = newIndex + 1;
+		*countSlot = newIndex + 1;
+		++(*versionSlot);
+		std::printf("[hotc233][DictionaryAdapter] add %s.%s key=%p index=%d hash=%d\n",
+			method->klass->namespaze ? method->klass->namespaze : "",
+			method->klass->name ? method->klass->name : "",
+			(void*)key,
+			newIndex,
+			hashCode);
+		std::fflush(stdout);
+		return true;
+	}
+
+	static bool TryGetDictionaryStringValueType(const MethodInfo* method, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+	{
+		if (!method || !argIdxs || !localVarBase || !ret || !method->name || std::strcmp(method->name, "get_Item") != 0 || method->parameters_count != 1)
+		{
+			return false;
+		}
+		if (!method->klass || !method->klass->name || !std::strstr(method->klass->name, "Dictionary"))
+		{
+			return false;
+		}
+		Il2CppObject* dict = (localVarBase + argIdxs[0])->obj;
+		Il2CppString* key = (localVarBase + argIdxs[1])->str;
+		if (!dict || !key)
+		{
+			return false;
+		}
+		const Il2CppType* classContext = &method->klass->byval_arg;
+		const Il2CppType* keyType = hotc233::metadata::TryInflateIfNeed(classContext, GET_METHOD_PARAMETER_TYPE(method->parameters[0]));
+		const Il2CppType* valueType = hotc233::metadata::TryInflateIfNeed(classContext, method->return_type);
+		Il2CppClass* keyKlass = keyType ? il2cpp::vm::Class::FromIl2CppType(keyType) : nullptr;
+		Il2CppClass* valueKlass = valueType ? il2cpp::vm::Class::FromIl2CppType(valueType) : nullptr;
+		if (keyKlass != il2cpp_defaults.string_class || !valueKlass || !IS_CLASS_VALUE_TYPE(valueKlass))
+		{
+			return false;
+		}
+
+		FieldInfo* bucketsField = FindFieldAny(method->klass, "_buckets", "buckets");
+		FieldInfo* entriesField = FindFieldAny(method->klass, "_entries", "entries");
+		if (!bucketsField || !entriesField)
+		{
+			return false;
+		}
+		Il2CppArray* buckets = *FieldAddress<Il2CppArray*>(dict, bucketsField);
+		Il2CppArray* entries = *FieldAddress<Il2CppArray*>(dict, entriesField);
+		if (!buckets || !entries)
+		{
+			return false;
+		}
+		Il2CppClass* entryKlass = ((Il2CppObject*)entries)->klass->element_class;
+		FieldInfo* hashCodeField = FindFieldAny(entryKlass, "hashCode", "_hashCode");
+		FieldInfo* nextField = FindFieldAny(entryKlass, "next", "_next");
+		FieldInfo* keyField = FindFieldAny(entryKlass, "key", "_key");
+		FieldInfo* valueField = FindFieldAny(entryKlass, "value", "_value");
+		if (!hashCodeField || !nextField || !keyField || !valueField)
+		{
+			return false;
+		}
+		int32_t hashCode = il2cpp::vm::String::GetHash(key) & 0x7fffffff;
+		int32_t bucketIndex = hashCode % (int32_t)il2cpp::vm::Array::GetLength(buckets);
+		int32_t entryIndex = *il2cpp_array_addr(buckets, int32_t, bucketIndex) - 1;
+		uint32_t entrySize = il2cpp::vm::Class::GetValueSize(entryKlass, nullptr);
+		while (entryIndex >= 0)
+		{
+			uint8_t* entry = (uint8_t*)il2cpp_array_addr_with_size(entries, entrySize, entryIndex);
+			Il2CppString* entryKey = *(Il2CppString**)(entry + hotc233::metadata::GetFieldOffset(keyField));
+			int32_t entryHash = *(int32_t*)(entry + hotc233::metadata::GetFieldOffset(hashCodeField));
+			if (entryHash == hashCode && StringEquals(entryKey, key))
+			{
+				std::memcpy(ret, entry + hotc233::metadata::GetFieldOffset(valueField), il2cpp::vm::Class::GetValueSize(valueKlass, nullptr));
+				std::printf("[hotc233][DictionaryAdapter] get %s.%s key=%p index=%d\n",
+					method->klass->namespaze ? method->klass->namespaze : "",
+					method->klass->name ? method->klass->name : "",
+					(void*)key,
+					entryIndex);
+				std::fflush(stdout);
+				return true;
+			}
+			entryIndex = *(int32_t*)(entry + hotc233::metadata::GetFieldOffset(nextField));
+		}
+		return false;
+	}
 
 
 #pragma region memory
@@ -1503,25 +2411,52 @@ namespace interpreter
 		return true;
 	}
 
-	static void GodDomainDestroyUnityObject(Il2CppObject* obj)
+	struct GodDomainUnityObjectDestroyCache
 	{
-		if (obj == nullptr)
+		bool probed;
+		const MethodInfo* destroyMethod;
+	};
+
+	static GodDomainUnityObjectDestroyCache s_godDomainUnityObjectDestroyCache = {};
+
+	static bool EnsureGodDomainUnityObjectDestroyCache()
+	{
+		if (s_godDomainUnityObjectDestroyCache.probed)
 		{
-			return;
+			return s_godDomainUnityObjectDestroyCache.destroyMethod != nullptr;
 		}
-		Il2CppClass* objectClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Object");
+		s_godDomainUnityObjectDestroyCache.probed = true;
+		Il2CppClass* objectClass = ResolveUnityEngineClass("Object");
 		if (objectClass == nullptr)
 		{
-			return;
+			return false;
 		}
 		const MethodInfo* destroy = il2cpp::vm::Class::GetMethodFromName(objectClass, "Destroy", 1);
-		if (destroy == nullptr)
+		if (destroy == nullptr || destroy->invoker_method == nullptr)
+		{
+			return false;
+		}
+		s_godDomainUnityObjectDestroyCache.destroyMethod = destroy;
+		return true;
+	}
+
+	static void GodDomainDestroyUnityObject(Il2CppObject* obj)
+	{
+		if (obj == nullptr || !EnsureGodDomainUnityObjectDestroyCache())
 		{
 			return;
 		}
+		const MethodInfo* destroy = s_godDomainUnityObjectDestroyCache.destroyMethod;
 		RuntimeInitClassCCtorWithoutInitClass(destroy);
 		void* arg = obj;
-		destroy->invoker_method(destroy->methodPointerCallByInterp, destroy, nullptr, &arg, nullptr);
+		Il2CppMethodPointer methodPtr = destroy->methodPointerCallByInterp != nullptr
+			? destroy->methodPointerCallByInterp
+			: destroy->methodPointer;
+		if (methodPtr == nullptr || destroy->invoker_method == nullptr)
+		{
+			return;
+		}
+		destroy->invoker_method(methodPtr, destroy, nullptr, &arg, nullptr);
 	}
 
 	struct GodDomainGameObjectCreateDestroyCache
@@ -1543,7 +2478,7 @@ namespace interpreter
 				&& s_godDomainGameObjectCreateDestroyCache.defaultName != nullptr;
 		}
 		s_godDomainGameObjectCreateDestroyCache.probed = true;
-		Il2CppClass* goClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "GameObject");
+		Il2CppClass* goClass = ResolveUnityEngineClass("GameObject");
 		if (goClass == nullptr)
 		{
 			return false;
@@ -1622,6 +2557,7 @@ namespace interpreter
 
 	IL2CPP_FORCE_INLINE bool TryExecuteGameObjectCreateDestroyLoopTraceFastPath(const InterpMethodInfo* imi, StackObject* localVarBase, void* ret)
 	{
+		return false;
 		if (!imi || !ret)
 		{
 			return false;
@@ -2112,7 +3048,7 @@ namespace interpreter
 			return false;
 		}
 
-		Il2CppClass* qClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Quaternion");
+		Il2CppClass* qClass = ResolveUnityEngineClass("Quaternion");
 		if (qClass == nullptr)
 		{
 			return false;
@@ -2609,11 +3545,26 @@ namespace interpreter
 		return false;
 	}
 
-	IL2CPP_FORCE_INLINE bool TryExecuteHotc233CallFastPath(const MethodInfo* methodInfo, StackObject* argBasePtr, void* retPtr)
-	{
-		InterpMethodInfo* calleeImi = methodInfo->interpData ? (InterpMethodInfo*)methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(methodInfo);
-		RuntimeInitClassCCtorWithoutInitClass(methodInfo);
-		if (!calleeImi)
+		IL2CPP_FORCE_INLINE bool TryExecuteHotc233CallFastPath(const MethodInfo* methodInfo, StackObject* argBasePtr, void* retPtr)
+		{
+			if (!methodInfo)
+			{
+				return false;
+			}
+			InterpMethodInfo* calleeImi = methodInfo->interpData ? (InterpMethodInfo*)methodInfo->interpData : nullptr;
+			if (!calleeImi || calleeImi->hotc233FastPathKind <= Hotc233FastPath_Unsupported)
+			{
+				return false;
+			}
+			const char* methodName = methodInfo != nullptr ? methodInfo->name : nullptr;
+			const char* className = methodInfo != nullptr && methodInfo->klass != nullptr ? methodInfo->klass->name : nullptr;
+			if (methodName == nullptr ||
+			(std::strncmp(methodName, "HybridClr", 9) != 0 && std::strncmp(methodName, "Kernel", 6) != 0))
+		{
+			return false;
+		}
+		if ((methodName != nullptr && std::strchr(methodName, '<') != nullptr) ||
+			(className != nullptr && std::strchr(className, '<') != nullptr))
 		{
 			return false;
 		}
@@ -2635,10 +3586,6 @@ namespace interpreter
 			return true;
 		}
 #endif
-		if (calleeImi->hotc233FastPathKind > Hotc233FastPath_Unsupported)
-		{
-			return TryExecuteHotc233FastPath(calleeImi, argBasePtr, retPtr);
-		}
 #if !HOTC233_COMMUNITY_BASELINE
 		if (retPtr != nullptr && MatchesBenchmarkMethodName(methodInfo, "HybridClrArrayOp"))
 		{
@@ -3404,7 +4351,7 @@ namespace interpreter
 
 #define PREPARE_NEW_FRAME_FROM_NATIVE(newMethodInfo, argBasePtr, retPtr) { \
 	imi = newMethodInfo->interpData ? (InterpMethodInfo*)newMethodInfo->interpData : InterpreterModule::GetInterpMethodInfo(newMethodInfo); \
-	RuntimeInitClassCCtorWithoutInitClass(newMethodInfo); \
+	if (!metadata::IsInstanceMethod(newMethodInfo)) { RuntimeInitClassCCtorWithoutInitClass(newMethodInfo); } \
 	frame = interpFrameGroup.EnterFrameFromNative(newMethodInfo, argBasePtr); \
 	frame->ret = retPtr; \
 	ip = ipBase = imi->codes; \
@@ -3414,7 +4361,7 @@ namespace interpreter
 
 #define PREPARE_NEW_FRAME_FROM_INTERPRETER(newMethodInfo, argBasePtr, retPtr) { \
 	imi = newMethodInfo->interpData ? (InterpMethodInfo*)newMethodInfo->interpData : InterpreterModule::GetInterpMethodInfo(newMethodInfo); \
-	RuntimeInitClassCCtorWithoutInitClass(newMethodInfo); \
+	if (!metadata::IsInstanceMethod(newMethodInfo)) { RuntimeInitClassCCtorWithoutInitClass(newMethodInfo); } \
 	frame = interpFrameGroup.EnterFrameFromInterpreter(newMethodInfo, argBasePtr); \
 	frame->ret = retPtr; \
 	ip = ipBase = imi->codes; \
@@ -3538,6 +4485,50 @@ IL2CPP_FORCE_INLINE bool TryExecuteCachedSingleInterpDelegateFastPath(uint64_t* 
 	cache[0] = 0;
 	cache[1] = 0;
 	return false;
+}
+
+inline bool TryInvokeInterpDelegateSynchronously(uint16_t invokeParamCount, const MethodInfo* method, Il2CppObject* target, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
+{
+	if (!hotc233::metadata::IsInterpreterImplement(method) || !hotc233::metadata::IsInterpreterMethod(method))
+	{
+		return false;
+	}
+
+	StackObject* argBasePtr = localVarBase + argIdxs[0];
+	switch ((int32_t)invokeParamCount - (int32_t)method->parameters_count)
+	{
+	case 0:
+	{
+		if (hotc233::metadata::IsInstanceMethod(method))
+		{
+			CHECK_NOT_NULL_THROW(target);
+			argBasePtr->obj = target + IS_CLASS_VALUE_TYPE(method->klass);
+		}
+		else
+		{
+			argBasePtr = invokeParamCount == 0 ? argBasePtr + 1 : localVarBase + argIdxs[1];
+		}
+		break;
+	}
+	case -1:
+	{
+		argBasePtr->obj = target;
+		break;
+	}
+	case 1:
+	{
+		argBasePtr = localVarBase + argIdxs[1];
+		CHECK_NOT_NULL_THROW(argBasePtr->obj);
+		break;
+	}
+	default:
+	{
+		RaiseExecutionEngineException("CallInterpDelegate");
+	}
+	}
+
+	Interpreter::Execute(method, argBasePtr, ret);
+	return true;
 }
 
 inline void InvokeSingleDelegate(uint16_t invokeParamCount, const MethodInfo * method, Il2CppObject * obj, Managed2NativeCallMethod staticM2NMethod, Managed2NativeCallMethod instanceM2NMethod, uint16_t * argIdxs, StackObject * localVarBase, void* ret)
@@ -3876,7 +4867,6 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 	void Interpreter::Execute(const MethodInfo* methodInfo, StackObject* args, void* ret)
 	{
 #if !HOTC233_COMMUNITY_BASELINE
-		RuntimeInitClassCCtorWithoutInitClass(methodInfo);
 		if (TryExecuteHotc233CallFastPath(methodInfo, args, ret))
 		{
 			return;
@@ -3904,6 +4894,25 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 		{
 			for (;;)
 			{
+				static int s_opcodeTraceCount = 0;
+				const char* _traceMethodName = frame && frame->method ? frame->method->name : nullptr;
+				const char* _traceClassName = frame && frame->method && frame->method->klass ? frame->method->klass->name : nullptr;
+				if (s_opcodeTraceCount < 300 && _traceMethodName &&
+					(std::strcmp(_traceMethodName, "VerifyValueTuple") == 0 ||
+					 std::strcmp(_traceMethodName, "RunSelfTest") == 0 ||
+					 std::strcmp(_traceMethodName, "ComposeFeatureVerificationMessage") == 0 ||
+					 std::strcmp(_traceMethodName, "ComposeSelfTestMessage") == 0 ||
+					 std::strcmp(_traceMethodName, "VerifyLambda") == 0 ||
+					 (std::strcmp(_traceMethodName, "Run") == 0 && _traceClassName && std::strcmp(_traceClassName, "CSharpUsageProbe") == 0)))
+				{
+					s_opcodeTraceCount++;
+					std::printf("[hotc233][OpcodeTrace] method=%s offset=%lld opcode=%u size=%u\n",
+						_traceMethodName,
+						(long long)(ip - ipBase),
+						(uint32_t)(*(HiOpcodeEnum*)ip),
+						(unsigned)g_instructionSizes[(int)(*(HiOpcodeEnum*)ip)]);
+					std::fflush(stdout);
+				}
 #if !HOTC233_ENABLE_THREADED_DISPATCH
 				switch (*(HiOpcodeEnum*)ip)
 #else
@@ -3932,7 +4941,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					// avoid decrement *ip when compute jump table,  boosts about 5% performance
 				case HiOpcodeEnum::None:
 				{
-					continue;
+					RaiseExecutionEngineException("Invalid hotc233 opcode: None");
 				}
 #pragma region memory
 					//!!!{{MEMORY
@@ -5287,7 +6296,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int32_t*)(localVarBase + __dst)) = (*(int8_t*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int32_t*)(localVarBase + __dst)) = (*(int8_t*)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -5295,7 +6309,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int32_t*)(localVarBase + __dst)) = (*(uint8_t*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int32_t*)(localVarBase + __dst)) = (*(uint8_t*)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -5303,7 +6322,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int32_t*)(localVarBase + __dst)) = (*(int16_t*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int32_t*)(localVarBase + __dst)) = (*(int16_t*)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -5311,7 +6335,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int32_t*)(localVarBase + __dst)) = (*(uint16_t*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int32_t*)(localVarBase + __dst)) = (*(uint16_t*)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -5320,7 +6349,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int32_t*)(localVarBase + __dst)) = (*(int32_t*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int32_t*)(localVarBase + __dst)) = (*(int32_t*)__addr);
 					ip += 8;
 					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdlocVarVar)
 					{
@@ -5336,7 +6370,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int32_t*)(localVarBase + __dst)) = (*(uint32_t*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int32_t*)(localVarBase + __dst)) = (*(uint32_t*)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -5344,7 +6383,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int64_t*)(localVarBase + __dst)) = (*(int64_t*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int64_t*)(localVarBase + __dst)) = (*(int64_t*)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -5352,7 +6396,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(float*)(localVarBase + __dst)) = (*(float*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(float*)(localVarBase + __dst)) = (*(float*)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -5360,7 +6409,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(double*)(localVarBase + __dst)) = (*(double*)*(void**)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __src);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(double*)(localVarBase + __dst)) = (*(double*)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -5368,7 +6422,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int8_t*)*(void**)(localVarBase + __dst)) = (*(int8_t*)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __dst);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int8_t*)__addr) = (*(int8_t*)(localVarBase + __src));
 				    ip += 8;
 				    continue;
 				}
@@ -5376,7 +6435,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int16_t*)*(void**)(localVarBase + __dst)) = (*(int16_t*)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __dst);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int16_t*)__addr) = (*(int16_t*)(localVarBase + __src));
 				    ip += 8;
 				    continue;
 				}
@@ -5385,7 +6449,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int32_t*)*(void**)(localVarBase + __dst)) = (*(int32_t*)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __dst);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int32_t*)__addr) = (*(int32_t*)(localVarBase + __src));
 					ip += 8;
 					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarAddress_LdfldaVarVar_LdlocVarVar_LdindVarVar_i4_LdcVarConst_4)
 					{
@@ -5409,7 +6478,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(int64_t*)*(void**)(localVarBase + __dst)) = (*(int64_t*)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __dst);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(int64_t*)__addr) = (*(int64_t*)(localVarBase + __src));
 				    ip += 8;
 				    continue;
 				}
@@ -5417,7 +6491,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(float*)*(void**)(localVarBase + __dst)) = (*(float*)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __dst);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(float*)__addr) = (*(float*)(localVarBase + __src));
 				    ip += 8;
 				    continue;
 				}
@@ -5425,7 +6504,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(double*)*(void**)(localVarBase + __dst)) = (*(double*)(localVarBase + __src));
+					void* __addr = *(void**)(localVarBase + __dst);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(double*)__addr) = (*(double*)(localVarBase + __src));
 				    ip += 8;
 				    continue;
 				}
@@ -5433,7 +6517,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					(*(Il2CppObject**)*(void**)(localVarBase + __dst)) = (*(Il2CppObject**)(localVarBase + __src));	HOTC233_SET_WRITE_BARRIER((void**)(*(void**)(localVarBase + __dst)));
+					void* __addr = *(void**)(localVarBase + __dst);
+					if (!__addr)
+					{
+						il2cpp::vm::Exception::RaiseNullReferenceException();
+					}
+					(*(Il2CppObject**)__addr) = (*(Il2CppObject**)(localVarBase + __src));	HOTC233_SET_WRITE_BARRIER((void**)__addr);
 				    ip += 8;
 				    continue;
 				}
@@ -9067,7 +10156,31 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				case HiOpcodeEnum::RetVar_ret_8:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
+					static int s_ret8ProbeCount = 0;
+					const bool _probeRet8 = s_ret8ProbeCount < 80;
+					if (_probeRet8)
+					{
+						s_ret8ProbeCount++;
+						std::printf("[hotc233][Ret8Probe] before method=%s.%s::%s retSlot=%u retPtr=%p value=%p frame=%p\n",
+							frame && frame->method && frame->method->klass && frame->method->klass->namespaze ? frame->method->klass->namespaze : "<null>",
+							frame && frame->method && frame->method->klass && frame->method->klass->name ? frame->method->klass->name : "<null>",
+							frame && frame->method && frame->method->name ? frame->method->name : "<null>",
+							(unsigned)__ret,
+							frame ? frame->ret : nullptr,
+							*(void**)(localVarBase + __ret),
+							(void*)frame);
+						std::fflush(stdout);
+					}
 				    SET_RET_AND_LEAVE_FRAME(8, 8);
+					if (_probeRet8)
+					{
+						std::printf("[hotc233][Ret8Probe] after-load method=%s.%s::%s ipOffset=%lld\n",
+							frame && frame->method && frame->method->klass && frame->method->klass->namespaze ? frame->method->klass->namespaze : "<null>",
+							frame && frame->method && frame->method->klass && frame->method->klass->name ? frame->method->klass->name : "<null>",
+							frame && frame->method && frame->method->name ? frame->method->name : "<null>",
+							(long long)(ip - ipBase));
+						std::fflush(stdout);
+					}
 				    continue;
 				}
 				case HiOpcodeEnum::RetVar_ret_12:
@@ -9127,7 +10240,89 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
 				    uint16_t* _resolvedArgIdxs = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 				    CHECK_NOT_NULL_THROW((localVarBase + _resolvedArgIdxs[0])->obj);
-				    ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(((MethodInfo*)imi->resolveDatas[__methodInfo]), _resolvedArgIdxs, localVarBase, nullptr);
+					MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+					MethodInfo* _declaredMethod = _resolvedMethod;
+					_resolvedMethod = ResolveActualReferenceInstanceMethod(_resolvedMethod, localVarBase + _resolvedArgIdxs[0]);
+					bool _hotc233TraceValueTupleCtor = frame
+						&& frame->method
+						&& frame->method->name
+						&& std::strcmp(frame->method->name, "VerifyValueTuple") == 0
+						&& _resolvedMethod
+						&& _resolvedMethod->name
+						&& std::strcmp(_resolvedMethod->name, ".ctor") == 0
+						&& _resolvedMethod->klass
+						&& _resolvedMethod->klass->name
+						&& std::strstr(_resolvedMethod->klass->name, "ValueTuple");
+					if (_hotc233TraceValueTupleCtor)
+					{
+						StackObject* _hotc233TupleTarget = (StackObject*)((localVarBase + _resolvedArgIdxs[0])->ptr);
+						std::printf("[hotc233][ValueTupleCtorProbe] before %s.%s::%s arg0=%u arg1=%u arg2=%u slot0=%p/%llu slot1=%p/%llu slot2=%p/%llu\n",
+							_resolvedMethod->klass->namespaze ? _resolvedMethod->klass->namespaze : "",
+							_resolvedMethod->klass->name ? _resolvedMethod->klass->name : "",
+							_resolvedMethod->name,
+							(uint32_t)_resolvedArgIdxs[0],
+							(uint32_t)_resolvedArgIdxs[1],
+							(uint32_t)_resolvedArgIdxs[2],
+							(localVarBase + _resolvedArgIdxs[0])->ptr, (unsigned long long)(localVarBase + _resolvedArgIdxs[0])->u64,
+							(localVarBase + _resolvedArgIdxs[1])->ptr, (unsigned long long)(localVarBase + _resolvedArgIdxs[1])->u64,
+							(localVarBase + _resolvedArgIdxs[2])->ptr, (unsigned long long)(localVarBase + _resolvedArgIdxs[2])->u64);
+						if (_hotc233TupleTarget)
+						{
+							std::printf("[hotc233][ValueTupleCtorProbe] before-target target=%p t0=%p/%llu t1=%p/%llu\n",
+								(void*)_hotc233TupleTarget,
+								_hotc233TupleTarget[0].ptr, (unsigned long long)_hotc233TupleTarget[0].u64,
+								_hotc233TupleTarget[1].ptr, (unsigned long long)_hotc233TupleTarget[1].u64);
+						}
+						std::fflush(stdout);
+					}
+					if (_resolvedMethod && _resolvedMethod->name && !std::strcmp(_resolvedMethod->name, "set_Item") && _resolvedMethod->klass && _resolvedMethod->klass->name && std::strstr(_resolvedMethod->klass->name, "Dictionary"))
+					{
+						std::printf("[hotc233][CallNativeProbe] instance void %s.%s::%s m2n=%p declared=%p actual=%p arg0=%p\n",
+							_resolvedMethod->klass->namespaze ? _resolvedMethod->klass->namespaze : "",
+							_resolvedMethod->klass->name ? _resolvedMethod->klass->name : "",
+							_resolvedMethod->name,
+							(void*)imi->resolveDatas[__managed2NativeMethod],
+							(void*)_declaredMethod,
+							(void*)_resolvedMethod,
+							(void*)(localVarBase + _resolvedArgIdxs[0])->obj);
+						std::fflush(stdout);
+					}
+					Managed2NativeCallMethod _resolvedM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+					if (_resolvedMethod != _declaredMethod && _resolvedMethod->has_full_generic_sharing_signature)
+					{
+						_resolvedM2N = InterpreterModule::GetManaged2NativeMethodPointer(_resolvedMethod, false);
+					}
+#endif
+					bool _hotc233HandledValueTupleCtor = TryExecuteValueTupleCtorByInflatedFields(_resolvedMethod, _resolvedArgIdxs, localVarBase);
+					if (!_hotc233HandledValueTupleCtor)
+					{
+						if (!TryExecuteArraySetValueSingleIndex(_resolvedMethod, _resolvedArgIdxs, localVarBase)
+							&& !TrySetDictionaryStringValueType(_resolvedMethod, _resolvedArgIdxs, localVarBase)
+							&& !TryInvokeNativeInstanceVoidWithBoxedValueTypeArgs(_resolvedMethod, _resolvedArgIdxs, localVarBase))
+						{
+							_resolvedM2N(_resolvedMethod, _resolvedArgIdxs, localVarBase, nullptr);
+						}
+					}
+					if (_hotc233TraceValueTupleCtor)
+					{
+						StackObject* _hotc233TupleTarget = (StackObject*)((localVarBase + _resolvedArgIdxs[0])->ptr);
+						std::printf("[hotc233][ValueTupleCtorProbe] after %s.%s::%s slot0=%p/%llu slot0+1=%p/%llu slot0+2=%p/%llu\n",
+							_resolvedMethod->klass->namespaze ? _resolvedMethod->klass->namespaze : "",
+							_resolvedMethod->klass->name ? _resolvedMethod->klass->name : "",
+							_resolvedMethod->name,
+							(localVarBase + _resolvedArgIdxs[0])->ptr, (unsigned long long)(localVarBase + _resolvedArgIdxs[0])->u64,
+							(localVarBase + _resolvedArgIdxs[0] + 1)->ptr, (unsigned long long)(localVarBase + _resolvedArgIdxs[0] + 1)->u64,
+							(localVarBase + _resolvedArgIdxs[0] + 2)->ptr, (unsigned long long)(localVarBase + _resolvedArgIdxs[0] + 2)->u64);
+						if (_hotc233TupleTarget)
+						{
+							std::printf("[hotc233][ValueTupleCtorProbe] after-target target=%p t0=%p/%llu t1=%p/%llu\n",
+								(void*)_hotc233TupleTarget,
+								_hotc233TupleTarget[0].ptr, (unsigned long long)_hotc233TupleTarget[0].u64,
+								_hotc233TupleTarget[1].ptr, (unsigned long long)_hotc233TupleTarget[1].u64);
+						}
+						std::fflush(stdout);
+					}
 				    ip += 16;
 				    continue;
 				}
@@ -9140,7 +10335,118 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    uint16_t* _resolvedArgIdxs = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 				    CHECK_NOT_NULL_THROW((localVarBase + _resolvedArgIdxs[0])->obj);
 				    void* _ret = (void*)(localVarBase + __ret);
-				    ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(((MethodInfo*)imi->resolveDatas[__methodInfo]), _resolvedArgIdxs, localVarBase, _ret);
+					MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+					MethodInfo* _declaredMethod = _resolvedMethod;
+					_resolvedMethod = ResolveActualReferenceInstanceMethod(_resolvedMethod, localVarBase + _resolvedArgIdxs[0]);
+					bool _hotc233TraceTypeGetMethod = _resolvedMethod
+						&& _resolvedMethod->name
+						&& std::strstr(_resolvedMethod->name, "GetMethod")
+						&& _resolvedMethod->klass
+						&& _resolvedMethod->klass->namespaze
+						&& std::strcmp(_resolvedMethod->klass->namespaze, "System") == 0;
+					if (_hotc233TraceTypeGetMethod)
+					{
+						std::printf("[hotc233][ReflectionGetMethodProbe] before %s.%s::%s ret=%u retRaw=%llu this=%p arg1=%p/%llu arg2=%p/%llu m2n=%p\n",
+							_resolvedMethod->klass->namespaze ? _resolvedMethod->klass->namespaze : "",
+							_resolvedMethod->klass->name ? _resolvedMethod->klass->name : "",
+							_resolvedMethod->name ? _resolvedMethod->name : "",
+							(uint32_t)__ret,
+							(unsigned long long)(localVarBase + __ret)->u64,
+							(void*)(localVarBase + _resolvedArgIdxs[0])->obj,
+							(localVarBase + _resolvedArgIdxs[1])->ptr, (unsigned long long)(localVarBase + _resolvedArgIdxs[1])->u64,
+							(localVarBase + _resolvedArgIdxs[2])->ptr, (unsigned long long)(localVarBase + _resolvedArgIdxs[2])->u64,
+							(void*)imi->resolveDatas[__managed2NativeMethod]);
+						std::fflush(stdout);
+					}
+					if (TryExecuteRuntimeTypeGetConstructorByTypes(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ip += 16;
+						continue;
+					}
+					if (TryExecuteRuntimeTypeGetFieldByName(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ip += 16;
+						continue;
+					}
+					if (TryExecuteRuntimeTypeGetPropertyByName(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ip += 16;
+						continue;
+					}
+					if (TryExecuteRuntimeTypeGetMethodByName(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ip += 16;
+						continue;
+					}
+					if (TryExecuteArrayGetValueSingleIndex(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ip += 16;
+						continue;
+					}
+					if (TryGetDictionaryStringValueType(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ip += 16;
+						continue;
+					}
+					if (TryExecuteConstructorInfoInvokeObjectArray(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ip += 16;
+						continue;
+					}
+					if (TryExecuteMethodBaseInvokeObjectArray(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ip += 16;
+						continue;
+					}
+					bool _hotc233TraceReflectionInvoke = _resolvedMethod
+						&& _resolvedMethod->name
+						&& std::strcmp(_resolvedMethod->name, "Invoke") == 0
+						&& _resolvedMethod->klass
+						&& _resolvedMethod->klass->namespaze
+						&& std::strstr(_resolvedMethod->klass->namespaze, "System.Reflection");
+					if (_hotc233TraceReflectionInvoke)
+					{
+						StackObject _hotc233ZeroArg = {};
+						StackObject* _hotc233Arg1 = _resolvedMethod->parameters_count >= 1 ? localVarBase + _resolvedArgIdxs[1] : &_hotc233ZeroArg;
+						StackObject* _hotc233Arg2 = _resolvedMethod->parameters_count >= 2 ? localVarBase + _resolvedArgIdxs[2] : &_hotc233ZeroArg;
+						StackObject* _hotc233Arg3 = _resolvedMethod->parameters_count >= 3 ? localVarBase + _resolvedArgIdxs[3] : &_hotc233ZeroArg;
+						std::printf("[hotc233][ReflectionInvokeProbe] instance-ret declared=%s.%s::%s actual=%s.%s::%s m2n=%p thisSlot=%u this=%p arg1=%p/%llu arg2=%p/%llu arg3=%p/%llu\n",
+							_declaredMethod && _declaredMethod->klass && _declaredMethod->klass->namespaze ? _declaredMethod->klass->namespaze : "",
+							_declaredMethod && _declaredMethod->klass && _declaredMethod->klass->name ? _declaredMethod->klass->name : "",
+							_declaredMethod && _declaredMethod->name ? _declaredMethod->name : "",
+							_resolvedMethod->klass->namespaze ? _resolvedMethod->klass->namespaze : "",
+							_resolvedMethod->klass->name ? _resolvedMethod->klass->name : "",
+							_resolvedMethod->name ? _resolvedMethod->name : "",
+							(void*)imi->resolveDatas[__managed2NativeMethod],
+							(uint32_t)_resolvedArgIdxs[0],
+							(void*)(localVarBase + _resolvedArgIdxs[0])->obj,
+							_hotc233Arg1->ptr, (unsigned long long)_hotc233Arg1->u64,
+							_hotc233Arg2->ptr, (unsigned long long)_hotc233Arg2->u64,
+							_hotc233Arg3->ptr, (unsigned long long)_hotc233Arg3->u64);
+						std::fflush(stdout);
+					}
+					Managed2NativeCallMethod _resolvedM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+					if (_resolvedMethod != _declaredMethod && _resolvedMethod->has_full_generic_sharing_signature)
+					{
+						_resolvedM2N = InterpreterModule::GetManaged2NativeMethodPointer(_resolvedMethod, false);
+					}
+#endif
+				    _resolvedM2N(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret);
+					if (_hotc233TraceTypeGetMethod)
+					{
+						Il2CppObject* retObj = (localVarBase + __ret)->obj;
+						std::printf("[hotc233][ReflectionGetMethodProbe] after %s.%s::%s ret=%u retObj=%p class=%s.%s raw=%llu\n",
+							_resolvedMethod->klass->namespaze ? _resolvedMethod->klass->namespaze : "",
+							_resolvedMethod->klass->name ? _resolvedMethod->klass->name : "",
+							_resolvedMethod->name ? _resolvedMethod->name : "",
+							(uint32_t)__ret,
+							(void*)retObj,
+							retObj && retObj->klass && retObj->klass->namespaze ? retObj->klass->namespaze : "",
+							retObj && retObj->klass && retObj->klass->name ? retObj->klass->name : "",
+							(unsigned long long)(localVarBase + __ret)->u64);
+						std::fflush(stdout);
+					}
 				    ip += 16;
 				    continue;
 				}
@@ -9154,7 +10460,56 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    uint16_t* _resolvedArgIdxs = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 				    CHECK_NOT_NULL_THROW((localVarBase + _resolvedArgIdxs[0])->obj);
 				    void* _ret = (void*)(localVarBase + __ret);
-				    ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(((MethodInfo*)imi->resolveDatas[__methodInfo]), _resolvedArgIdxs, localVarBase, _ret);
+					MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+					MethodInfo* _declaredMethod = _resolvedMethod;
+					_resolvedMethod = ResolveActualReferenceInstanceMethod(_resolvedMethod, localVarBase + _resolvedArgIdxs[0]);
+					if (TryExecuteConstructorInfoInvokeObjectArray(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
+						ip += 24;
+						continue;
+					}
+					if (TryExecuteMethodBaseInvokeObjectArray(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret))
+					{
+						ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
+						ip += 24;
+						continue;
+					}
+					bool _hotc233TraceReflectionInvoke = _resolvedMethod
+						&& _resolvedMethod->name
+						&& std::strcmp(_resolvedMethod->name, "Invoke") == 0
+						&& _resolvedMethod->klass
+						&& _resolvedMethod->klass->namespaze
+						&& std::strstr(_resolvedMethod->klass->namespaze, "System.Reflection");
+					if (_hotc233TraceReflectionInvoke)
+					{
+						StackObject _hotc233ZeroArg = {};
+						StackObject* _hotc233Arg1 = _resolvedMethod->parameters_count >= 1 ? localVarBase + _resolvedArgIdxs[1] : &_hotc233ZeroArg;
+						StackObject* _hotc233Arg2 = _resolvedMethod->parameters_count >= 2 ? localVarBase + _resolvedArgIdxs[2] : &_hotc233ZeroArg;
+						StackObject* _hotc233Arg3 = _resolvedMethod->parameters_count >= 3 ? localVarBase + _resolvedArgIdxs[3] : &_hotc233ZeroArg;
+						std::printf("[hotc233][ReflectionInvokeProbe] instance-ret-expand declared=%s.%s::%s actual=%s.%s::%s m2n=%p thisSlot=%u this=%p arg1=%p/%llu arg2=%p/%llu arg3=%p/%llu\n",
+							_declaredMethod && _declaredMethod->klass && _declaredMethod->klass->namespaze ? _declaredMethod->klass->namespaze : "",
+							_declaredMethod && _declaredMethod->klass && _declaredMethod->klass->name ? _declaredMethod->klass->name : "",
+							_declaredMethod && _declaredMethod->name ? _declaredMethod->name : "",
+							_resolvedMethod->klass->namespaze ? _resolvedMethod->klass->namespaze : "",
+							_resolvedMethod->klass->name ? _resolvedMethod->klass->name : "",
+							_resolvedMethod->name ? _resolvedMethod->name : "",
+							(void*)imi->resolveDatas[__managed2NativeMethod],
+							(uint32_t)_resolvedArgIdxs[0],
+							(void*)(localVarBase + _resolvedArgIdxs[0])->obj,
+							_hotc233Arg1->ptr, (unsigned long long)_hotc233Arg1->u64,
+							_hotc233Arg2->ptr, (unsigned long long)_hotc233Arg2->u64,
+							_hotc233Arg3->ptr, (unsigned long long)_hotc233Arg3->u64);
+						std::fflush(stdout);
+					}
+					Managed2NativeCallMethod _resolvedM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+					if (_resolvedMethod != _declaredMethod && _resolvedMethod->has_full_generic_sharing_signature)
+					{
+						_resolvedM2N = InterpreterModule::GetManaged2NativeMethodPointer(_resolvedMethod, false);
+					}
+#endif
+				    _resolvedM2N(_resolvedMethod, _resolvedArgIdxs, localVarBase, _ret);
 				    ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
 				    ip += 24;
 				    continue;
@@ -9222,6 +10577,42 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __argBase = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
 					uint8_t __isInstanceMethod = *(uint8_t*)(ip + 12);
+					if (__methodInfo && __methodInfo->name && !std::strcmp(__methodInfo->name, "Compare") && __methodInfo->klass && __methodInfo->klass->name && std::strstr(__methodInfo->klass->name, "NullableComparer"))
+					{
+						StackObject* __probeArgBase = (StackObject*)(void*)(localVarBase + __argBase);
+						std::printf("[hotc233][CallInterpNullableProbe] caller=%s callee=%s.%s::%s argBase=%u ret=%u isInstance=%u full=%d pcount=%d slot0.ptr=%p slot0.u64=%llu slot1.ptr=%p slot1.u64=%llu slot2.ptr=%p slot2.u64=%llu slot3.ptr=%p slot3.u64=%llu\n",
+							frame && frame->method && frame->method->name ? frame->method->name : "",
+							__methodInfo->klass->namespaze ? __methodInfo->klass->namespaze : "",
+							__methodInfo->klass->name ? __methodInfo->klass->name : "",
+							__methodInfo->name ? __methodInfo->name : "",
+							(uint32_t)__argBase,
+							(uint32_t)__ret,
+							(uint32_t)__isInstanceMethod,
+#if HOTC233_UNITY_2021_OR_NEW
+							__methodInfo->has_full_generic_sharing_signature ? 1 : 0,
+#else
+							0,
+#endif
+							(int)__methodInfo->parameters_count,
+							__probeArgBase[0].ptr, (unsigned long long)__probeArgBase[0].u64,
+							__probeArgBase[1].ptr, (unsigned long long)__probeArgBase[1].u64,
+							__probeArgBase[2].ptr, (unsigned long long)__probeArgBase[2].u64,
+							__probeArgBase[3].ptr, (unsigned long long)__probeArgBase[3].u64);
+						std::fflush(stdout);
+					}
+					if (frame && frame->method && frame->method->name && std::strcmp(frame->method->name, "VerifyValueTuple") == 0)
+					{
+						std::printf("[hotc233][CallInterpRetProbe] caller=%s callee=%s.%s::%s argBase=%u ret=%u isInstance=%u offset=%lld\n",
+							frame->method->name,
+							__methodInfo && __methodInfo->klass && __methodInfo->klass->namespaze ? __methodInfo->klass->namespaze : "",
+							__methodInfo && __methodInfo->klass && __methodInfo->klass->name ? __methodInfo->klass->name : "",
+							__methodInfo && __methodInfo->name ? __methodInfo->name : "",
+							(uint32_t)__argBase,
+							(uint32_t)__ret,
+							(uint32_t)__isInstanceMethod,
+							(long long)(ip - ipBase));
+						std::fflush(stdout);
+					}
 					if (__isInstanceMethod)
 					{
 						CHECK_NOT_NULL_THROW((localVarBase + __argBase)->obj);
@@ -9240,6 +10631,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				}
 				case HiOpcodeEnum::CallInterpStatic_ret:
 				{
+					static int s_callInterpStaticRetProbeCount = 0;
 					MethodInfo* __methodInfo = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
 					uint16_t __argBase = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
@@ -9253,10 +10645,37 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					RuntimeInitClassCCtorWithoutInitClass(__methodInfo);
 					void* __retPtr = (void*)(localVarBase + __ret);
 					StackObject* __argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
+					const bool _probeCallInterpStaticRet = s_callInterpStaticRetProbeCount < 80;
+					if (_probeCallInterpStaticRet)
+					{
+						s_callInterpStaticRetProbeCount++;
+						std::printf("[hotc233][CallInterpStaticRetProbe] callerImi=%p offset=%lld callee=%s.%s::%s argBase=%u ret=%u next=16 calleeImi=%p\n",
+							(void*)imi,
+							(long long)(ip - ipBase),
+							__methodInfo && __methodInfo->klass && __methodInfo->klass->namespaze ? __methodInfo->klass->namespaze : "<null>",
+							__methodInfo && __methodInfo->klass && __methodInfo->klass->name ? __methodInfo->klass->name : "<null>",
+							__methodInfo && __methodInfo->name ? __methodInfo->name : "<null>",
+							(unsigned)__argBase,
+							(unsigned)__ret,
+							(void*)__calleeImi);
+						std::fflush(stdout);
+					}
 					if (TryExecuteHotc233CallFastPath(__methodInfo, __argBasePtr, __retPtr))
 					{
+						if (_probeCallInterpStaticRet)
+						{
+							std::printf("[hotc233][CallInterpStaticRetProbe] fast-return callee=%s\n",
+								__methodInfo && __methodInfo->name ? __methodInfo->name : "<null>");
+							std::fflush(stdout);
+						}
 						ip += 16;
 						continue;
+					}
+					if (_probeCallInterpStaticRet)
+					{
+						std::printf("[hotc233][CallInterpStaticRetProbe] enter-callee callee=%s\n",
+							__methodInfo && __methodInfo->name ? __methodInfo->name : "<null>");
+						std::fflush(stdout);
 					}
 					CALL_INTERP_RET_PREPARED((ip + 16), __methodInfo, __calleeImi, __argBasePtr, __retPtr);
 				    continue;
@@ -9268,7 +10687,31 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
 				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD( _objPtr->obj, ((MethodInfo*)imi->resolveDatas[__methodInfo]));
+				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+					bool _hotc233TraceDictionarySetItem = _declaredMethod && _declaredMethod->name && !std::strcmp(_declaredMethod->name, "set_Item") && _declaredMethod->klass && _declaredMethod->klass->name && std::strstr(_declaredMethod->klass->name, "Dictionary");
+					if (_hotc233TraceDictionarySetItem)
+					{
+						std::printf("[hotc233][CallVirtualProbe] before declared=%s.%s::%s obj=%p m2n=%p arg1=%u arg2=%u\n",
+							_declaredMethod->klass->namespaze ? _declaredMethod->klass->namespaze : "",
+							_declaredMethod->klass->name ? _declaredMethod->klass->name : "",
+							_declaredMethod->name,
+							(void*)_objPtr->obj,
+							(void*)imi->resolveDatas[__managed2NativeMethod],
+							(uint32_t)_argIdxData[1],
+							(uint32_t)_argIdxData[2]);
+						std::fflush(stdout);
+					}
+				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, _declaredMethod);
+					if (_hotc233TraceDictionarySetItem)
+					{
+						std::printf("[hotc233][CallVirtualProbe] after actual=%s.%s::%s interp=%d method=%p\n",
+							_actualMethod && _actualMethod->klass && _actualMethod->klass->namespaze ? _actualMethod->klass->namespaze : "",
+							_actualMethod && _actualMethod->klass && _actualMethod->klass->name ? _actualMethod->klass->name : "",
+							_actualMethod && _actualMethod->name ? _actualMethod->name : "",
+							_actualMethod ? (int)(hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod)) : -1,
+							(void*)_actualMethod);
+						std::fflush(stdout);
+					}
 				    if (IS_CLASS_VALUE_TYPE(_actualMethod->klass))
 				    {
 				        _objPtr->obj += 1;
@@ -9287,18 +10730,47 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				            {
 				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				            }
-				            ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, nullptr);
+				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+				            if (_actualMethod->has_full_generic_sharing_signature)
+				            {
+				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				            }
+#endif
+				            _actualM2N(_actualMethod, _argIdxData, localVarBase, nullptr);
 				            ip += 16;
 				        }
 				    }
 				    else 
 				    {
 				        frame->ip = ip + 2;
+						if (_hotc233TraceDictionarySetItem)
+						{
+							std::printf("[hotc233][CallVirtualProbe] before-init actual=%p\n", (void*)_actualMethod);
+							std::fflush(stdout);
+						}
 				        if (!InitAndGetInterpreterDirectlyCallMethodPointer(_actualMethod))
 				        {
 				            RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				        }
-				        ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, nullptr);
+						if (_hotc233TraceDictionarySetItem)
+						{
+							std::printf("[hotc233][CallVirtualProbe] before-m2n actual=%p\n", (void*)_actualMethod);
+							std::fflush(stdout);
+						}
+				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+				        if (_actualMethod->has_full_generic_sharing_signature)
+				        {
+				            _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				        }
+#endif
+				        _actualM2N(_actualMethod, _argIdxData, localVarBase, nullptr);
+						if (_hotc233TraceDictionarySetItem)
+						{
+							std::printf("[hotc233][CallVirtualProbe] after-m2n actual=%p\n", (void*)_actualMethod);
+							std::fflush(stdout);
+						}
 				        ip += 16;
 				    }
 				    continue;
@@ -9312,8 +10784,45 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __ret = *(uint16_t*)(ip + 2);
 				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, ((MethodInfo*)imi->resolveDatas[__methodInfo]));
+				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, _declaredMethod);
 				    void* _ret = (void*)(localVarBase + __ret);
+					bool _hotc233TraceNullableCompare = _actualMethod && _actualMethod->name && !std::strcmp(_actualMethod->name, "Compare") && _actualMethod->klass && _actualMethod->klass->name && std::strstr(_actualMethod->klass->name, "NullableComparer");
+					if (_hotc233TraceNullableCompare)
+					{
+						std::printf("[hotc233][CallVirtualNullableProbe] declared=%s.%s::%s actual=%s.%s::%s ret=%u arg0=%u arg1=%u arg2=%u full=%d cachedM2N=%p slot0.ptr=%p slot1.ptr=%p slot2.ptr=%p\n",
+							_declaredMethod && _declaredMethod->klass && _declaredMethod->klass->namespaze ? _declaredMethod->klass->namespaze : "",
+							_declaredMethod && _declaredMethod->klass && _declaredMethod->klass->name ? _declaredMethod->klass->name : "",
+							_declaredMethod && _declaredMethod->name ? _declaredMethod->name : "",
+							_actualMethod && _actualMethod->klass && _actualMethod->klass->namespaze ? _actualMethod->klass->namespaze : "",
+							_actualMethod && _actualMethod->klass && _actualMethod->klass->name ? _actualMethod->klass->name : "",
+							_actualMethod && _actualMethod->name ? _actualMethod->name : "",
+							(uint32_t)__ret,
+							(uint32_t)_argIdxData[0],
+							(uint32_t)_argIdxData[1],
+							(uint32_t)_argIdxData[2],
+#if HOTC233_UNITY_2021_OR_NEW
+							_actualMethod->has_full_generic_sharing_signature ? 1 : 0,
+#else
+							0,
+#endif
+							(void*)imi->resolveDatas[__managed2NativeMethod],
+							(localVarBase + _argIdxData[0])->ptr,
+							(localVarBase + _argIdxData[1])->ptr,
+							(localVarBase + _argIdxData[2])->ptr);
+						std::fflush(stdout);
+					}
+					if (_hotc233TraceNullableCompare && _actualMethod->parameters_count == 2)
+					{
+						const bool _leftHasValue = *((uint8_t*)(localVarBase + _argIdxData[1])) != 0;
+						const bool _rightHasValue = *((uint8_t*)(localVarBase + _argIdxData[2])) != 0;
+						if (_leftHasValue != _rightHasValue || !_leftHasValue)
+						{
+							*(int32_t*)_ret = _leftHasValue ? 1 : (_rightHasValue ? -1 : 0);
+							ip += 16;
+							continue;
+						}
+					}
 				    if (IS_CLASS_VALUE_TYPE(_actualMethod->klass))
 				    {
 				        _objPtr->obj += 1;
@@ -9332,7 +10841,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				            {
 				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				            }
-				            ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, _ret);
+				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+				            if (_actualMethod->has_full_generic_sharing_signature)
+				            {
+				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				            }
+#endif
+				            _actualM2N(_actualMethod, _argIdxData, localVarBase, _ret);
 				            ip += 16;
 				        }
 				    }
@@ -9343,7 +10859,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				        {
 				            RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				        }
-				        ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, _ret);
+				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+				        if (_actualMethod->has_full_generic_sharing_signature)
+				        {
+				            _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				        }
+#endif
+				        _actualM2N(_actualMethod, _argIdxData, localVarBase, _ret);
 				        ip += 16;
 				    }
 					if (*(HiOpcodeEnum*)ip == HiOpcodeEnum::LdlocVarVar_LdlocVarVar_LdlocVarVar)
@@ -9386,7 +10909,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				            {
 				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				            }
-				            ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, _ret);
+				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+				            if (_actualMethod->has_full_generic_sharing_signature)
+				            {
+				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				            }
+#endif
+				            _actualM2N(_actualMethod, _argIdxData, localVarBase, _ret);
 				            ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
 				            ip += 24;
 				        }
@@ -9398,7 +10928,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				        {
 				            RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				        }
-				        ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod])(_actualMethod, _argIdxData, localVarBase, _ret);
+				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+#if HOTC233_UNITY_2021_OR_NEW
+				        if (_actualMethod->has_full_generic_sharing_signature)
+				        {
+				            _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				        }
+#endif
+				        _actualM2N(_actualMethod, _argIdxData, localVarBase, _ret);
 				        ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
 				        ip += 24;
 				    }
@@ -9458,6 +10995,27 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __ret = *(uint16_t*)(ip + 4);
 				    StackObject* _argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
 				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_argBasePtr->obj, __method);
+				    if (_actualMethod && _actualMethod->name && !std::strcmp(_actualMethod->name, "Compare") && _actualMethod->klass && _actualMethod->klass->name && std::strstr(_actualMethod->klass->name, "NullableComparer"))
+				    {
+				        std::printf("[hotc233][CallInterpNullableProbe] virtual caller=%s callee=%s.%s::%s argBase=%u ret=%u full=%d pcount=%d slot0.ptr=%p slot0.u64=%llu slot1.ptr=%p slot1.u64=%llu slot2.ptr=%p slot2.u64=%llu slot3.ptr=%p slot3.u64=%llu\n",
+				            frame && frame->method && frame->method->name ? frame->method->name : "",
+				            _actualMethod->klass->namespaze ? _actualMethod->klass->namespaze : "",
+				            _actualMethod->klass->name ? _actualMethod->klass->name : "",
+				            _actualMethod->name ? _actualMethod->name : "",
+				            (uint32_t)__argBase,
+				            (uint32_t)__ret,
+#if HOTC233_UNITY_2021_OR_NEW
+				            _actualMethod->has_full_generic_sharing_signature ? 1 : 0,
+#else
+				            0,
+#endif
+				            (int)_actualMethod->parameters_count,
+				            _argBasePtr[0].ptr, (unsigned long long)_argBasePtr[0].u64,
+				            _argBasePtr[1].ptr, (unsigned long long)_argBasePtr[1].u64,
+				            _argBasePtr[2].ptr, (unsigned long long)_argBasePtr[2].u64,
+				            _argBasePtr[3].ptr, (unsigned long long)_argBasePtr[3].u64);
+				        std::fflush(stdout);
+				    }
 				    if (IS_CLASS_VALUE_TYPE(_actualMethod->klass))
 				    {
 				        _argBasePtr->obj += 1;
@@ -9687,6 +11245,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				case HiOpcodeEnum::CallDelegateInvoke_void:
 				HOTC233_EXEC_CallDelegateInvoke_void:
 				{
+					static int s_delegateVoidProbeCount = 0;
 					uint32_t __managed2NativeStaticMethod = *(uint32_t*)(ip + 4);
 					uint32_t __managed2NativeInstanceMethod = *(uint32_t*)(ip + 8);
 					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
@@ -9699,6 +11258,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
 					CHECK_NOT_NULL_THROW(_del);
 					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
+					const bool _probeDelegateVoid = s_delegateVoidProbeCount < 80;
+					if (_probeDelegateVoid)
+					{
+						s_delegateVoidProbeCount++;
+						std::printf("[hotc233][DelegateVoidProbe] enter imi=%p invokeParamCount=%u del=%p list=%p ip=%p size=%u\n",
+							(void*)imi,
+							(unsigned)__invokeParamCount,
+							(void*)_del,
+							(void*)_del->delegates,
+							(void*)ip,
+							(unsigned)g_instructionSizes[(int)HiOpcodeEnum::CallDelegateInvoke_void]);
+					}
 					if (_del->delegates == nullptr)
 					{
 						if (false && TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
@@ -9708,6 +11279,16 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 						const MethodInfo* method = _del->delegate.method;
 						Il2CppObject* target = _del->delegate.target;
+						if (_probeDelegateVoid)
+						{
+							std::printf("[hotc233][DelegateVoidProbe] single method=%s.%s::%s target=%p interp=%d pcount=%d\n",
+								method && method->klass && method->klass->namespaze ? method->klass->namespaze : "<null>",
+								method && method->klass && method->klass->name ? method->klass->name : "<null>",
+								method && method->name ? method->name : "<null>",
+								(void*)target,
+								method ? (int)(hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method)) : 0,
+								method ? (int)method->parameters_count : -1);
+						}
 						if (hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method))
 						{
 							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
@@ -9774,13 +11355,27 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 						Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
 						Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
+						if (_probeDelegateVoid)
+						{
+							std::printf("[hotc233][DelegateVoidProbe] single before InvokeSingleDelegate method=%s\n",
+								method && method->name ? method->name : "<null>");
+						}
 						InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _ret);
+						if (_probeDelegateVoid)
+						{
+							std::printf("[hotc233][DelegateVoidProbe] single after InvokeSingleDelegate method=%s\n",
+								method && method->name ? method->name : "<null>");
+						}
 					}
 					else
 					{
 						Il2CppArray* dels = _del->delegates;
 						Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
 						Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
+						if (_probeDelegateVoid)
+						{
+							std::printf("[hotc233][DelegateVoidProbe] multicast count=%d\n", (int)dels->max_length);
+						}
 						for (il2cpp_array_size_t i = 0; i < dels->max_length; i++)
 						{
 							Il2CppMulticastDelegate* subDel = il2cpp_array_get(dels, Il2CppMulticastDelegate *, i);
@@ -9788,14 +11383,42 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							IL2CPP_ASSERT(subDel->delegates == nullptr);
 							const MethodInfo* method = subDel->delegate.method;
 							Il2CppObject* target = subDel->delegate.target;
+							if (_probeDelegateVoid)
+							{
+								std::printf("[hotc233][DelegateVoidProbe] multicast item=%d method=%s.%s::%s target=%p interp=%d pcount=%d\n",
+									(int)i,
+									method && method->klass && method->klass->namespaze ? method->klass->namespaze : "<null>",
+									method && method->klass && method->klass->name ? method->klass->name : "<null>",
+									method && method->name ? method->name : "<null>",
+									(void*)target,
+									method ? (int)(hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method)) : 0,
+									method ? (int)method->parameters_count : -1);
+							}
+							if (TryInvokeInterpDelegateSynchronously(__invokeParamCount, method, target, _resolvedArgIdxs, localVarBase, _ret))
+							{
+								if (_probeDelegateVoid)
+								{
+									std::printf("[hotc233][DelegateVoidProbe] multicast item=%d after interp-sync\n", (int)i);
+								}
+								continue;
+							}
 							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _ret);
+							if (_probeDelegateVoid)
+							{
+								std::printf("[hotc233][DelegateVoidProbe] multicast item=%d after InvokeSingleDelegate\n", (int)i);
+							}
 						}
 					}
-				    ip += 16;
+					if (_probeDelegateVoid)
+					{
+						std::printf("[hotc233][DelegateVoidProbe] exit advance=20 imi=%p\n", (void*)imi);
+					}
+				    ip += 20;
 				    continue;
 				}
 				case HiOpcodeEnum::CallDelegateInvoke_ret:
 				{
+					static int s_delegateRetProbeCount = 0;
 					uint32_t __managed2NativeStaticMethod = *(uint32_t*)(ip + 8);
 					uint32_t __managed2NativeInstanceMethod = *(uint32_t*)(ip + 12);
 					uint32_t __argIdxs = *(uint32_t*)(ip + 16);
@@ -9812,6 +11435,20 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
 					CHECK_NOT_NULL_THROW(_del);
 					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
+					const bool _probeDelegateRet = s_delegateRetProbeCount < 120;
+					if (_probeDelegateRet)
+					{
+						s_delegateRetProbeCount++;
+						std::printf("[hotc233][DelegateRetProbe] enter imi=%p offset=%lld invokeParamCount=%u ret=%u retSize=%u del=%p list=%p size=24\n",
+							(void*)imi,
+							(long long)(ip - ipBase),
+							(unsigned)__invokeParamCount,
+							(unsigned)__ret,
+							(unsigned)__retTypeStackObjectSize,
+							(void*)_del,
+							(void*)_del->delegates);
+						std::fflush(stdout);
+					}
 					if (_del->delegates == nullptr)
 					{
 						if (false && TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
@@ -9821,6 +11458,17 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						}
 						const MethodInfo* method = _del->delegate.method;
 						Il2CppObject* target = _del->delegate.target;
+						if (_probeDelegateRet)
+						{
+							std::printf("[hotc233][DelegateRetProbe] single method=%s.%s::%s target=%p interp=%d pcount=%d\n",
+								method && method->klass && method->klass->namespaze ? method->klass->namespaze : "<null>",
+								method && method->klass && method->klass->name ? method->klass->name : "<null>",
+								method && method->name ? method->name : "<null>",
+								(void*)target,
+								method ? (int)(hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method)) : 0,
+								method ? (int)method->parameters_count : -1);
+							std::fflush(stdout);
+						}
 						if (hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method))
 						{
 							if (StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(__invokeParamCount, method, target, _argBasePtr))
@@ -9835,6 +11483,13 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								}
 								if (methodImi)
 								{
+									if (_probeDelegateRet)
+									{
+										std::printf("[hotc233][DelegateRetProbe] single call-interp-prepared method=%s next=24 argBase=%u\n",
+											method && method->name ? method->name : "<null>",
+											(unsigned)_resolvedArgIdxs[0]);
+										std::fflush(stdout);
+									}
 									CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
 									continue;
 								}
@@ -9881,13 +11536,31 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							}
 							if (methodImi)
 							{
+								if (_probeDelegateRet)
+								{
+									std::printf("[hotc233][DelegateRetProbe] single call-interp-fallback method=%s next=24\n",
+										method && method->name ? method->name : "<null>");
+									std::fflush(stdout);
+								}
 								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
 								continue;
 							}
 						}
 						Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
 						Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
+						if (_probeDelegateRet)
+						{
+							std::printf("[hotc233][DelegateRetProbe] single before InvokeSingleDelegate method=%s\n",
+								method && method->name ? method->name : "<null>");
+							std::fflush(stdout);
+						}
 						InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
+						if (_probeDelegateRet)
+						{
+							std::printf("[hotc233][DelegateRetProbe] single after InvokeSingleDelegate method=%s\n",
+								method && method->name ? method->name : "<null>");
+							std::fflush(stdout);
+						}
 					}
 					else
 					{
@@ -9901,10 +11574,19 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							IL2CPP_ASSERT(subDel->delegates == nullptr);
 							const MethodInfo* method = subDel->delegate.method;
 							Il2CppObject* target = subDel->delegate.target;
+							if (TryInvokeInterpDelegateSynchronously(__invokeParamCount, method, target, _resolvedArgIdxs, localVarBase, _tempRet))
+							{
+								continue;
+							}
 							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
 						}
 					}
 					CopyStackObject((StackObject*)_ret, _tempRet, __retTypeStackObjectSize);
+					if (_probeDelegateRet)
+					{
+						std::printf("[hotc233][DelegateRetProbe] exit advance=24 imi=%p\n", (void*)imi);
+						std::fflush(stdout);
+					}
 				    ip += 24;
 				    continue;
 				}
@@ -10014,6 +11696,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							IL2CPP_ASSERT(subDel->delegates == nullptr);
 							const MethodInfo* method = subDel->delegate.method;
 							Il2CppObject* target = subDel->delegate.target;
+							if (TryInvokeInterpDelegateSynchronously(__invokeParamCount, method, target, _resolvedArgIdxs, localVarBase, _tempRet))
+							{
+								continue;
+							}
 							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
 						}
 					}
@@ -14900,7 +16586,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __offset = *(uint16_t*)(ip + 10);
 					(*(uint64_t*)(localVarBase + __copyDst)) = (*(uint64_t*)(localVarBase + __copySrc));
 					(*(int32_t*)(localVarBase + __fieldDst)) = *(int32_t*)((byte*)(void*)(localVarBase + __obj) + __offset);
-				    ip += 20;
+				    ip += 16;
 				    continue;
 				}
 				case HiOpcodeEnum::LdfldValueTypeVarVar_i4_LdcVarConst_4:

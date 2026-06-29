@@ -44,7 +44,20 @@ namespace Hotc233.Editor.Commands
             });
 
             g.Generate();
+            SyncGeneratedMethodBridgeToBundledRuntime(outputFile);
             Debug.LogFormat("[MethodBridgeGeneratorCommand] output:{0}", outputFile);
+        }
+
+        private static void SyncGeneratedMethodBridgeToBundledRuntime(string outputFile)
+        {
+            string bundledOutputFile = $"{SettingsUtil.ProjectDir}/{SettingsUtil.Hotc233DataPathInPackage}/Libil2cpp/2022-tuanjie/hotc233/generated/MethodBridge.cpp";
+            if (string.Equals(Path.GetFullPath(outputFile), Path.GetFullPath(bundledOutputFile), StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(bundledOutputFile));
+            File.Copy(outputFile, bundledOutputFile, true);
+            Debug.LogFormat("[MethodBridgeGeneratorCommand] synced bundled output:{0}", bundledOutputFile);
         }
 
         [MenuItem("hotc233/Generate/MethodBridgeAndReversePInvokeWrapper", priority = 101)]
@@ -64,7 +77,14 @@ namespace Hotc233.Editor.Commands
             {
                 throw new Exception($"no aot assembly found. please run `hotc233/Generate/All` or `hotc233/Generate/AotDlls` to generate aot dlls before runing `hotc233/Generate/MethodBridge`");
             }
-            AssemblyReferenceDeepCollector collector = new AssemblyReferenceDeepCollector(MetaUtil.CreateAOTAssemblyResolver(target), aotAssemblyNames);
+            List<string> hotUpdateDlls = SettingsUtil.HotUpdateAssemblyNamesExcludePreserved;
+            List<string> bridgeRootAssemblyNames = aotAssemblyNames
+                .Concat(hotUpdateDlls)
+                .Distinct()
+                .ToList();
+            AssemblyReferenceDeepCollector collector = new AssemblyReferenceDeepCollector(
+                MetaUtil.CreateHotUpdateAndAOTAssemblyResolver(target, hotUpdateDlls),
+                bridgeRootAssemblyNames);
 
             var methodBridgeAnalyzer = new Analyzer(new Analyzer.Options
             {
@@ -74,7 +94,6 @@ namespace Hotc233.Editor.Commands
 
             methodBridgeAnalyzer.Run();
 
-            List<string> hotUpdateDlls = SettingsUtil.HotUpdateAssemblyNamesExcludePreserved;
             var cache = new AssemblyCache(MetaUtil.CreateHotUpdateAndAOTAssemblyResolver(target, hotUpdateDlls));
 
             var reversePInvokeAnalyzer = new MonoPInvokeCallbackAnalyzer(cache, hotUpdateDlls);
