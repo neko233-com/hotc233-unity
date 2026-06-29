@@ -150,11 +150,15 @@ namespace metadata
         {
             if (ass->token)
             {
-                RaiseExecutionEngineException("reloading placeholder assembly is not supported!");
+                ass = new (HOTC233_MALLOC_ZERO(sizeof(Il2CppAssembly))) Il2CppAssembly;
+                image2 = new (HOTC233_MALLOC_ZERO(sizeof(Il2CppImage))) Il2CppImage;
             }
-            image2 = ass->image;
-            HOTC233_FREE((void*)ass->image->name);
-            HOTC233_FREE((void*)ass->image->nameNoExt);
+            else
+            {
+                image2 = ass->image;
+                HOTC233_FREE((void*)ass->image->name);
+                HOTC233_FREE((void*)ass->image->nameNoExt);
+            }
         }
         else
         {

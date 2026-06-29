@@ -1051,8 +1051,9 @@ const Il2CppAssembly* il2cpp::vm::MetadataCache::GetAssemblyByName(const char* n
 
     il2cpp::os::FastAutoLock lock(&il2cpp::vm::g_MetadataLock);
 
-    for (auto assembly : s_cliAssemblies)
+    for (size_t i = s_cliAssemblies.size(); i > 0; --i)
     {
+        Il2CppAssembly* assembly = s_cliAssemblies[i - 1];
         if (comparer(assembly->aname.name, assemblyName) || comparer(assembly->image->name, assemblyName))
             return assembly;
     }

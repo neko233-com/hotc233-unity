@@ -201,6 +201,14 @@ namespace Hotc233
 
         private Assembly LoadOrReuseHotUpdateAssembly(string binaryName, byte[] bytes, string sha256)
         {
+            if (TryGetLoadedAssemblyByHash(sha256, out var cachedAssembly))
+            {
+                Hotc233RuntimeDiagnostics.Info(
+                    "assembly.load.reuse",
+                    $"{cachedAssembly.GetName().Name} from {binaryName}; sha256={sha256}; reason=same-bytes");
+                return cachedAssembly;
+            }
+
             try
             {
                 return Assembly.Load(bytes);
