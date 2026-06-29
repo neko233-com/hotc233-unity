@@ -7,6 +7,7 @@
 #endif
 
 #include "InterpreterDefs.h"
+#include "InstrinctDef.h"
 #include "../Il2CppCompatibleDef.h"
 
 namespace hotc233
@@ -171,11 +172,6 @@ namespace interpreter
 		{
 			return nullptr;
 		}
-		if (kind == Hotc233DirectCallKind::InstanceVoidV3x4)
-		{
-			// Four Vector3-by-ref params: methodPointer is not DirectInstanceV_V3_4 — stay on interp ABI.
-			return nullptr;
-		}
 		if (kind == Hotc233DirectCallKind::InstanceVoidV3Setter)
 		{
 			// Unity value-type setters need the invoker argument ABI unless a dedicated
@@ -230,6 +226,11 @@ namespace interpreter
 			resolveDatas[cacheIndex] = (uint64_t)directPtr;
 		}
 		return directPtr;
+	}
+
+	IL2CPP_FORCE_INLINE HtVector3f LoadVector3Value(const void* value)
+	{
+		return *(const HtVector3f*)value;
 	}
 
 	IL2CPP_FORCE_INLINE Il2CppMethodPointer GetOrCacheDirectNativeMethodPointer(
@@ -850,12 +851,18 @@ namespace interpreter
 			return;
 		}
 		RuntimeInitClassCCtorWithoutInitClass(method);
-		typedef void(*DirectInstanceV_V3_4)(void*, void*, void*, void*, void*);
+		typedef void(*DirectInstanceV_V3_4)(void*, HtVector3f, HtVector3f, HtVector3f, HtVector3f, MethodInfo*);
 		Il2CppMethodPointer directPtr = GetOrCacheDirectNativeMethodPointer(
 			resolveDatas, thunkCacheIdx, method, Hotc233DirectCallKind::InstanceVoidV3x4);
 		if (directPtr != nullptr)
 		{
-			((DirectInstanceV_V3_4)directPtr)(self, p0, p1, p2, p3);
+			((DirectInstanceV_V3_4)directPtr)(
+				self,
+				LoadVector3Value(p0),
+				LoadVector3Value(p1),
+				LoadVector3Value(p2),
+				LoadVector3Value(p3),
+				method);
 			return;
 		}
 		typedef void(*InterpInstanceV_V3_4)(void*, void*, void*, void*, void*, MethodInfo*);
@@ -874,25 +881,29 @@ namespace interpreter
 	{
 		if (directPtr != nullptr)
 		{
-			typedef void(*DirectInstanceV_V3_4)(void*, void*, void*, void*, void*);
+			typedef void(*DirectInstanceV_V3_4)(void*, HtVector3f, HtVector3f, HtVector3f, HtVector3f, MethodInfo*);
 			DirectInstanceV_V3_4 directFn = (DirectInstanceV_V3_4)directPtr;
+			HtVector3f v0 = LoadVector3Value(p0);
+			HtVector3f v1 = LoadVector3Value(p1);
+			HtVector3f v2 = LoadVector3Value(p2);
+			HtVector3f v3 = LoadVector3Value(p3);
 			if (stepCount == 10)
 			{
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
 				return;
 			}
 			for (uint16_t step = 0; step < stepCount; step++)
 			{
-				directFn(self, p0, p1, p2, p3);
+				directFn(self, v0, v1, v2, v3, method);
 			}
 			return;
 		}
@@ -934,25 +945,29 @@ namespace interpreter
 		}
 		if (directPtr != nullptr)
 		{
-			typedef void(*DirectInstanceV_V3_4)(void*, void*, void*, void*, void*);
+			typedef void(*DirectInstanceV_V3_4)(void*, HtVector3f, HtVector3f, HtVector3f, HtVector3f, MethodInfo*);
 			DirectInstanceV_V3_4 directFn = (DirectInstanceV_V3_4)directPtr;
+			HtVector3f v0 = LoadVector3Value(p0);
+			HtVector3f v1 = LoadVector3Value(p1);
+			HtVector3f v2 = LoadVector3Value(p2);
+			HtVector3f v3 = LoadVector3Value(p3);
 			while (totalSteps >= 10)
 			{
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
-				directFn(self, p0, p1, p2, p3);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
+				directFn(self, v0, v1, v2, v3, method);
 				totalSteps -= 10;
 			}
 			while (totalSteps-- > 0)
 			{
-				directFn(self, p0, p1, p2, p3);
+				directFn(self, v0, v1, v2, v3, method);
 			}
 			return;
 		}
