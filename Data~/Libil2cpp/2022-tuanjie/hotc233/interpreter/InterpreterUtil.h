@@ -158,8 +158,8 @@ namespace interpreter
 		{
 			if (directNoArg != nullptr)
 			{
-				typedef float(*DirectStaticF4)();
-				return ((DirectStaticF4)directNoArg)();
+				typedef float(*DirectStaticF4)(MethodInfo*);
+				return ((DirectStaticF4)directNoArg)(const_cast<MethodInfo*>(method));
 			}
 			typedef float(*InterpStaticF4)(MethodInfo*);
 			return ((InterpStaticF4)interpWithMethodInfo)(const_cast<MethodInfo*>(method));

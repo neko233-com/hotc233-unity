@@ -13924,8 +13924,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    	imi->resolveDatas, __thunkCache, _resolvedMethod, Hotc233DirectCallKind::StaticI4OrNoArg);
 				    if (_directPtr != nullptr)
 				    {
-				    	typedef int32_t(*DirectStaticI4)();
-				    	*(int32_t*)(void*)(localVarBase + __ret) = ((DirectStaticI4)_directPtr)();
+						typedef int32_t(*DirectStaticI4)(MethodInfo*);
+						*(int32_t*)(void*)(localVarBase + __ret) = ((DirectStaticI4)_directPtr)(_resolvedMethod);
 				    }
 				    else
 				    {
@@ -14038,8 +14038,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						int32_t __value = 0;
 						if (_directPtr != nullptr)
 						{
-							typedef int32_t(*DirectStaticI4)();
-							__value = ((DirectStaticI4)_directPtr)();
+							typedef int32_t(*DirectStaticI4)(MethodInfo*);
+							__value = ((DirectStaticI4)_directPtr)(_resolvedMethod);
 						}
 						else
 						{
