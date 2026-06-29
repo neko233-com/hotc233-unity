@@ -36,6 +36,7 @@ namespace Hotc233
             public bool passed;
             public bool metadataOptimization;
             public bool hotfix;
+            public bool hotfixDifferentContent;
             public bool hotReload;
             public bool codeProtection;
             public bool accessControl;
@@ -71,6 +72,7 @@ namespace Hotc233
             HotUpdateBinaryLoader loader,
             IReadOnlyList<NamedBinary> metadataBinaries,
             IReadOnlyList<NamedBinary> hotUpdateBinaries,
+            IReadOnlyList<NamedBinary> hotfixProbeBinaries = null,
             MetadataOptimizationSummary metadataSummary = null)
         {
             if (loader == null)
@@ -127,8 +129,11 @@ namespace Hotc233
             result.accessControl = VerifyAccessControl(hotUpdateBinaries[0]);
             AddIfPassed(passed, result.accessControl, "access-control");
 
-            result.hotfix = VerifyHotfix(loader, hotUpdateBinaries[0]);
+            bool hasDifferentContentHotfixProbe = hotfixProbeBinaries != null && hotfixProbeBinaries.Count >= 2;
+            result.hotfixDifferentContent = !hasDifferentContentHotfixProbe || VerifyDifferentContentHotfix(loader, hotfixProbeBinaries);
+            result.hotfix = VerifyHotfix(loader, hotUpdateBinaries[0]) && result.hotfixDifferentContent;
             AddIfPassed(passed, result.hotfix, "hotfix");
+            AddIfPassed(passed, hasDifferentContentHotfixProbe && result.hotfixDifferentContent, "hotfix-different-content");
 
             result.hotReload = VerifyHotReload(loader, hotUpdateBinaries);
             AddIfPassed(passed, result.hotReload, "hot-reload");
@@ -249,6 +254,49 @@ namespace Hotc233
             }
 
             return VerifyFeatureVerificationAfterLoaderChange(loader);
+        }
+
+        private static bool VerifyDifferentContentHotfix(HotUpdateBinaryLoader loader, IReadOnlyList<NamedBinary> binaries)
+        {
+            try
+            {
+                var ordered = binaries
+                    .Where(binary => binary.Bytes != null && binary.Bytes.Length > 0)
+                    .OrderBy(binary => binary.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (ordered.Length < 2)
+                {
+                    return false;
+                }
+
+                string hashA = Hotc233RuntimeDiagnostics.Sha256Hex(ordered[0].Bytes);
+                string hashB = Hotc233RuntimeDiagnostics.Sha256Hex(ordered[1].Bytes);
+                if (string.Equals(hashA, hashB, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                var first = loader.ReplaceHotUpdateAssembly(ordered[0]);
+                int firstValue = InvokeHotfixProbeVersion(loader);
+                var second = loader.ReplaceHotUpdateAssembly(ordered[1]);
+                int secondValue = InvokeHotfixProbeVersion(loader);
+                return first != null
+                    && second != null
+                    && string.Equals(first.GetName().Name, second.GetName().Name, StringComparison.OrdinalIgnoreCase)
+                    && firstValue == 101
+                    && secondValue == 202;
+            }
+            catch (Exception exception)
+            {
+                Hotc233RuntimeDiagnostics.Error("commercial.hotfix-different-content.failed", exception.Message);
+                return false;
+            }
+        }
+
+        private static int InvokeHotfixProbeVersion(HotUpdateBinaryLoader loader)
+        {
+            object value = loader.InvokeStatic("Hotc233Probe.HotfixEntry", "GetVersion");
+            return value is int version ? version : -1;
         }
 
         private static bool VerifyHotReload(HotUpdateBinaryLoader loader, IReadOnlyList<NamedBinary> binaries)

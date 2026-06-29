@@ -264,6 +264,7 @@ namespace Hotc233
                         || message.Contains("metadata-saving-percent=")
                         || message.Contains("metadata-bytes=")),
                 hotfix = message.Contains("hotfix"),
+                hotfixDifferentContent = message.Contains("hotfix-different-content"),
                 hotReload = message.Contains("hot-reload"),
                 codeProtection = message.Contains("code-protection"),
                 accessControl = message.Contains("access-control"),
@@ -523,6 +524,7 @@ namespace Hotc233
             public bool metadataOptimization;
             public bool standardInterpreterOptimization;
             public bool hotfix;
+            public bool hotfixDifferentContent;
             public bool hotReload;
             public bool codeProtection;
             public bool accessControl;
