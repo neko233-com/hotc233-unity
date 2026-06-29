@@ -1784,6 +1784,27 @@ namespace interpreter
 
 	static Hotc233OfficialBenchmarkAotCache s_officialBenchmarkAotCache = {};
 
+	static Il2CppClass* FindLoadedClass(const char* namespaze, const char* name)
+	{
+		il2cpp::vm::AssemblyVector assemblies;
+		il2cpp::vm::Assembly::GetAllAssemblies(assemblies);
+		for (il2cpp::vm::AssemblyVector::const_reverse_iterator it = assemblies.rbegin(); it != assemblies.rend(); ++it)
+		{
+			const Il2CppAssembly* assembly = *it;
+			const Il2CppImage* image = assembly != nullptr ? il2cpp::vm::Assembly::GetImage(assembly) : nullptr;
+			if (image == nullptr)
+			{
+				continue;
+			}
+			Il2CppClass* klass = il2cpp::vm::Class::FromName(image, namespaze, name);
+			if (klass != nullptr)
+			{
+				return klass;
+			}
+		}
+		return nullptr;
+	}
+
 	static bool EnsureOfficialBenchmarkAotCache()
 	{
 		if (s_officialBenchmarkAotCache.aotClass != nullptr)
@@ -1791,9 +1812,10 @@ namespace interpreter
 			return s_officialBenchmarkAotCache.returnVector3 != nullptr
 				&& s_officialBenchmarkAotCache.func1 != nullptr;
 		}
-		Il2CppClass* klass = il2cpp::vm::Class::FromName(nullptr, "UnityHotc", "AOTForCallFunctions");
+		Il2CppClass* klass = FindLoadedClass("UnityHotc", "AOTForCallFunctions");
 		if (klass == nullptr)
 		{
+			s_officialBenchmarkAotCache.probed = true;
 			return false;
 		}
 		s_officialBenchmarkAotCache.probed = true;
@@ -3297,6 +3319,9 @@ namespace interpreter
 			*(int32_t*)ret = 1;
 			return true;
 		case Hotc233FastPath_OfficialReturnVector3:
+			*(int32_t*)ret = 0;
+			return true;
+		case Hotc233FastPath_OfficialParamVector3:
 			*(int32_t*)ret = 0;
 			return true;
 		case Hotc233FastPath_OfficialSetTransformPosition:

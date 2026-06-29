@@ -148,6 +148,7 @@ namespace hotc233
 			Hotc233FastPath_OfficialCallAOTStatic = 79,
 			Hotc233FastPath_OfficialQuaternion = 80,
 			Hotc233FastPath_OfficialGameObjectCreateDestroy = 81,
+			Hotc233FastPath_OfficialParamVector3 = 82,
 			Hotc233FastPath_UnityKernel_First = 43,
 			Hotc233FastPath_UnityKernel_EntityHotLoop = 43,
 			Hotc233FastPath_UnityKernel_PrefabSpawnDespawn = 44,

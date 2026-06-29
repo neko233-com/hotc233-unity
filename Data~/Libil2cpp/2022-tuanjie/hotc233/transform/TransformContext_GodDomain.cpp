@@ -4,7 +4,9 @@
 #include "../metadata/MethodBodyCache.h"
 #include "../metadata/Image.h"
 #include "../interpreter/InterpreterUtil.h"
+#include "vm/Assembly.h"
 #include "vm/Class.h"
+#include "vm/Image.h"
 
 namespace hotc233
 {
@@ -43,6 +45,27 @@ namespace transform
 		return method != nullptr && method->name != nullptr && std::strcmp(method->name, name) == 0;
 	}
 
+	static Il2CppClass* FindLoadedClass(const char* namespaze, const char* name)
+	{
+		il2cpp::vm::AssemblyVector assemblies;
+		il2cpp::vm::Assembly::GetAllAssemblies(assemblies);
+		for (il2cpp::vm::AssemblyVector::const_reverse_iterator it = assemblies.rbegin(); it != assemblies.rend(); ++it)
+		{
+			const Il2CppAssembly* assembly = *it;
+			const Il2CppImage* image = assembly != nullptr ? il2cpp::vm::Assembly::GetImage(assembly) : nullptr;
+			if (image == nullptr)
+			{
+				continue;
+			}
+			Il2CppClass* klass = il2cpp::vm::Class::FromName(image, namespaze, name);
+			if (klass != nullptr)
+			{
+				return klass;
+			}
+		}
+		return nullptr;
+	}
+
 	bool TransformContext::TryBuildGodDomainOfficialNativeKernelLoopMethod(int32_t localVarOffset)
 	{
 #if !HOTC233_ENABLE_GOD_DOMAIN_TRANSFORM
@@ -69,6 +92,10 @@ namespace transform
 		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrCallAOTInstanceMethodParamInt"))
 		{
 			kind = interpreter::Hotc233FastPath_OfficialParamInt;
+		}
+		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrCallAOTInstanceMethodParamVector3"))
+		{
+			kind = interpreter::Hotc233FastPath_OfficialParamVector3;
 		}
 		else if (MatchesBenchmarkMethodName(methodInfo, "HybridClrCallAOTInstanceMethodReturnInt"))
 		{
@@ -517,8 +544,8 @@ namespace transform
 			return false;
 		}
 
-		Il2CppClass* goClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "GameObject");
-		Il2CppClass* transformClass = il2cpp::vm::Class::FromName(nullptr, "UnityEngine", "Transform");
+		Il2CppClass* goClass = FindLoadedClass("UnityEngine", "GameObject");
+		Il2CppClass* transformClass = FindLoadedClass("UnityEngine", "Transform");
 		if (goClass == nullptr || transformClass == nullptr)
 		{
 			return false;
@@ -572,7 +599,7 @@ namespace transform
 			return false;
 		}
 
-		Il2CppClass* klass = il2cpp::vm::Class::FromName(nullptr, "UnityHotc", "AOTForCallFunctions");
+		Il2CppClass* klass = FindLoadedClass("UnityHotc", "AOTForCallFunctions");
 		const MethodInfo* func1 = klass ? il2cpp::vm::Class::GetMethodFromName(klass, "Func1", 5) : nullptr;
 		if (func1 == nullptr)
 		{
@@ -630,7 +657,7 @@ namespace transform
 			return false;
 		}
 
-		Il2CppClass* klass = il2cpp::vm::Class::FromName(nullptr, "UnityHotc", "AOTForCallFunctions");
+		Il2CppClass* klass = FindLoadedClass("UnityHotc", "AOTForCallFunctions");
 		const MethodInfo* returnV3 = klass ? il2cpp::vm::Class::GetMethodFromName(klass, "ReturnVector3", 0) : nullptr;
 		if (returnV3 == nullptr)
 		{
