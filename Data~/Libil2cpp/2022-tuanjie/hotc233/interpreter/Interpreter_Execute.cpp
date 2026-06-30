@@ -11292,7 +11292,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
 					CHECK_NOT_NULL_THROW(_del);
 					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
-					const bool _probeDelegateVoid = s_delegateVoidProbeCount < 80;
+					const bool _probeDelegateVoid = false;
 					if (_probeDelegateVoid)
 					{
 						s_delegateVoidProbeCount++;
@@ -11469,7 +11469,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
 					CHECK_NOT_NULL_THROW(_del);
 					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
-					const bool _probeDelegateRet = s_delegateRetProbeCount < 120;
+					const bool _probeDelegateRet = false;
 					if (_probeDelegateRet)
 					{
 						s_delegateRetProbeCount++;

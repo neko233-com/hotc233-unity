@@ -1,6 +1,6 @@
 # hotc233 性能报告
 
-- 更新时间 (UTC): 2026-06-30T13:18:12.4583677Z
+- 更新时间 (UTC): 2026-06-30T13:55:01.7540122Z
 - 口径: 本机 StandaloneWindows64 IL2CPP Player · RuntimeFast · warmup=0
 - Loader profile: `RuntimeFast`
 - 业务场景: **已包含** `business-realworld-*`（`HOTC233_INCLUDE_BUSINESS_BENCHMARK=0` 可仅跑官方 14 条）
@@ -12,29 +12,29 @@
 
 ## 自动摘要
 
-- 官方 base 最弱项: **CallAOTInstance ParamVector3** = 2407.7% (`hybridclr-call-aot-instance-param-vector3`)
-- 官方 base 最强项: **SetTransformPosition** = 1031736.5%
-- 业务场景最弱项: **配置表 Dictionary 查找** = 7.2%
-- 业务场景最强项: **自定义类虚派发** = 143.2%
+- 官方 base 最弱项: **CallAOTInstance ParamVector3** = 2389.4% (`hybridclr-call-aot-instance-param-vector3`)
+- 官方 base 最强项: **SetTransformPosition** = 1073652.7%
+- 业务场景最弱项: **List 池化 Rent/Return** = 15.3%
+- 业务场景最强项: **自定义类虚派发** = 136.8%
 
 ## 官方 14 条 HybridCLR base
 
 | 项目 | hotc233 | HybridCLR 社区版 | Pro 目标估算 | 次数 | hotc / HybridCLR | 追平社区还需 | 追 Pro 还需 | xLua | hotc / xLua |
 |------|---------|------------------|--------------|-----:|-----------------:|-------------:|------------:|-----:|------------:|
-| CallAOTInstance ParamVector3 | 0.09 ms / 109409190 ops/s | 0.07 ms / 4544218 ops/s | 0.30 ms / 33400000 ops/s | 10000 | **2407.7%** | 1.00x | 1.00x | missing | - |
-| VectorOp1 sqrMagnitude | 0.03 ms / 322580645 ops/s | 0.05 ms / 7276688 ops/s | 0.19 ms / 53483660 ops/s | 10000 | **4433.1%** | 1.00x | 1.00x | missing | - |
-| CallAOTInstance ReturnInt | 0.00 ms / 2083333333 ops/s | 0.02 ms / 14585153 ops/s | 0.46 ms / 21877729 ops/s | 10000 | **14283.9%** | 1.00x | 1.00x | missing | - |
-| BinOpAdd 简单数值 | 0.01 ms / 1492537313 ops/s | 0.20 ms / 8464268 ops/s | 0.16 ms / 62212367 ops/s | 10000 | **17633.4%** | 1.00x | 1.00x | missing | - |
-| ArrayOp 数组写读 | 0.01 ms / 1075268817 ops/s | 0.32 ms / 5176689 ops/s | 0.26 ms / 38048667 ops/s | 10000 | **20771.4%** | 1.00x | 1.00x | missing | - |
-| CallAOTInstance ReturnVector3 | 0.00 ms / 2127659574 ops/s | 0.04 ms / 8434343 ops/s | 0.16 ms / 61992424 ops/s | 10000 | **25226.1%** | 1.00x | 1.00x | missing | - |
-| BinOpComplex 复杂数值 | 0.00 ms / 2127659574 ops/s | 0.26 ms / 6536204 ops/s | 0.21 ms / 48041096 ops/s | 10000 | **32551.9%** | 1.00x | 1.00x | missing | - |
-| CallAOTStaticMethod | 0.00 ms / 2083333333 ops/s | 0.06 ms / 5651438 ops/s | 1.18 ms / 8477157 ops/s | 10000 | **36863.8%** | 1.00x | 1.00x | missing | - |
-| CallAOTInstance ParamInt | 0.00 ms / 2083333333 ops/s | 0.06 ms / 5226917 ops/s | 1.28 ms / 7840376 ops/s | 10000 | **39857.8%** | 1.00x | 1.00x | missing | - |
-| VectorOp2 Vector3 加法 | 0.01 ms / 1408450704 ops/s | 0.10 ms / 3453981 ops/s | 0.39 ms / 25386763 ops/s | 10000 | **40777.6%** | 1.00x | 1.00x | missing | - |
-| QuaternionOp | 0.01 ms / 1754385965 ops/s | 0.10 ms / 3223938 ops/s | 0.42 ms / 23695946 ops/s | 10000 | **54417.5%** | 1.00x | 1.00x | missing | - |
-| typeof 指令 | 0.00 ms / 25000000000 ops/s | 0.48 ms / 3456126 ops/s | 0.29 ms / 34561258 ops/s | 10000 | **723353.3%** | 1.00x | 1.00x | missing | - |
-| GameObject Create/Destroy | 0.01 ms / 2000000000 ops/s | 0.36 ms / 230453 ops/s | 39.45 ms / 253498 ops/s | 10000 | **867857.1%** | 1.00x | 1.00x | missing | - |
-| SetTransformPosition | 0.00 ms / 20000000000 ops/s | 0.17 ms / 1938479 ops/s | 4.69 ms / 2132327 ops/s | 10000 | **1031736.5%** | 1.00x | 1.00x | missing | - |
+| CallAOTInstance ParamVector3 | 0.09 ms / 107411386 ops/s | 0.07 ms / 4495289 ops/s | 0.30 ms / 33040377 ops/s | 10000 | **2389.4%** | 1.00x | 1.00x | missing | - |
+| ArrayOp 数组写读 | 0.01 ms / 1020408163 ops/s | 0.17 ms / 9964200 ops/s | 0.14 ms / 73236874 ops/s | 10000 | **10240.7%** | 1.00x | 1.00x | missing | - |
+| CallAOTInstance ReturnInt | 0.00 ms / 2083333333 ops/s | 0.02 ms / 14649123 ops/s | 0.46 ms / 21973684 ops/s | 10000 | **14221.6%** | 1.00x | 1.00x | missing | - |
+| BinOpAdd 简单数值 | 0.01 ms / 1492537313 ops/s | 0.17 ms / 9548313 ops/s | 0.14 ms / 70180103 ops/s | 10000 | **15631.4%** | 1.00x | 1.00x | missing | - |
+| VectorOp1 sqrMagnitude | 0.01 ms / 1886792453 ops/s | 0.03 ms / 9794721 ops/s | 0.14 ms / 71991202 ops/s | 10000 | **19263.4%** | 1.00x | 1.00x | missing | - |
+| BinOpComplex 复杂数值 | 0.01 ms / 1886792453 ops/s | 0.19 ms / 8657335 ops/s | 0.16 ms / 63631415 ops/s | 10000 | **21794.1%** | 1.00x | 1.00x | missing | - |
+| CallAOTInstance ReturnVector3 | 0.01 ms / 1960784314 ops/s | 0.04 ms / 8391960 ops/s | 0.16 ms / 61680905 ops/s | 10000 | **23365.0%** | 1.00x | 1.00x | missing | - |
+| CallAOTStaticMethod | 0.00 ms / 2040816327 ops/s | 0.04 ms / 7573696 ops/s | 0.88 ms / 11360544 ops/s | 10000 | **26946.1%** | 1.00x | 1.00x | missing | - |
+| VectorOp2 Vector3 加法 | 0.01 ms / 1333333333 ops/s | 0.07 ms / 4918999 ops/s | 0.28 ms / 36154639 ops/s | 10000 | **27105.8%** | 1.00x | 1.00x | missing | - |
+| CallAOTInstance ParamInt | 0.00 ms / 2083333333 ops/s | 0.05 ms / 7016807 ops/s | 0.95 ms / 10525210 ops/s | 10000 | **29690.6%** | 1.00x | 1.00x | missing | - |
+| QuaternionOp | 0.01 ms / 1666666667 ops/s | 0.08 ms / 4304124 ops/s | 0.32 ms / 31635309 ops/s | 10000 | **38722.6%** | 1.00x | 1.00x | missing | - |
+| typeof 指令 | 0.00 ms / 25000000000 ops/s | 0.40 ms / 4133663 ops/s | 0.24 ms / 41336634 ops/s | 10000 | **604790.4%** | 1.00x | 1.00x | missing | - |
+| GameObject Create/Destroy | 0.01 ms / 1886792453 ops/s | 0.43 ms / 196767 ops/s | 46.20 ms / 216444 ops/s | 10000 | **958894.9%** | 1.00x | 1.00x | missing | - |
+| SetTransformPosition | 0.00 ms / 20000000000 ops/s | 0.18 ms / 1862800 ops/s | 4.88 ms / 2049080 ops/s | 10000 | **1073652.7%** | 1.00x | 1.00x | missing | - |
 
 ## 实际业务热更场景
 
@@ -42,16 +42,16 @@
 
 | 项目 | hotc233 | HybridCLR 社区版 | Pro 目标估算 | 次数 | hotc / HybridCLR | 追平社区还需 | 追 Pro 还需 | xLua | hotc / xLua |
 |------|---------|------------------|--------------|-----:|-----------------:|-------------:|------------:|-----:|------------:|
-| 配置表 Dictionary 查找 | 0.33 ms / 30572 ops/s | 0.02 ms / 425532 ops/s | 0.01 ms / 1221277 ops/s | 10 | 7.2% | 13.92x | 39.95x | missing | - |
-| List 池化 Rent/Return | 0.36 ms / 27693 ops/s | 0.03 ms / 353357 ops/s | 0.01 ms / 1014134 ops/s | 10 | 7.8% | 12.76x | 36.62x | missing | - |
-| Tween 模拟更新 | 0.06 ms / 160256 ops/s | 0.01 ms / 934579 ops/s | 0.00 ms / 2682243 ops/s | 10 | 17.1% | 5.83x | 16.74x | missing | - |
-| 协程式 IEnumerator | 0.13 ms / 78309 ops/s | 0.03 ms / 325733 ops/s | 0.01 ms / 934853 ops/s | 10 | 24.0% | 4.16x | 11.94x | missing | - |
-| Callback 链 | 0.07 ms / 133511 ops/s | 0.02 ms / 483092 ops/s | 0.01 ms / 1386473 ops/s | 10 | 27.6% | 3.62x | 10.38x | missing | - |
-| async/await 热循环 | 0.00 ms / 5882353 ops/s | 0.00 ms / 20000000 ops/s | 0.00 ms / 57400000 ops/s | 10 | 29.4% | 3.40x | 9.76x | missing | - |
-| Event 多播 | 0.10 ms / 103734 ops/s | 0.03 ms / 352113 ops/s | 0.01 ms / 1010563 ops/s | 10 | 29.5% | 3.39x | 9.74x | missing | - |
-| Task.WhenAll | 0.00 ms / 5000000 ops/s | 0.00 ms / 16666667 ops/s | 0.00 ms / 47833333 ops/s | 10 | 30.0% | 3.33x | 9.57x | missing | - |
-| Struct 传值与字段更新 | 0.00 ms / 2272727 ops/s | 0.00 ms / 2083333 ops/s | 0.00 ms / 5979167 ops/s | 10 | **109.1%** | 1.00x | 2.63x | missing | - |
-| 自定义类虚派发 | 0.01 ms / 847458 ops/s | 0.02 ms / 591716 ops/s | 0.01 ms / 1698225 ops/s | 10 | **143.2%** | 1.00x | 2.00x | missing | - |
+| List 池化 Rent/Return | 0.19 ms / 51493 ops/s | 0.03 ms / 336700 ops/s | 0.01 ms / 966330 ops/s | 10 | 15.3% | 6.54x | 18.77x | missing | - |
+| Tween 模拟更新 | 0.06 ms / 173310 ops/s | 0.01 ms / 917431 ops/s | 0.00 ms / 2633028 ops/s | 10 | 18.9% | 5.29x | 15.19x | missing | - |
+| async/await 热循环 | 0.00 ms / 5000000 ops/s | 0.00 ms / 25000000 ops/s | 0.00 ms / 71750000 ops/s | 10 | 20.0% | 5.00x | 14.35x | missing | - |
+| 协程式 IEnumerator | 0.12 ms / 81103 ops/s | 0.03 ms / 320513 ops/s | 0.01 ms / 919872 ops/s | 10 | 25.3% | 3.95x | 11.34x | missing | - |
+| Task.WhenAll | 0.00 ms / 5263158 ops/s | 0.00 ms / 16666667 ops/s | 0.00 ms / 47833333 ops/s | 10 | 31.6% | 3.17x | 9.09x | missing | - |
+| Event 多播 | 0.06 ms / 162338 ops/s | 0.03 ms / 343643 ops/s | 0.01 ms / 986254 ops/s | 10 | 47.2% | 2.12x | 6.08x | missing | - |
+| 配置表 Dictionary 查找 | 0.05 ms / 202429 ops/s | 0.03 ms / 373134 ops/s | 0.01 ms / 1070896 ops/s | 10 | 54.3% | 1.84x | 5.29x | missing | - |
+| Callback 链 | 0.04 ms / 226757 ops/s | 0.02 ms / 413223 ops/s | 0.01 ms / 1185950 ops/s | 10 | 54.9% | 1.82x | 5.23x | missing | - |
+| Struct 传值与字段更新 | 0.01 ms / 2000000 ops/s | 0.00 ms / 2040816 ops/s | 0.00 ms / 5857143 ops/s | 10 | 98.0% | 1.02x | 2.93x | missing | - |
+| 自定义类虚派发 | 0.01 ms / 800000 ops/s | 0.02 ms / 584795 ops/s | 0.01 ms / 1678363 ops/s | 10 | **136.8%** | 1.00x | 2.10x | missing | - |
 
 ## 验收命令
 

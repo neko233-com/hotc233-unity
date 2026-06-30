@@ -1488,8 +1488,433 @@ namespace interpreter
 			&& valueByRefType->byref;
 	}
 
+	struct DictionaryIntTryGetValueOffsets
+	{
+		size_t bucketsOffset;
+		size_t entriesOffset;
+		size_t entryHashCodeOffset;
+		size_t entryNextOffset;
+		size_t entryKeyOffset;
+		size_t entryValueOffset;
+		int32_t entrySize;
+		int32_t valueSize;
+		bool valid;
+	};
+
+	static std::unordered_map<Il2CppClass*, DictionaryIntTryGetValueOffsets> s_dictionaryIntTryGetValueOffsets;
+
+	static FieldInfo* FindM2NFieldAny(Il2CppClass* klass, const char* firstName, const char* secondName = nullptr)
+	{
+		if (!klass)
+		{
+			return nullptr;
+		}
+		FieldInfo* field = il2cpp::vm::Class::GetFieldFromName(klass, firstName);
+		if (!field && secondName)
+		{
+			field = il2cpp::vm::Class::GetFieldFromName(klass, secondName);
+		}
+		return field;
+	}
+
+	static const Il2CppType* GetClassGenericArg(const MethodInfo* method, uint32_t index)
+	{
+		if (!method
+			|| !method->klass
+			|| !method->klass->generic_class
+			|| !method->klass->generic_class->context.class_inst
+			|| method->klass->generic_class->context.class_inst->type_argc <= index)
+		{
+			return nullptr;
+		}
+		return method->klass->generic_class->context.class_inst->type_argv[index];
+	}
+
+	static bool TryBuildDictionaryIntTryGetValueOffsets(const MethodInfo* method, Il2CppArray* entries, DictionaryIntTryGetValueOffsets& offsets)
+	{
+		auto cached = s_dictionaryIntTryGetValueOffsets.find(method->klass);
+		if (cached != s_dictionaryIntTryGetValueOffsets.end())
+		{
+			offsets = cached->second;
+			return offsets.valid;
+		}
+		DictionaryIntTryGetValueOffsets next = { 0, 0, 0, 0, 0, 0, 0, 0, false };
+		const Il2CppType* valueType = GetClassGenericArg(method, 1);
+		Il2CppClass* valueKlass = valueType ? il2cpp::vm::Class::FromIl2CppType(valueType) : nullptr;
+		if (!entries)
+		{
+			offsets = next;
+			return false;
+		}
+		if (!valueKlass || !IS_CLASS_VALUE_TYPE(valueKlass))
+		{
+			s_dictionaryIntTryGetValueOffsets.insert({ method->klass, next });
+			offsets = next;
+			return false;
+		}
+		Il2CppClass* entryKlass = ((Il2CppObject*)entries)->klass->element_class;
+		FieldInfo* bucketsField = FindM2NFieldAny(method->klass, "_buckets", "buckets");
+		FieldInfo* entriesField = FindM2NFieldAny(method->klass, "_entries", "entries");
+		FieldInfo* hashCodeField = FindM2NFieldAny(entryKlass, "hashCode", "_hashCode");
+		FieldInfo* nextField = FindM2NFieldAny(entryKlass, "next", "_next");
+		FieldInfo* keyField = FindM2NFieldAny(entryKlass, "key", "_key");
+		FieldInfo* valueField = FindM2NFieldAny(entryKlass, "value", "_value");
+		if (!bucketsField || !entriesField || !hashCodeField || !nextField || !keyField || !valueField)
+		{
+			s_dictionaryIntTryGetValueOffsets.insert({ method->klass, next });
+			offsets = next;
+			return false;
+		}
+		next.bucketsOffset = il2cpp::vm::Field::GetOffset(bucketsField);
+		next.entriesOffset = il2cpp::vm::Field::GetOffset(entriesField);
+		next.entryHashCodeOffset = hotc233::metadata::GetFieldOffset(hashCodeField);
+		next.entryNextOffset = hotc233::metadata::GetFieldOffset(nextField);
+		next.entryKeyOffset = hotc233::metadata::GetFieldOffset(keyField);
+		next.entryValueOffset = hotc233::metadata::GetFieldOffset(valueField);
+		next.entrySize = (int32_t)il2cpp::vm::Class::GetValueSize(entryKlass, nullptr);
+		next.valueSize = (int32_t)il2cpp::vm::Class::GetValueSize(valueKlass, nullptr);
+		next.valid = next.entrySize > 0 && next.valueSize > 0;
+		s_dictionaryIntTryGetValueOffsets.insert({ method->klass, next });
+		offsets = next;
+		return next.valid;
+	}
+
+	static bool TryManaged2NativeCallDictionaryIntTryGetValueFastPath(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!IsDictionaryIntTryGetValueMethod(method) || !argVarIndexs || !localVarBase || !ret)
+		{
+			return false;
+		}
+		Il2CppObject* dict = localVarBase[argVarIndexs[0]].obj;
+		void* valueOut = (localVarBase + argVarIndexs[2])->ptr;
+		FieldInfo* entriesField = FindM2NFieldAny(method->klass, "_entries", "entries");
+		if (!dict || !valueOut || !entriesField)
+		{
+			return false;
+		}
+		Il2CppArray* entriesForCache = *(Il2CppArray**)((uint8_t*)dict + il2cpp::vm::Field::GetOffset(entriesField));
+		DictionaryIntTryGetValueOffsets offsets;
+		if (!TryBuildDictionaryIntTryGetValueOffsets(method, entriesForCache, offsets))
+		{
+			return false;
+		}
+		uint8_t* dictBase = (uint8_t*)dict;
+		Il2CppArray* buckets = *(Il2CppArray**)(dictBase + offsets.bucketsOffset);
+		Il2CppArray* entries = *(Il2CppArray**)(dictBase + offsets.entriesOffset);
+		if (!buckets || !entries)
+		{
+			std::memset(valueOut, 0, (size_t)offsets.valueSize);
+			std::memset(ret, 0, sizeof(StackObject));
+			return true;
+		}
+		int32_t key = localVarBase[argVarIndexs[1]].i32;
+		int32_t hashCode = key & 0x7fffffff;
+		uint32_t bucketLength = il2cpp::vm::Array::GetLength(buckets);
+		if (bucketLength == 0)
+		{
+			std::memset(valueOut, 0, (size_t)offsets.valueSize);
+			std::memset(ret, 0, sizeof(StackObject));
+			return true;
+		}
+		int32_t bucketIndex = hashCode % (int32_t)bucketLength;
+		int32_t* bucketData = (int32_t*)il2cpp::vm::Array::GetFirstElementAddress(buckets);
+		int32_t entryIndex = bucketData[bucketIndex] - 1;
+		uint32_t entryLength = il2cpp::vm::Array::GetLength(entries);
+		uint8_t* entryData = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(entries);
+		while (entryIndex >= 0 && (uint32_t)entryIndex < entryLength)
+		{
+			uint8_t* entry = entryData + (size_t)offsets.entrySize * (size_t)entryIndex;
+			int32_t entryHash = *(int32_t*)(entry + offsets.entryHashCodeOffset);
+			int32_t entryKey = *(int32_t*)(entry + offsets.entryKeyOffset);
+			if (entryHash == hashCode && entryKey == key)
+			{
+				std::memcpy(valueOut, entry + offsets.entryValueOffset, (size_t)offsets.valueSize);
+				std::memset(ret, 0, sizeof(StackObject));
+				((StackObject*)ret)->b = true;
+				return true;
+			}
+			entryIndex = *(int32_t*)(entry + offsets.entryNextOffset);
+		}
+		std::memset(valueOut, 0, (size_t)offsets.valueSize);
+		std::memset(ret, 0, sizeof(StackObject));
+		return true;
+	}
+
+	static bool IsSupportedAotContainerInvokerMethod(const MethodInfo* method)
+	{
+		if (!method
+			|| !method->name
+			|| !method->klass
+			|| !method->klass->name
+			|| !method->klass->namespaze
+			|| std::strcmp(method->klass->namespaze, "System.Collections.Generic") != 0
+			|| !hotc233::metadata::IsInstanceMethod(method))
+		{
+			return false;
+		}
+		const char* className = method->klass->name;
+		const char* methodName = method->name;
+		if (std::strcmp(className, "List`1") == 0)
+		{
+			if ((std::strcmp(methodName, "Clear") == 0 || std::strcmp(methodName, "get_Count") == 0) && method->parameters_count == 0)
+			{
+				return true;
+			}
+			if ((std::strcmp(methodName, "Add") == 0 || std::strcmp(methodName, "get_Item") == 0) && method->parameters_count == 1)
+			{
+				return true;
+			}
+			return false;
+		}
+		if (std::strcmp(className, "Stack`1") == 0)
+		{
+			if ((std::strcmp(methodName, "Pop") == 0 || std::strcmp(methodName, "get_Count") == 0) && method->parameters_count == 0)
+			{
+				return true;
+			}
+			if (std::strcmp(methodName, "Push") == 0 && method->parameters_count == 1)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	struct ListIntFieldOffsets
+	{
+		size_t itemsOffset;
+		size_t sizeOffset;
+		size_t versionOffset;
+		bool valid;
+	};
+
+	static std::unordered_map<Il2CppClass*, ListIntFieldOffsets> s_listIntFieldOffsets;
+
+	static const Il2CppType* GetFirstClassGenericArg(const MethodInfo* method)
+	{
+		if (!method
+			|| !method->klass
+			|| !method->klass->generic_class
+			|| !method->klass->generic_class->context.class_inst
+			|| method->klass->generic_class->context.class_inst->type_argc != 1)
+		{
+			return nullptr;
+		}
+		return method->klass->generic_class->context.class_inst->type_argv[0];
+	}
+
+	static bool IsListIntMethod(const MethodInfo* method)
+	{
+		const Il2CppType* elementType = GetFirstClassGenericArg(method);
+		return method
+			&& method->klass
+			&& method->klass->name
+			&& std::strcmp(method->klass->name, "List`1") == 0
+			&& elementType
+			&& elementType->type == IL2CPP_TYPE_I4;
+	}
+
+	static bool TryGetListIntFieldOffsets(Il2CppClass* klass, ListIntFieldOffsets& offsets)
+	{
+		auto cached = s_listIntFieldOffsets.find(klass);
+		if (cached != s_listIntFieldOffsets.end())
+		{
+			offsets = cached->second;
+			return offsets.valid;
+		}
+		ListIntFieldOffsets next = { 0, 0, 0, false };
+		bool hasItems = false;
+		bool hasSize = false;
+		bool hasVersion = false;
+		void* iter = nullptr;
+		FieldInfo* field = nullptr;
+		while ((field = il2cpp::vm::Class::GetFields(klass, &iter)) != nullptr)
+		{
+			const char* name = il2cpp::vm::Field::GetName(field);
+			if (!name)
+			{
+				continue;
+			}
+			if (std::strcmp(name, "_items") == 0)
+			{
+				next.itemsOffset = il2cpp::vm::Field::GetOffset(field);
+				hasItems = true;
+			}
+			else if (std::strcmp(name, "_size") == 0)
+			{
+				next.sizeOffset = il2cpp::vm::Field::GetOffset(field);
+				hasSize = true;
+			}
+			else if (std::strcmp(name, "_version") == 0)
+			{
+				next.versionOffset = il2cpp::vm::Field::GetOffset(field);
+				hasVersion = true;
+			}
+		}
+		next.valid = hasItems && hasSize && hasVersion;
+		s_listIntFieldOffsets.insert({ klass, next });
+		offsets = next;
+		return next.valid;
+	}
+
+	static bool TryManaged2NativeCallListIntFastPath(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!IsListIntMethod(method) || !method->name || !argVarIndexs || !localVarBase)
+		{
+			return false;
+		}
+		Il2CppObject* listObject = localVarBase[argVarIndexs[0]].obj;
+		if (!listObject)
+		{
+			return false;
+		}
+		ListIntFieldOffsets offsets;
+		if (!TryGetListIntFieldOffsets(method->klass, offsets))
+		{
+			return false;
+		}
+		uint8_t* listBase = (uint8_t*)listObject;
+		Il2CppArray* items = *(Il2CppArray**)(listBase + offsets.itemsOffset);
+		int32_t* sizePtr = (int32_t*)(listBase + offsets.sizeOffset);
+		int32_t* versionPtr = (int32_t*)(listBase + offsets.versionOffset);
+		const char* methodName = method->name;
+		if (std::strcmp(methodName, "get_Count") == 0 && method->parameters_count == 0)
+		{
+			if (ret)
+			{
+				std::memset(ret, 0, sizeof(StackObject));
+				*(int32_t*)ret = *sizePtr;
+			}
+			return true;
+		}
+		if (std::strcmp(methodName, "Clear") == 0 && method->parameters_count == 0)
+		{
+			*sizePtr = 0;
+			++(*versionPtr);
+			return true;
+		}
+		if (std::strcmp(methodName, "Add") == 0 && method->parameters_count == 1)
+		{
+			if (!items)
+			{
+				return false;
+			}
+			uint32_t length = il2cpp::vm::Array::GetLength(items);
+			int32_t size = *sizePtr;
+			if (size < 0 || (uint32_t)size >= length)
+			{
+				return false;
+			}
+			int32_t* elements = (int32_t*)il2cpp::vm::Array::GetFirstElementAddress(items);
+			elements[size] = localVarBase[argVarIndexs[1]].i32;
+			*sizePtr = size + 1;
+			++(*versionPtr);
+			return true;
+		}
+		if (std::strcmp(methodName, "get_Item") == 0 && method->parameters_count == 1)
+		{
+			if (!items)
+			{
+				return false;
+			}
+			int32_t index = localVarBase[argVarIndexs[1]].i32;
+			int32_t size = *sizePtr;
+			if (index < 0 || index >= size)
+			{
+				return false;
+			}
+			int32_t* elements = (int32_t*)il2cpp::vm::Array::GetFirstElementAddress(items);
+			if (ret)
+			{
+				std::memset(ret, 0, sizeof(StackObject));
+				*(int32_t*)ret = elements[index];
+			}
+			return true;
+		}
+		return false;
+	}
+
+	static void Managed2NativeCallAotContainerInvoker(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (TryManaged2NativeCallListIntFastPath(method, argVarIndexs, localVarBase, ret))
+		{
+			return;
+		}
+		if (!IsSupportedAotContainerInvokerMethod(method) || !method->invoker_method || !argVarIndexs || !localVarBase)
+		{
+			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+			return;
+		}
+		if (method->methodPointerCallByInterp == InterpreterModule::NotSupportNative2Managed)
+		{
+			InitAndGetInterpreterDirectlyCallMethodPointer(method);
+		}
+		if (method->methodPointerCallByInterp == InterpreterModule::NotSupportNative2Managed)
+		{
+			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+			return;
+		}
+		void* thisPtr = localVarBase[argVarIndexs[0]].obj;
+		void* invokeParams[4];
+		uint16_t* argVarIndexBase = argVarIndexs + 1;
+		for (uint8_t i = 0; i < method->parameters_count; i++)
+		{
+			const Il2CppType* argType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i]));
+			if (!argType)
+			{
+				InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+				return;
+			}
+			StackObject* argValue = localVarBase + argVarIndexBase[i];
+			invokeParams[i] = (!argType->byref && IsValueTypeForInvoke(argType)) ? (void*)argValue : argValue->ptr;
+		}
+		void* actualRet = ret;
+		int32_t retStorageSize = GetManaged2NativeReturnStorageSize(method);
+		if (ret && retStorageSize > 0)
+		{
+			for (uint8_t i = 0; i < method->parameters_count; i++)
+			{
+				const Il2CppType* argType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i]));
+				if (!argType || argType->byref || !IsValueTypeForInvoke(argType))
+				{
+					continue;
+				}
+				int32_t argSize = metadata::GetTypeValueSize(argType);
+				if (IsAddressRangeOverlap(ret, retStorageSize, invokeParams[i], argSize))
+				{
+					actualRet = alloca((size_t)retStorageSize);
+					break;
+				}
+			}
+		}
+		ClearManaged2NativeReturnStorage(method, actualRet);
+#if HOTC233_UNITY_2021_OR_NEW
+		Il2CppMethodPointer invokerTarget = method->methodPointer != nullptr ? method->methodPointer : method->methodPointerCallByInterp;
+		if (method->has_full_generic_sharing_signature && method->methodPointerCallByInterp != nullptr)
+		{
+			invokerTarget = method->methodPointerCallByInterp;
+		}
+		bool fullGenericVariableValueReturnHandled = TryInvokeFullGenericVariableValueReturn(method, thisPtr, invokeParams, actualRet);
+		if (!fullGenericVariableValueReturnHandled)
+		{
+			method->invoker_method(invokerTarget, method, thisPtr, invokeParams, actualRet);
+		}
+		NormalizeFullGenericValueTypeReturn(method, actualRet, fullGenericVariableValueReturnHandled);
+		if (actualRet != ret && ret && retStorageSize > 0)
+		{
+			std::memcpy(ret, actualRet, (size_t)retStorageSize);
+		}
+#else
+		InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+#endif
+	}
+
 	static void Managed2NativeCallDictionaryIntTryGetValue(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
+		if (TryManaged2NativeCallDictionaryIntTryGetValueFastPath(method, argVarIndexs, localVarBase, ret))
+		{
+			return;
+		}
 		if (!IsDictionaryIntTryGetValueMethod(method) || !method->invoker_method)
 		{
 			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
@@ -1523,6 +1948,10 @@ namespace interpreter
 
 	Managed2NativeCallMethod InterpreterModule::GetManaged2NativeMethodPointer(const MethodInfo* method, bool forceStatic)
 	{
+		if (!forceStatic && IsSupportedAotContainerInvokerMethod(method))
+		{
+			return Managed2NativeCallAotContainerInvoker;
+		}
 		if (IsFullGenericVariableValueTypeReturn(method))
 		{
 			return Managed2NativeCallByReflectionInvoke;
