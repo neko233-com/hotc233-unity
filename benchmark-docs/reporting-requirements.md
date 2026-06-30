@@ -57,6 +57,12 @@
 
 Player 参数：`-hotc233-performance-suite`（`local-benchmark` 默认开启；`HOTC233_INCLUDE_BUSINESS_BENCHMARK=0` 仅跑官方 14 条）。
 
+业务表硬规则：
+
+- hotc233 与 HybridCLR 社区版必须使用同名 `business-realworld-*` 行、同迭代数、同平台、同 Player 口径计算 `hotc / HybridCLR`；不得通过增大任一侧迭代次数来换取稳定读数。
+- 默认商业版报告必须包含 10 条业务行及对应 10 条社区版同名行；缺行、`hotc-only`、`not-required-for-business` 都是 blocker，不能作为生产结论。
+- `headless` 只能验证已生成报告的结构与门禁，不得替代真实 Player 对比；业务性能百分比只能来自 `local-benchmark` 或明确标注的平台专项 Player 报告。
+
 **xLua 对照（demo 内，表格最后一列）**：`tools/setup-xlua.ps1` 安装 `Assets/XLua` → Player 内 `-hotc233-performance-suite` 顺序跑 Lua 探针 → 报告列 `xLua` / `hotc / xLua`。关闭：`HOTC233_INCLUDE_XLUA_BENCHMARK=0` 或 `-hotc233-skip-xlua-benchmark`。
 
 架构说明可选写入 [`benchmark-docs/performance-architecture-notes.md`](performance-architecture-notes.md)，会并入 `性能报告.md` 的「架构要点」节。

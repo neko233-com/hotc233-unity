@@ -536,6 +536,23 @@ namespace transform
 		return TryAddSystemMathMinMax(ctx, method, HiOpcodeEnum::MathMaxVarVarVar_i4, HiOpcodeEnum::MathMaxVarVarVar_i8);
 	}
 
+	static bool IH_Mathf_Clamp01(TransformContext& ctx, const MethodInfo* method)
+	{
+		if (method->parameters_count != 1)
+		{
+			return false;
+		}
+		const Il2CppType* paramType = GET_METHOD_PARAMETER_TYPE(method->parameters[0]);
+		if (paramType->type != IL2CPP_TYPE_R4)
+		{
+			return false;
+		}
+		IL2CPP_ASSERT(ctx.GetEvalStackTop() >= 1);
+		IHCreateAddIR(ir, MathfClamp01VarVar_r4);
+		ir->ret = ir->op1 = ctx.GetEvalStackTopOffset();
+		return true;
+	}
+
 	struct InstinctHandlerInfo
 	{
 		const char* namespaze;
@@ -548,6 +565,7 @@ namespace transform
 	{
 		{"System", "Math", "Min", IH_Math_Min},
 		{"System", "Math", "Max", IH_Math_Max},
+		{"UnityEngine", "Mathf", "Clamp01", IH_Mathf_Clamp01},
 		{"System", "Object", ".ctor", IH_object_ctor},
 		{"System", "Nullable`1", ".ctor", IH_Nullable_ctor},
 		{"System", "Nullable`1", "GetValueOrDefault", IH_Nullable_GetValueOrDefault},

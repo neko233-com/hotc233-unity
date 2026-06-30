@@ -1,4 +1,4 @@
-#include "Instruction.h"
+﻿#include "Instruction.h"
 
 #include <cstring>
 
@@ -961,6 +961,7 @@ namespace interpreter
 		8,
 		8,
 		8,
+		6,
 		8,
 		8,
 		8,

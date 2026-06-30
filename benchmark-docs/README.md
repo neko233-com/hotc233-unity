@@ -112,6 +112,7 @@ go run ./hotc233ctl benchmark -project .. `
 
 - **L1 硬门禁**：只认 HybridCLR 官方 14 条 `hybridclr-*` base；任一 base 行 `hotc233PercentOfHybridClr <= 100%`，方向不合格。
 - **业务拉伸（可选）**：10 条 `business-realworld-*`（custom class / struct / async / Task / callback / coroutine / tween 模拟等）；`HOTC233_ENFORCE_BUSINESS_FLOOR=500` 启用 500% 拉伸门禁。
+- **业务代码对社区版**：必须同名、同迭代、同平台、同 Player 对比；禁止增大迭代数制造稳定读数；缺 HybridCLR 社区版同名 business 行时不得宣称商业版业务性能落地。
 - Pro 目标是纯解释器性能，不用 DHE 或首包 AOT 预置热更代码替代。
 - 禁止 Cursor multitask、并行 WebGL 探针、旧 `flywheel` 结论。
 

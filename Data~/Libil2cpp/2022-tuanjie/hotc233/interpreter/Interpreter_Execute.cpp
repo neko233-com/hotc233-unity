@@ -8608,6 +8608,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::MathfClamp01VarVar_r4:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint16_t __op1 = *(uint16_t*)(ip + 4);
+					float __v = (*(float*)(localVarBase + __op1));
+					(*(float*)(localVarBase + __ret)) = __v < 0.0f ? 0.0f : (__v > 1.0f ? 1.0f : __v);
+				    ip += 6;
+				    continue;
+				}
 				case HiOpcodeEnum::BinOpVarVarVar_Add_f4:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);

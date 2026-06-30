@@ -162,6 +162,7 @@
 
 - **唯一文档入口**：`benchmark-docs/`（见 `benchmark-docs/README.md`）。
 - **唯一验收 benchmark 代码**：HybridCLR 官方 14 条 base（`hybridclr-benchmark-demo/OfficialBenchmarkProbe.cs` 形状）；demo `PerformanceProbe` 的 business 行不得进入 Pro/社区版硬验收。
+- **业务代码性能对比**：`business-realworld-*` 只允许作为追加商业观察/业务门禁，必须使用 hotc233 与 HybridCLR 独立工程同名、同迭代、同平台、同 Player 报告计算百分比；禁止通过增大迭代次数制造稳定读数；缺少社区版同名行时必须判为 blocker。
 - **唯一验收命令**：宿主 `go run ./tools/hotc233ctl benchmark`；顺序探针，禁止 multitask / `-parallel-captures`。
 - **同机社区版参照**：`D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo`（HybridCLR 8.11.0 + Tuanjie 2022.3.62t10）；测试环境与该工程完全一致（WebGL IL2CPP + 相同探针链路）。
 - **Pro 终态**；**L1 绝对门槛：同机 14 条 base 必须全面快于 HybridCLR 社区版**（fork 基线，任一条未赢即方向错误）。

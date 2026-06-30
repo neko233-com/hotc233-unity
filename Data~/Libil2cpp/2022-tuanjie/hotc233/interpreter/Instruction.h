@@ -954,6 +954,7 @@ namespace interpreter
 		MathMaxVarVarVar_i4,
 		MathMinVarVarVar_i8,
 		MathMaxVarVarVar_i8,
+		MathfClamp01VarVar_r4,
 		SetArrayElementVarVar_size_20,
 		SetArrayElementVarVar_size_24,
 		SetArrayElementVarVar_size_28,
@@ -2540,6 +2541,12 @@ namespace interpreter
 		uint16_t ret;
 		uint16_t op1;
 		uint16_t op2;
+	};
+
+	struct IRMathfClamp01VarVar_r4 : IRCommon
+	{
+		uint16_t ret;
+		uint16_t op1;
 	};
 
 
