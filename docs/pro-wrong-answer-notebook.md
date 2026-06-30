@@ -30,6 +30,7 @@
 | WA-007 | 2026-06-26 | `RunI4LinearTrace` v4 通用 i4 linear trace | WebGL CDP 691s 超时，主线程卡死 | **禁止** 通用 linear trace / interpreter 内 switch-loop trace | blocked |
 | WA-008 | 2026-06 | static 专用 opcode | 局部提升、总体不稳定 | 并入 typed ABI callsite，不单开 static opcode 线 | withdrawn |
 | WA-009 | 2026-06-27 | 通用 dispatch + M2N 桥接 + Execute fallback 微优化 | CallAOTStatic 8%→37% 仍无 Pro bypass；profile 无 RunStaticF4CallTrace | **断舍离**：GodDomain；禁止投资 Interpreter_Execute switch；见 `god-domain-architecture.md` | blocked |
+| WA-010 | 2026-06-30 | 放开 scalar value-type generated M2N，绕过 shared-struct reflection guard | `Dictionary<TKey,TValue>.TryGetValue` fully-shared generic native crash `-1073741819` | 禁止粗暴放开 fully-shared generic M2N；必须显式解决 rgctx/MethodInfo ABI | blocked |
 
 ## 保留项（不是错题，但不得扩展成通用路线）
 
@@ -56,6 +57,16 @@
 - **教训**：**断舍离 dispatch 方案**；14 base 每行必须 dedicated builder；专用慢于通用则删。
 - **替代**：`benchmark-docs/god-domain-architecture.md`、`TransformContext_GodDomain.cpp`、Instinct 全表。
 - **状态**：blocked；归档 `benchmark-docs/archive/generic-dispatch-bridge-retired.md`。
+
+### WA-010 — scalar value-type generated M2N unguard（blocked）
+
+- **尝试**：让 generated M2N bridge 对 bool/int/float/enum 等 scalar value-type return/param 直接调用，不再进入 `TryManaged2NativeCallByReflectionInvokeForSharedStruct`。
+- **实测**：`HOTC233_LOCAL_OFFICIAL_COUNT=1` smoke local-benchmark 构建通过，但 Player 在 `business-realworld-dictionary-config-lookup` 崩溃；exit `-1073741819`，native crash `1`。
+- **证据**：`Assets/EditorForBuild/Generated/performance-hotc233-player.json.log`；栈为 `Dictionary_2_TryGetValue` -> `Dictionary_2_FindEntry` -> `ClassInlines::GetInterfaceInvokeDataFromVTable`，调用点为 generated bridge `__M2N_s203uuu`。
+- **根因**：fully-shared generic Dictionary ABI 不能只凭标量 return 判断安全；rgctx/MethodInfo/hidden generic context 仍可能需要 invoker/reflection 保护。
+- **教训**：业务字典优化不能通过移除 shared-struct guard 侥幸获得；必须做 fully-shared generic aware 的 typed ABI 或专门安全桥接。
+- **替代**：新增显式 fully-shared generic M2N ABI 探针，确认 `methodPointerCallByInterp` 所需 rgctx/MethodInfo 形状后再落地 direct bridge。
+- **状态**：blocked，代码已撤回。
 
 ### WA-007 — RunI4LinearTrace v4（blocked）
 
