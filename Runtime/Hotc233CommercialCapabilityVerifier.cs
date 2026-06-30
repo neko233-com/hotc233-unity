@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.Scripting;
 
@@ -49,6 +50,11 @@ namespace Hotc233
             public double metadataSavingPercent;
             public double metadataLoadElapsedMs;
             public long metadataPeakHeapDeltaBytes;
+            public long codeProtectionPlainBytes;
+            public long codeProtectionProtectedBytes;
+            public long codeProtectionOverheadBytes;
+            public bool codeProtectionTamperRejected;
+            public bool codeProtectionNameMismatchRejected;
             public string message;
 
             /// <summary>P0 商业能力（有/无）：不含标准解释优化、离线指令优化等性能项。</summary>
@@ -123,8 +129,12 @@ namespace Hotc233
                 passed.Add("metadata-peak-heap=" + metadataSummary.peakHeapDeltaBytes);
             }
 
-            result.codeProtection = VerifyCodeProtection(hotUpdateBinaries[0]);
+            result.codeProtection = VerifyCodeProtection(hotUpdateBinaries[0], result);
             AddIfPassed(passed, result.codeProtection, "code-protection");
+            if (result.codeProtectionProtectedBytes > 0)
+            {
+                passed.Add("code-protection-overhead=" + result.codeProtectionOverheadBytes);
+            }
 
             result.accessControl = VerifyAccessControl(hotUpdateBinaries[0]);
             AddIfPassed(passed, result.accessControl, "access-control");
@@ -185,15 +195,82 @@ namespace Hotc233
             return true;
         }
 
-        private static bool VerifyCodeProtection(NamedBinary binary)
+        private static bool VerifyCodeProtection(NamedBinary binary, Result result)
         {
+            byte[] encryptionKey = DeriveKey("hotc233-commercial-probe-encryption");
+            byte[] authenticationKey = DeriveKey("hotc233-commercial-probe-authentication");
+            var productionPolicy = Hotc233LoadPolicy.CreateAesCbcHmacProtected(encryptionKey, authenticationKey)
+                .RequireSha256(binary.Name, Hotc233RuntimeDiagnostics.Sha256Hex(binary.Bytes));
+            var protectedBinaryA = productionPolicy.Protect(binary);
+            var protectedBinaryB = productionPolicy.Protect(binary);
+            if (result != null)
+            {
+                result.codeProtectionPlainBytes = binary.Bytes?.LongLength ?? 0;
+                result.codeProtectionProtectedBytes = protectedBinaryA.Bytes?.LongLength ?? 0;
+                result.codeProtectionOverheadBytes = result.codeProtectionProtectedBytes - result.codeProtectionPlainBytes;
+            }
+
+            if (ByteArrayEquals(protectedBinaryA.Bytes, binary.Bytes)
+                || ByteArrayEquals(protectedBinaryA.Bytes, protectedBinaryB.Bytes))
+            {
+                return false;
+            }
+
+            var decrypted = productionPolicy.Apply(protectedBinaryA);
+            if (!ByteArrayEquals(decrypted.Bytes, binary.Bytes))
+            {
+                return false;
+            }
+
+            bool rejectedTamper = false;
+            try
+            {
+                byte[] tampered = (byte[])protectedBinaryA.Bytes.Clone();
+                tampered[tampered.Length - 1] ^= 0x5a;
+                productionPolicy.Apply(new NamedBinary(binary.Name, tampered));
+            }
+            catch (InvalidOperationException)
+            {
+                rejectedTamper = true;
+            }
+
+            if (result != null)
+            {
+                result.codeProtectionTamperRejected = rejectedTamper;
+            }
+
+            if (!rejectedTamper)
+            {
+                return false;
+            }
+
+            bool rejectedNameMismatch = false;
+            try
+            {
+                productionPolicy.Apply(new NamedBinary("renamed-" + binary.Name, protectedBinaryA.Bytes));
+            }
+            catch (InvalidOperationException)
+            {
+                rejectedNameMismatch = true;
+            }
+
+            if (result != null)
+            {
+                result.codeProtectionNameMismatchRejected = rejectedNameMismatch;
+            }
+
+            if (!rejectedNameMismatch)
+            {
+                return false;
+            }
+
             const string key = "hotc233-dev-capability-key";
             byte[] encrypted = Hotc233LoadPolicy.Xor(binary.Bytes, key);
             var encryptedBinary = new NamedBinary(binary.Name, encrypted);
             string expectedHash = Hotc233RuntimeDiagnostics.Sha256Hex(binary.Bytes);
             var policy = Hotc233LoadPolicy.CreateXorProtected(key).RequireSha256(binary.Name, expectedHash);
-            var decrypted = policy.Apply(encryptedBinary);
-            if (!ByteArrayEquals(decrypted.Bytes, binary.Bytes))
+            var legacyDecrypted = policy.Apply(encryptedBinary);
+            if (!ByteArrayEquals(legacyDecrypted.Bytes, binary.Bytes))
             {
                 return false;
             }
@@ -211,6 +288,14 @@ namespace Hotc233
             }
 
             return rejectedBadHash;
+        }
+
+        private static byte[] DeriveKey(string purpose)
+        {
+            using (var sha = SHA256.Create())
+            {
+                return sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(purpose));
+            }
         }
 
         private static bool VerifyAccessControl(NamedBinary binary)

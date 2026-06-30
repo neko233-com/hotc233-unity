@@ -346,7 +346,7 @@
             <tr><td>元数据优化</td><td><span class="warn">部分落地</span>，AOT metadata 裁剪、完整性校验、minigame 安全配置；仍需 10%-25% 内存节省实测表。</td><td><code>LoadRuntimeMetadata</code>, <code>Hotc233LoadPolicy</code></td></tr>
             <tr><td>标准解释优化</td><td><span class="warn">RuntimeFast 已落地</span>，但官方基准仍落后 HybridCLR 8.11.0 本地 WebGL 实测 1.14x-1.98x。</td><td><code>HotUpdatePerformanceProfile.RuntimeFast</code></td></tr>
             <tr><td>Hotfix 动态热修复</td><td><span class="ok">支持入口</span>，按程序集名替换 loader 解析优先级。</td><td><code>ReplaceHotUpdateAssembly</code></td></tr>
-            <tr><td>代码加固/加密</td><td><span class="ok">支持入口</span>，解密钩子、XOR 示例、SHA256 完整性校验。</td><td><code>Hotc233LoadPolicy</code></td></tr>
+            <tr><td>代码加固/加密</td><td><span class="ok">支持</span>，AES-CBC + HMAC-SHA256 认证 payload、解密钩子、legacy XOR 示例、SHA256 完整性校验。</td><td><code>Hotc233LoadPolicy</code></td></tr>
             <tr><td>Assembly.Load 优化</td><td><span class="ok">支持</span>，本地 payload manifest、缓存、StreamingAssets 原始 bytes。</td><td><code>LoadHotUpdateAssemblies</code></td></tr>
             <tr><td>解释器栈崩溃日志</td><td><span class="ok">支持</span>，session、环境、最近事件和异常链。</td><td><code>Hotc233RuntimeDiagnostics</code></td></tr>
             <tr><td>访问控制策略</td><td><span class="ok">支持入口</span>，白名单、自定义回调、hash 校验。</td><td><code>AllowOnly</code>, <code>AccessValidator</code></td></tr>
@@ -397,8 +397,8 @@ loader.ReloadHotUpdateAssemblies(allHotUpdateDllBytes);</code></pre>
 
       <section id="security">
         <h2>代码加固、加密与访问控制</h2>
-        <p>内置 `Hotc233LoadPolicy` 提供可替换的安全面：开发期可用 XOR 示例，生产环境应接入项目自己的密钥派生、签名服务或平台安全模块。不要把真实生产密钥提交到仓库。</p>
-        <pre><code>var policy = Hotc233LoadPolicy.CreateXorProtected("dev-key");
+        <p>内置 `Hotc233LoadPolicy` 提供可替换的安全面：生产路径使用 AES-CBC + HMAC-SHA256 认证 payload；密钥应来自项目自己的 KMS、平台安全模块或运行时注入，不要把真实生产密钥提交到仓库。XOR 只保留为 legacy/dev 示例。</p>
+        <pre><code>var policy = Hotc233LoadPolicy.CreateAesCbcHmacProtected(encryptionKey, authenticationKey);
 policy.EnableAccessControl = true;
 policy.AllowedBinaryNames.Add("HotUpdateDlls/Feature_HotUpdate.dll.bytes");
 policy.AccessValidator = binary => binary.Bytes.Length &lt; 16 * 1024 * 1024;

@@ -7,7 +7,7 @@
 | 目的 | fork 社区版对标、L1 门禁 | **真实业务**热更可行性 + 性能 |
 | GO 用法 | 理想化（如 N 次 new+Destroy） | **真实用法**（单 GO 热循环、spawn+组件） |
 | 迭代 | 167~1670 | **10~100** 快测，推演 1s 吞吐 |
-| 对比 | 必须 vs HybridCLR 社区版 | hotc233 自检；正式发布需接入 HybridCLR/xLua 同形状列 |
+| 对比 | 必须 vs HybridCLR CE | hotc233 与 `unity-hybridclr-ce-benchmark` 同名、同迭代、同平台对照 |
 
 官方 base **仍保留**作 L1 方向守门；本套件 **不替代** L1，也 **不参与** `HOTC233_ENFORCE_BEAT_COMMUNITY`。
 
@@ -39,7 +39,7 @@
 
 | `hotupdate-unity-renderer-enabled-toggle` | Renderer.enabled | `KernelRendererEnabledToggle` |
 
-代码：`Assets/CodeHotUpdate/Feature/UnityHotUpdateRealWorldProbe.cs`  
+代码：`Assets/CodeHotUpdate/Feature/UnityHotUpdateRealWorldProbe.cs`
 校验：`Reference*` 解释执行 golden；`Kernel*` 可被 GodDomain native bypass（`Hotc233FastPath_UnityKernel_*`）。
 
 ## 命令
@@ -69,8 +69,8 @@ go run ./tools/hotc233ctl unity-realworld-benchmark -project . -loader-profile R
 
 正式 `性能报告.md` 必须包含全量表，不允许省略：
 
-- HybridCLR 官方 14 base：hotc233 / HybridCLR 社区版 / Pro 估算 / xLua；
-- 业务热更代码：hotc233 / HybridCLR 社区版 / xLua（如同形状脚本存在）；
+- HybridCLR 官方 14 base：hotc233 / HybridCLR CE / Pro 估算；
+- 业务热更代码：hotc233 / HybridCLR CE；
 - Unity API 热更代码：20 条 `hotupdate-unity-*`，并标记是否为 raw Unity API ABI 已独立兼容覆盖；
 - 超时、少行、crash、correctness failure 均为未通过，不得写成性能数字。
 

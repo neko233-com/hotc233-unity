@@ -3570,29 +3570,62 @@ namespace interpreter
 		return false;
 	}
 
+	IL2CPP_FORCE_INLINE bool IsSafeGenericHotc233CallFastPath(uint32_t fastPathKind, void* retPtr)
+	{
+		switch ((Hotc233FastPathKind)fastPathKind)
+		{
+		case Hotc233FastPath_EmptyVoid:
+			return true;
+		case Hotc233FastPath_ReturnI4:
+		case Hotc233FastPath_ReturnI8:
+		case Hotc233FastPath_ConstI4:
+		case Hotc233FastPath_ConstI8:
+		case Hotc233FastPath_AddI4:
+		case Hotc233FastPath_SubI4:
+		case Hotc233FastPath_MulI4:
+		case Hotc233FastPath_AndI4:
+		case Hotc233FastPath_OrI4:
+		case Hotc233FastPath_XorI4:
+		case Hotc233FastPath_AddI8:
+		case Hotc233FastPath_SubI8:
+		case Hotc233FastPath_MulI8:
+		case Hotc233FastPath_AndI8:
+		case Hotc233FastPath_OrI8:
+		case Hotc233FastPath_XorI8:
+		case Hotc233FastPath_CopyConstMulRetI4:
+		case Hotc233FastPath_ClosureMulConstAddFieldI4:
+			return retPtr != nullptr;
+		default:
+			return false;
+		}
+	}
+
 		IL2CPP_FORCE_INLINE bool TryExecuteHotc233CallFastPath(const MethodInfo* methodInfo, StackObject* argBasePtr, void* retPtr)
 		{
 			if (!methodInfo)
 			{
 				return false;
 			}
-			InterpMethodInfo* calleeImi = methodInfo->interpData ? (InterpMethodInfo*)methodInfo->interpData : nullptr;
+			InterpMethodInfo* calleeImi = methodInfo->interpData ? (InterpMethodInfo*)methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(methodInfo);
 			if (!calleeImi || calleeImi->hotc233FastPathKind <= Hotc233FastPath_Unsupported)
 			{
 				return false;
 			}
 			const char* methodName = methodInfo != nullptr ? methodInfo->name : nullptr;
 			const char* className = methodInfo != nullptr && methodInfo->klass != nullptr ? methodInfo->klass->name : nullptr;
-			if (methodName == nullptr ||
-			(std::strncmp(methodName, "HybridClr", 9) != 0 && std::strncmp(methodName, "Kernel", 6) != 0))
-		{
-			return false;
-		}
-		if ((methodName != nullptr && std::strchr(methodName, '<') != nullptr) ||
-			(className != nullptr && std::strchr(className, '<') != nullptr))
-		{
-			return false;
-		}
+			bool officialOrKernelName = methodName != nullptr
+				&& (std::strncmp(methodName, "HybridClr", 9) == 0 || std::strncmp(methodName, "Kernel", 6) == 0);
+			if (!officialOrKernelName)
+			{
+				return IsSafeGenericHotc233CallFastPath(calleeImi->hotc233FastPathKind, retPtr)
+					&& TryExecuteHotc233FastPath(calleeImi, argBasePtr, retPtr);
+			}
+			if ((methodName != nullptr && std::strchr(methodName, '<') != nullptr) ||
+				(className != nullptr && std::strchr(className, '<') != nullptr))
+			{
+				return IsSafeGenericHotc233CallFastPath(calleeImi->hotc233FastPathKind, retPtr)
+					&& TryExecuteHotc233FastPath(calleeImi, argBasePtr, retPtr);
+			}
 #if !HOTC233_COMMUNITY_BASELINE && HOTC233_ENABLE_UNITY_KERNEL_GODDOMAIN
 		if (retPtr != nullptr && methodInfo->name != nullptr)
 		{
@@ -10679,7 +10712,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					RuntimeInitClassCCtorWithoutInitClass(__methodInfo);
 					void* __retPtr = (void*)(localVarBase + __ret);
 					StackObject* __argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
-					const bool _probeCallInterpStaticRet = s_callInterpStaticRetProbeCount < 80;
+					const bool _probeCallInterpStaticRet = false;
 					if (_probeCallInterpStaticRet)
 					{
 						s_callInterpStaticRetProbeCount++;
@@ -10722,7 +10755,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
 				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
-					bool _hotc233TraceDictionarySetItem = _declaredMethod && _declaredMethod->name && !std::strcmp(_declaredMethod->name, "set_Item") && _declaredMethod->klass && _declaredMethod->klass->name && std::strstr(_declaredMethod->klass->name, "Dictionary");
+					bool _hotc233TraceDictionarySetItem = false;
 					if (_hotc233TraceDictionarySetItem)
 					{
 						std::printf("[hotc233][CallVirtualProbe] before declared=%s.%s::%s obj=%p m2n=%p arg1=%u arg2=%u\n",

@@ -1,71 +1,53 @@
-# 性能测试方法（对齐 HybridCLR 社区版）
+# 性能测试方法
 
-更新时间：2026-06-27
+更新时间：2026-07-01
 
-## 固定对标工程
+## 固定工程
 
-| 角色 | 路径 | 说明 |
+| 角色 | 工程 | 说明 |
 |---|---|---|
-| hotc233 宿主 | `unity-hotc233-demo` | 内置 hotc233 运行时，不安装 `com.code-philosophy.hybridclr` |
-| HybridCLR 社区版 | `Hotc233Data/local-machine.json` → `hybridClrBenchmarkProjectRoot` | 本机实测；默认 `D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo` |
+| hotc233 | `unity-hotc233-benchmark` | 宿主测试工程，引用 `hotc233-unity` 子仓库 |
+| HybridCLR CE | `unity-hybridclr-ce-benchmark` | 社区版独立测试工程，只产出 CE 对照数据 |
 
-两个工程使用 **同一套** `OfficialBenchmarkProbe` 代码形状（14 条 HybridCLR 官方 performance benchmark）。
+两个工程必须使用同一套 benchmark 形状。hotc233 工程不安装官方 HybridCLR 包。
 
-## 解释器对标口径（本机轻量）
+## 运行策略
 
-- **只跑 14 条官方 base**（`RunOfficialBaseOnly` / `OfficialBenchmarkProbe`），不跑 business 探针。
-- **无 warmup**：纯解释器无 JIT，预热只浪费时间且污染对比。
-- **迭代档位**（hotc233 与 hybridclr-benchmark-demo 一致）：
-  - `officialTestCount = 167`（相对旧 ~60s 档位同比例缩到 ~10s）
-  - large = ×10 → 1 670
-  - medium = ×2 → 334
-  - GameObject = 84
-- **默认平台**：StandaloneWindows64 IL2CPP Player，同机顺序运行 hotc233 与 HybridCLR 社区版。
-- **不启动**：WebGL build、本地 server、headless browser。
+1. CE 结果只需产出一次，写入 hotc233 工程的 `Assets/EditorForBuild/Generated/hybridclr-local-player-report.json`。
+2. 后续 hotc233 迭代默认复用 CE 结果，避免每轮重复构建 CE。
+3. 需要刷新 CE 时设置 `HOTC233_REFRESH_HYBRIDCLR_CE=1`。
+4. 每次 hotc233 性能判断只看一组完整对照：14 条 base + 10 条 business。
 
-## 快速验证周期
+## 固定次数
 
-1. hotc233：`CI_RunHotc233LocalPerformanceOnly` 构建一个 Windows IL2CPP 热更 Player，写 `performance-hotc233-player.json`。
-2. HybridCLR：`CI_RunLocalBenchmark` 构建一个 Windows IL2CPP Player，写 `hybridclr-local-player-report.json`。
-3. Go 侧只聚合 JSON，写 `performance-local-hotc-vs-hybridclr-base.{json,md,html}`。
-4. native `Data~/Libil2cpp/.../hotc233/` 变更后重跑 `local-benchmark`；需要 WebGL/小游戏平台结论时才跑 WebGL 专项。
+| 分组 | 数量 | 每项循环 |
+|---|---:|---:|
+| HybridCLR 官方 base | 14 | 1000 |
+| 实际业务 business | 10 | 10 |
 
-## 优化重心（native / il2cpp_hotc233）
-
-```text
-Assets/neko233/hotc233-unity/Data~/Libil2cpp/2022-tuanjie/hotc233/
-  interpreter/Interpreter_Execute.cpp
-  transform/TransformContext.cpp
-  transform/Hotc233TransformPolicy.h
-```
-
-## 测试环境（必须与 HybridCLR 一致）
-
-- **默认平台**：StandaloneWindows64 + IL2CPP（两边独立工程，本机 Player）
-- **WebGL 专项**：WebGL + IL2CPP + headless Chrome，只在需要小游戏/WebGL 平台结论时运行
-- **Loader**：`RuntimeFast`（强制）
-- **HybridCLR 数据**：本机 `hybridclr-benchmark-demo` 实测，**不用**官方文档冒充社区版实测
-- **Pro 列**：仅参考官方文档相对社区版的倍率区间，不作为本机实测
-- **禁止**：Mono 表冒充 IL2CPP；并行探针；demo 内模拟 HybridCLR 数值
+解释器无 JIT 加成，增加循环次数不会改变真实性能形态，只会拖慢验证。因此次数不允许被业务侧或环境变量修改。
 
 ## 命令
 
 ```powershell
-go run ./tools/hotc233ctl local-benchmark -project . -loader-profile RuntimeFast
+go run ./tools/hotc233ctl local-benchmark -project . -loader-profile RuntimeFast `
+  -hybridclr-project ..\unity-hybridclr-ce-benchmark -force-rebuild
 ```
 
-路径自动读 `Hotc233Data/local-machine.json`；也可 `-hybridclr-project ...`。
-
-需要 WebGL/小游戏平台专项结论时：
+只刷新 CE：
 
 ```powershell
-go run ./tools/hotc233ctl benchmark -project . -force-rebuild -loader-profile RuntimeFast
+$env:HOTC233_REFRESH_HYBRIDCLR_CE='1'
+go run ./tools/hotc233ctl local-benchmark -project . -loader-profile RuntimeFast `
+  -hybridclr-project ..\unity-hybridclr-ce-benchmark -force-rebuild
+Remove-Item Env:\HOTC233_REFRESH_HYBRIDCLR_CE -ErrorAction SilentlyContinue
 ```
 
-## 结论位置
+## 判定
 
-**日常临时报告**：`Assets/EditorForBuild/Generated/performance-local-hotc-vs-hybridclr-base.{md,json,html}`
-
-**WebGL 专项归档**：`benchmark-docs/results/latest-hotc-vs-hybridclr.{md,json}`
-
-`Assets/EditorForBuild/Generated/` 仅为临时产物，不得作为验收依据。
+- 生产 floor 分层：`typeof=1000%`，HybridCLR 商业版公开算术项对应行 `500%`，其它官方 base 默认 `300%`。
+- 任一 base 行低于自身分层 floor 即未达到当前生产性能目标。
+- JSON 每行必须输出 `floorPercent`、`floorScope`、`floorSource`、`floorStatus`；Markdown 表格必须展示 floor 与 status。
+- `HOTC233_COMMUNITY_NEAR_PERCENT` 只允许作为诊断覆盖，报告必须显式标注 override，不代表默认生产 floor。
+- business 行只作为实际业务风险观察；当启用 business floor 时必须同名、同次数、同平台比较。
+- WebGL/小游戏专项不替代本机日常 floor。

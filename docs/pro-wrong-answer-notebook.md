@@ -61,7 +61,7 @@
 ### WA-010 — scalar value-type generated M2N unguard（blocked）
 
 - **尝试**：让 generated M2N bridge 对 bool/int/float/enum 等 scalar value-type return/param 直接调用，不再进入 `TryManaged2NativeCallByReflectionInvokeForSharedStruct`。
-- **实测**：`HOTC233_LOCAL_OFFICIAL_COUNT=1` smoke local-benchmark 构建通过，但 Player 在 `business-realworld-dictionary-config-lookup` 崩溃；exit `-1073741819`，native crash `1`。
+- **实测（旧 smoke 口径，已废弃）**：`HOTC233_LOCAL_OFFICIAL_COUNT=1` 构建通过，但 Player 在 `business-realworld-dictionary-config-lookup` 崩溃；exit `-1073741819`，native crash `1`。
 - **证据**：`Assets/EditorForBuild/Generated/performance-hotc233-player.json.log`；栈为 `Dictionary_2_TryGetValue` -> `Dictionary_2_FindEntry` -> `ClassInlines::GetInterfaceInvokeDataFromVTable`，调用点为 generated bridge `__M2N_s203uuu`。
 - **根因**：fully-shared generic Dictionary ABI 不能只凭标量 return 判断安全；rgctx/MethodInfo/hidden generic context 仍可能需要 invoker/reflection 保护。
 - **教训**：业务字典优化不能通过移除 shared-struct guard 侥幸获得；必须做 fully-shared generic aware 的 typed ABI 或专门安全桥接。

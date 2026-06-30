@@ -8,7 +8,7 @@
 |---|---|---|
 | 快速兼容性 | `go run ./tools/hotc233ctl compat-fast -project . -timeout 15m` | Editor 内 AB 加载热更 DLL，不构建 Player，不跑性能；先验证 C# / Unity / 商业能力兼容面 |
 | Unity 真实热更短验收 | `go run ./tools/hotc233ctl unity-realworld-benchmark -project . -loader-profile RuntimeFast -timeout 15m` | StandaloneWindows64 IL2CPP Player，20 条 Unity API 热更性能/正确性 |
-| 正式性能对标 | `go run ./tools/hotc233ctl local-benchmark -project . -loader-profile RuntimeFast -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo` | hotc233 / HybridCLR 社区版 / xLua / Pro 目标全表 |
+| 正式性能对标 | `go run ./tools/hotc233ctl local-benchmark -project . -loader-profile RuntimeFast -hybridclr-project ..\unity-hybridclr-ce-benchmark` | hotc233 / HybridCLR CE / Pro 目标全表；base 固定 1000 次，business 固定 10 次 |
 | WebGL 专项 | `go run ./tools/hotc233ctl benchmark -project . -loader-profile RuntimeFast -skip-unity -hybridclr-project D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo` | 仅在 Windows 快速兼容性和本机性能通过后运行 |
 
 ## C# / CLR 机制

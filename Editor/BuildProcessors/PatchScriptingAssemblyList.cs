@@ -1,4 +1,3 @@
-using Hotc233.Editor.UnityBinFileReader;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,7 +10,10 @@ using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.UnityLinker;
 using UnityEngine;
+#if HOTC233_ENABLE_LEGACY_UNITYFS_PATCHER
+using Hotc233.Editor.UnityBinFileReader;
 using UnityFS;
+#endif
 #if !UNITY_2023_1_OR_NEWER
 using UnityEditor.Il2Cpp;
 #endif
@@ -127,6 +129,7 @@ namespace Hotc233.Editor.BuildProcessors
         }
         private void AddHotFixAssembliesToBinFile(string path)
         {
+#if HOTC233_ENABLE_LEGACY_UNITYFS_PATCHER
 #if UNITY_STANDALONE_OSX
             path = Path.GetDirectoryName(path);
 #endif
@@ -139,8 +142,12 @@ namespace Hotc233.Editor.BuildProcessors
                 return;
             }
             Debug.LogError($"[PatchScriptingAssemblyList] can not find file '{SettingsUtil.GlobalgamemanagersBinFile}' or '{SettingsUtil.Dataunity3dBinFile}' in '{path}'");
+#else
+            Debug.LogWarning("[PatchScriptingAssemblyList] legacy UnityFS bin patcher is not included in this checkout. Unity 2020+ builds use ScriptingAssemblies.json and are unaffected.");
+#endif
         }
 
+#if HOTC233_ENABLE_LEGACY_UNITYFS_PATCHER
         private bool AddHotFixAssembliesToGlobalgamemanagers(string path)
         {
             string[] binFiles = Directory.GetFiles(path, SettingsUtil.GlobalgamemanagersBinFile, SearchOption.AllDirectories);
@@ -178,6 +185,7 @@ namespace Hotc233.Editor.BuildProcessors
             }
             return true;
         }
+#endif
 
 #if UNITY_WEBGL && !UNITY_2022_3_OR_NEWER
         public void OnBeforeConvertRun(BuildReport report, Il2CppBuildPipelineData data)

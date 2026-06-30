@@ -16,6 +16,7 @@
 #include "vm/Object.h"
 #include "vm/Method.h"
 #include "vm/Field.h"
+#include "gc/GarbageCollector.h"
 #include "metadata/GenericMetadata.h"
 
 #include "../metadata/MetadataModule.h"
@@ -315,6 +316,7 @@ namespace interpreter
 
 	static void TraceHiddenDelegateReturn(const char* phase, const MethodInfo* invokeMethod, const MethodInfo* targetMethod, StackObject* args, void* ret)
 	{
+		return;
 		static int32_t s_traceCount = 0;
 		if (!ret || s_traceCount >= 64)
 		{
@@ -354,7 +356,7 @@ namespace interpreter
 			const MethodInfo* maybeMethod = (const MethodInfo*)maybeRetAddress;
 			if (maybeMethod->name && maybeMethod->klass)
 			{
-				if (s_openDelegateSkipTraceCount < 16)
+				if (false && s_openDelegateSkipTraceCount < 16)
 				{
 					std::printf("[hotc233][N2MOpenDelegateProbe] skip-real-method slot=%p method=%s.%s::%s args0=%p\n",
 						(void*)maybeRetAddress,
@@ -371,7 +373,7 @@ namespace interpreter
 		Il2CppDelegate* del = (Il2CppDelegate*)args[0].obj;
 		if (!del || !del->method)
 		{
-			if (s_openDelegateExecTraceCount < 128)
+			if (false && s_openDelegateExecTraceCount < 128)
 			{
 				std::printf("[hotc233][N2MOpenDelegateProbe] missing-delegate ret=%p del=%p args0=%p\n",
 					(void*)maybeRetAddress,
@@ -383,7 +385,7 @@ namespace interpreter
 			return false;
 		}
 		const MethodInfo* curMethod = del->method;
-		if (s_openDelegateExecTraceCount < 128)
+		if (false && s_openDelegateExecTraceCount < 128)
 		{
 			std::printf("[hotc233][N2MOpenDelegateProbe] exec ret=%p del=%p klass=%s.%s target=%p method=%s.%s::%s interp=%d methodPtr=%p invokeImpl=%p invokeThis=%p interpMethod=%p interpInvoke=%p virtual=%d pcount=%d retType=%d\n",
 				(void*)maybeRetAddress,
@@ -694,6 +696,7 @@ namespace interpreter
 
 	static void TraceNative2ManagedBinding(const Il2CppMethodDefinition* method, const char* sigName)
 	{
+		return;
 		static int32_t s_n2mDefinitionBindingTraceCount = 0;
 		if (!method || !sigName || s_n2mDefinitionBindingTraceCount >= 256)
 		{
@@ -739,6 +742,7 @@ namespace interpreter
 
 	static void TraceNative2ManagedBinding(const MethodInfo* method, const char* sigName)
 	{
+		return;
 		static int32_t s_n2mBindingTraceCount = 0;
 		if (!method || !sigName || s_n2mBindingTraceCount >= 64)
 		{
@@ -1110,12 +1114,7 @@ namespace interpreter
 
 	void InterpreterModule::Managed2NativeCallByReflectionInvoke(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
-		bool tracePerformanceEntry = method
-			&& method->name
-			&& (!std::strcmp(method->name, "RunPerformanceOnlyJson") || !std::strcmp(method->name, "RunPerformanceSuiteJson"))
-			&& method->klass
-			&& method->klass->name
-			&& !std::strcmp(method->klass->name, "HotUpdateApp");
+		bool tracePerformanceEntry = false;
 		if (hotc233::metadata::IsInterpreterImplement(method) && hotc233::metadata::IsInterpreterMethod(method))
 		{
 			StackObject* argBase = (hotc233::metadata::IsInstanceMethod(method) || method->parameters_count > 0)
@@ -1148,15 +1147,8 @@ namespace interpreter
 			}
 			return;
 		}
-		bool traceDictionarySetItem = method && method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary");
-		bool traceColorOp = method
-			&& method->name
-			&& (!std::strcmp(method->name, "op_Inequality") || !std::strcmp(method->name, "op_Equality"))
-			&& method->klass
-			&& method->klass->namespaze
-			&& method->klass->name
-			&& !std::strcmp(method->klass->namespaze, "UnityEngine")
-			&& !std::strcmp(method->klass->name, "Color");
+		bool traceDictionarySetItem = false;
+		bool traceColorOp = false;
 		if (traceDictionarySetItem)
 		{
 			std::printf("[hotc233][M2NReflectionProbe] enter %s.%s::%s method=%p methodPointer=%p interpPointer=%p invoker=%p pcount=%d ret=%p\n",
@@ -1275,12 +1267,7 @@ namespace interpreter
 				(void*)method->invoker_method);
 			std::fflush(stdout);
 		}
-		bool traceGroupingKey = method
-			&& method->name
-			&& !std::strcmp(method->name, "get_Key")
-			&& method->klass
-			&& method->klass->name
-			&& std::strstr(method->klass->name, "Grouping");
+		bool traceGroupingKey = false;
 		if (traceGroupingKey)
 		{
 			std::printf("[hotc233][M2NGroupingKeyProbe] before %s.%s::%s full=%d retType=%d ret=%p retU64=%llu this=%p pcount=%d\n",
@@ -1834,9 +1821,164 @@ namespace interpreter
 		return false;
 	}
 
+	struct StackFieldOffsets
+	{
+		size_t arrayOffset;
+		size_t sizeOffset;
+		size_t versionOffset;
+		bool elementIsValueType;
+		bool elementHasReferences;
+		bool valid;
+	};
+
+	static std::unordered_map<Il2CppClass*, StackFieldOffsets> s_stackFieldOffsets;
+
+	static bool IsStackMethod(const MethodInfo* method)
+	{
+		return method
+			&& method->klass
+			&& method->klass->name
+			&& std::strcmp(method->klass->name, "Stack`1") == 0
+			&& GetFirstClassGenericArg(method) != nullptr;
+	}
+
+	static bool TryGetStackFieldOffsets(const MethodInfo* method, StackFieldOffsets& offsets)
+	{
+		auto cached = s_stackFieldOffsets.find(method->klass);
+		if (cached != s_stackFieldOffsets.end())
+		{
+			offsets = cached->second;
+			return offsets.valid;
+		}
+		StackFieldOffsets next = { 0, 0, 0, false, false, false };
+		const Il2CppType* elementType = GetFirstClassGenericArg(method);
+		Il2CppClass* elementKlass = elementType ? il2cpp::vm::Class::FromIl2CppType(elementType) : nullptr;
+		FieldInfo* arrayField = FindM2NFieldAny(method->klass, "_array", "array");
+		FieldInfo* sizeField = FindM2NFieldAny(method->klass, "_size", "size");
+		FieldInfo* versionField = FindM2NFieldAny(method->klass, "_version", "version");
+		if (!elementKlass || !arrayField || !sizeField || !versionField)
+		{
+			s_stackFieldOffsets.insert({ method->klass, next });
+			offsets = next;
+			return false;
+		}
+		next.arrayOffset = il2cpp::vm::Field::GetOffset(arrayField);
+		next.sizeOffset = il2cpp::vm::Field::GetOffset(sizeField);
+		next.versionOffset = il2cpp::vm::Field::GetOffset(versionField);
+		next.elementIsValueType = IS_CLASS_VALUE_TYPE(elementKlass);
+		next.elementHasReferences = elementKlass->has_references;
+		next.valid = true;
+		s_stackFieldOffsets.insert({ method->klass, next });
+		offsets = next;
+		return true;
+	}
+
+	static bool TryManaged2NativeCallStackFastPath(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!IsStackMethod(method) || !method->name || !argVarIndexs || !localVarBase)
+		{
+			return false;
+		}
+		Il2CppObject* stackObject = localVarBase[argVarIndexs[0]].obj;
+		if (!stackObject)
+		{
+			return false;
+		}
+		StackFieldOffsets offsets;
+		if (!TryGetStackFieldOffsets(method, offsets))
+		{
+			return false;
+		}
+		uint8_t* stackBase = (uint8_t*)stackObject;
+		Il2CppArray* array = *(Il2CppArray**)(stackBase + offsets.arrayOffset);
+		int32_t* sizePtr = (int32_t*)(stackBase + offsets.sizeOffset);
+		int32_t* versionPtr = (int32_t*)(stackBase + offsets.versionOffset);
+		const char* methodName = method->name;
+		if (std::strcmp(methodName, "get_Count") == 0 && method->parameters_count == 0)
+		{
+			if (ret)
+			{
+				std::memset(ret, 0, sizeof(StackObject));
+				*(int32_t*)ret = *sizePtr;
+			}
+			return true;
+		}
+		if (!array)
+		{
+			return false;
+		}
+		uint32_t length = il2cpp::vm::Array::GetLength(array);
+		uint32_t elementSize = array->klass->element_size;
+		uint8_t* elementData = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(array);
+		if (!elementData || elementSize == 0)
+		{
+			return false;
+		}
+		if (std::strcmp(methodName, "Push") == 0 && method->parameters_count == 1)
+		{
+			int32_t size = *sizePtr;
+			if (size < 0 || (uint32_t)size >= length)
+			{
+				return false;
+			}
+			uint8_t* element = elementData + (size_t)elementSize * (size_t)size;
+			if (offsets.elementIsValueType)
+			{
+				std::memcpy(element, localVarBase + argVarIndexs[1], (size_t)elementSize);
+				if (offsets.elementHasReferences)
+				{
+					il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element, (size_t)elementSize);
+				}
+			}
+			else
+			{
+				*(Il2CppObject**)element = localVarBase[argVarIndexs[1]].obj;
+				il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element);
+			}
+			*sizePtr = size + 1;
+			++(*versionPtr);
+			return true;
+		}
+		if (std::strcmp(methodName, "Pop") == 0 && method->parameters_count == 0)
+		{
+			int32_t size = *sizePtr;
+			if (size <= 0 || (uint32_t)size > length)
+			{
+				return false;
+			}
+			int32_t nextSize = size - 1;
+			uint8_t* element = elementData + (size_t)elementSize * (size_t)nextSize;
+			if (ret)
+			{
+				if (offsets.elementIsValueType)
+				{
+					std::memcpy(ret, element, (size_t)elementSize);
+				}
+				else
+				{
+					std::memset(ret, 0, sizeof(StackObject));
+					((StackObject*)ret)->obj = *(Il2CppObject**)element;
+				}
+			}
+			std::memset(element, 0, (size_t)elementSize);
+			if (!offsets.elementIsValueType || offsets.elementHasReferences)
+			{
+				il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element, (size_t)elementSize);
+			}
+			*sizePtr = nextSize;
+			++(*versionPtr);
+			return true;
+		}
+		return false;
+	}
+
 	static void Managed2NativeCallAotContainerInvoker(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
 		if (TryManaged2NativeCallListIntFastPath(method, argVarIndexs, localVarBase, ret))
+		{
+			return;
+		}
+		if (TryManaged2NativeCallStackFastPath(method, argVarIndexs, localVarBase, ret))
 		{
 			return;
 		}

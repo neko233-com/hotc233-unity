@@ -110,7 +110,7 @@ namespace Hotc233
             Def("business-hot-reload", "热重载版工作流", FeatureCategory.CommercialCompatibility, "hot-reload", true,
                 "HotUpdateBinaryLoader.ReloadHotUpdateAssemblies"),
             Def("business-code-protection", "代码加密 / 加固", FeatureCategory.CommercialCompatibility, "code-protection", true,
-                "Hotc233LoadPolicy 解密钩子、XOR 示例和 SHA256 完整性校验"),
+                "Hotc233LoadPolicy AES-CBC + HMAC-SHA256 provider、解密钩子、legacy XOR 示例和 SHA256 完整性校验"),
             Def("business-access-control", "访问控制策略", FeatureCategory.CommercialCompatibility, "access-control", true,
                 "Hotc233LoadPolicy.AllowOnly 与自定义 AccessValidator"),
             Def("business-assembly-load-optimization", "Assembly.Load 加载优化", FeatureCategory.CommercialCompatibility, "assembly-load-optimization", true,

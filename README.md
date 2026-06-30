@@ -566,7 +566,7 @@ hotc233-unity 当前生态重点：
 | Release tag | ✅ | 每个版本自动打 zip、sha256、GitHub Release |
 | 文档网站 | ✅ | GitHub Pages 自动发布，后续补常见错误和图文流程 |
 | 平台矩阵 | ✅ | Windows/Linux/macOS/Android/iOS/WebGL IL2CPP 已验证；Android/iOS 真机、WebGL 浏览器 smoke 继续补 |
-| 竞品实测 | ⚠️ | HybridCLR、ILRuntime、xLua 接入同 benchmark 后再填百分比 |
+| 竞品实测 | ⚠️ | HybridCLR CE 独立工程已接入；其它竞品不进入当前正式对照组 |
 | `.meta` 策略 | ✅ | 子仓库忽略 `.meta`，由宿主项目按 Unity/Tuanjie 本地生成 |
 
 ## 约束

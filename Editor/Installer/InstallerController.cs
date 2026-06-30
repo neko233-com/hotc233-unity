@@ -181,12 +181,13 @@ namespace Hotc233.Editor.Installer
 
             List<PreservedGeneratedFile> generatedFiles = CaptureGeneratedRuntimeFiles();
             bool editorFilesChanged = BashUtil.SyncDirIncremental(editorIl2cppPath, localIl2CppDir, true);
+            bool toolLayoutChanged = EnsureIl2CppToolCompatibilityLayout(localIl2CppDir);
 
             string dstLibil2cppDir = $"{LocalIl2CppDir}/libil2cpp";
             bool runtimeFilesChanged = BashUtil.SyncDirIncremental(libil2cppSourceDir, dstLibil2cppDir, true);
             runtimeFilesChanged = RestoreGeneratedRuntimeFiles(generatedFiles) || runtimeFilesChanged;
 
-            if (editorFilesChanged || runtimeFilesChanged)
+            if (editorFilesChanged || toolLayoutChanged || runtimeFilesChanged)
             {
                 BashUtil.RemoveDir($"{SettingsUtil.ProjectDir}/Library/Il2cppBuildCache", true);
             }
@@ -204,6 +205,107 @@ namespace Hotc233.Editor.Installer
             {
                 Debug.LogError("Hotc233 安装失败。");
             }
+        }
+
+        private static bool EnsureIl2CppToolCompatibilityLayout(string localIl2CppDir)
+        {
+            string deployDir = $"{localIl2CppDir}/build/deploy";
+            if (!Directory.Exists(deployDir))
+            {
+                Debug.LogWarning($"Hotc233 IL2CPP deploy tools not found at: {deployDir}");
+                return false;
+            }
+
+            bool changed = EnsureToolCompatibilityLayout(deployDir, localIl2CppDir, "il2cpp");
+            changed = EnsureToolCompatibilityLayout(deployDir, localIl2CppDir, "UnityLinker") || changed;
+            changed = EnsureToolCompatibilityLayout(deployDir, localIl2CppDir, "Analytics") || changed;
+            return changed;
+        }
+
+        private static bool EnsureToolCompatibilityLayout(string deployDir, string localIl2CppDir, string toolName)
+        {
+            string legacyBinDir = $"{localIl2CppDir}/{toolName}/bin";
+            bool changed = false;
+            if (File.Exists($"{legacyBinDir}/{toolName}.exe")
+                || File.Exists($"{legacyBinDir}/il2cpp.exe")
+                || Directory.Exists($"{legacyBinDir}/bee_backend"))
+            {
+                BashUtil.RemoveDir(legacyBinDir, true);
+                changed = true;
+            }
+
+            string targetFramework = ReadToolTargetFramework(deployDir, toolName);
+            string editorRuntimeIdentifier = GetEditorRuntimeIdentifier();
+            foreach (string existingDirectory in Directory.Exists(legacyBinDir)
+                ? Directory.GetDirectories(legacyBinDir, "*", SearchOption.TopDirectoryOnly)
+                : Array.Empty<string>())
+            {
+                if (!Path.GetFileName(existingDirectory).Equals(targetFramework, StringComparison.OrdinalIgnoreCase))
+                {
+                    BashUtil.RemoveDir(existingDirectory, true);
+                    changed = true;
+                }
+            }
+
+            string legacyTfmDir = $"{legacyBinDir}/{targetFramework}";
+            if (File.Exists($"{legacyTfmDir}/{toolName}.exe") || Directory.Exists($"{legacyTfmDir}/bee_backend"))
+            {
+                BashUtil.RemoveDir(legacyTfmDir, true);
+                changed = true;
+            }
+
+            foreach (string existingRuntimeDirectory in Directory.Exists(legacyTfmDir)
+                ? Directory.GetDirectories(legacyTfmDir, "*", SearchOption.TopDirectoryOnly)
+                : Array.Empty<string>())
+            {
+                if (!Path.GetFileName(existingRuntimeDirectory).Equals(editorRuntimeIdentifier, StringComparison.OrdinalIgnoreCase))
+                {
+                    BashUtil.RemoveDir(existingRuntimeDirectory, true);
+                    changed = true;
+                }
+            }
+
+            string legacyRuntimeDir = $"{legacyTfmDir}/{editorRuntimeIdentifier}";
+            changed = BashUtil.SyncDirIncremental(deployDir, legacyRuntimeDir, true) || changed;
+            if (changed)
+            {
+                Debug.Log($"Hotc233 prepared {toolName} tool compatibility layout: {legacyRuntimeDir}");
+            }
+
+            return changed;
+        }
+
+        private static string GetEditorRuntimeIdentifier()
+        {
+            switch (Application.platform)
+            {
+                case RuntimePlatform.WindowsEditor:
+                    return "win-x64";
+                case RuntimePlatform.LinuxEditor:
+                    return "linux-x64";
+                case RuntimePlatform.OSXEditor:
+                    return System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture
+                        == System.Runtime.InteropServices.Architecture.Arm64
+                            ? "osx-arm64"
+                            : "osx-x64";
+                default:
+                    return "win-x64";
+            }
+        }
+
+        private static string ReadToolTargetFramework(string deployDir, string toolName)
+        {
+            string runtimeConfigPath = $"{deployDir}/{toolName}.runtimeconfig.json";
+            if (File.Exists(runtimeConfigPath))
+            {
+                Match match = Regex.Match(File.ReadAllText(runtimeConfigPath), @"""tfm""\s*:\s*""([^""]+)""");
+                if (match.Success)
+                {
+                    return match.Groups[1].Value;
+                }
+            }
+
+            return "net6.0";
         }
 
         public bool HasInstalledHotc233()

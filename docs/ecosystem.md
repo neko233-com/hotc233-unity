@@ -23,7 +23,7 @@ hotc233-unity 的生态目标是：接入路径简单、版本来源单一、验
 | 平台矩阵 | ✅ | Windows/Linux/macOS/Android/iOS/WebGL IL2CPP 已验证 |
 | `.meta` 策略 | ✅ | 包仓库不提交 `.meta`，由宿主 Unity / Tuanjie 本地生成 GUID |
 | 真机矩阵 | ⚠️ | Android/iOS/WebGL 浏览器 smoke 待补 |
-| 竞品同场景 benchmark | ⚠️ | HybridCLR、ILRuntime、xLua 需要接入同 benchmark 后才能填百分比 |
+| 竞品同场景 benchmark | ⚠️ | HybridCLR CE 已接入；其它竞品不进入当前正式对照组 |
 | 社区案例 | ⚠️ | 需要更多最小项目、资源系统接入样例和常见错误库 |
 
 ## 对外宣传口径
@@ -40,7 +40,7 @@ hotc233-unity 的生态目标是：接入路径简单、版本来源单一、验
 - 全平台已真机验证。
 - 全面性能超过原生 IL2CPP。
 - 已达到 HybridCLR 专业版纯解释器性能上限，除非最新 `performance-comparison-report.md` 的游戏业务行已经达标。
-- ILRuntime、xLua 的同表百分比，除非已经接入同 benchmark。
+- ILRuntime 等其它竞品的同表百分比，除非已经接入同 benchmark。
 
 ## Release 节奏
 

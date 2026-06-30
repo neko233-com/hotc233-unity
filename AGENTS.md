@@ -16,7 +16,7 @@
 1. **商业轨（P0）**：`pro-landing-matrix.json` 中 Hotfix/热重载/加固/访问控制/Assembly 缓存/栈诊断等 — 有/无能力，默认 CI 必须绿。
 2. **性能轨（P1+）**：**专用 transform + whole-method bypass**（见 `benchmark-docs/god-domain-architecture.md`）；**禁止** dispatch/M2N 桥接微优化替代专用 IR。
 
-**200% 规则**：同机 14 条 base 任一行 `hotc233PercentOfHybridClr < 50%` → 架构方向错误，换桶，禁止继续细节优化。
+**分层 floor 规则**：`typeof=1000%`；HybridCLR 商业版公开算术项对应行（当前 `hybridclr-binop-add` / `hybridclr-binop-complex`）为 `500%`；其它官方 base 默认 `300%`。低于 100% 说明连 CE 基线都没超过，必须优先排查架构方向。
 
 ## 可量化汇报硬规则
 
@@ -161,11 +161,12 @@
 ## 性能对标规范（2026-06-27 起）
 
 - **唯一文档入口**：`benchmark-docs/`（见 `benchmark-docs/README.md`）。
-- **唯一验收 benchmark 代码**：HybridCLR 官方 14 条 base（`hybridclr-benchmark-demo/OfficialBenchmarkProbe.cs` 形状）；demo `PerformanceProbe` 的 business 行不得进入 Pro/社区版硬验收。
+- **唯一验收 benchmark 代码**：HybridCLR 官方 14 条 base（`unity-hybridclr-ce-benchmark/OfficialBenchmarkProbe.cs` 形状）；demo `PerformanceProbe` 的 business 行只作为业务风险观察，不得替代官方 base。
 - **业务代码性能对比**：`business-realworld-*` 只允许作为追加商业观察/业务门禁，必须使用 hotc233 与 HybridCLR 独立工程同名、同迭代、同平台、同 Player 报告计算百分比；禁止通过增大迭代次数制造稳定读数；缺少社区版同名行时必须判为 blocker。
-- **唯一验收命令**：宿主 `go run ./tools/hotc233ctl benchmark`；顺序探针，禁止 multitask / `-parallel-captures`。
-- **同机社区版参照**：`D:\Code\Tuanjie-Projects\hybridclr-benchmark-demo`（HybridCLR 8.11.0 + Tuanjie 2022.3.62t10）；测试环境与该工程完全一致（WebGL IL2CPP + 相同探针链路）。
-- **Pro 终态**；**L1 绝对门槛：同机 14 条 base 必须全面快于 HybridCLR 社区版**（fork 基线，任一条未赢即方向错误）。
+- **唯一日常验收命令**：宿主 `go run ./tools/hotc233ctl local-benchmark`；顺序探针，禁止 multitask / `-parallel-captures`。
+- **同机社区版参照**：同级子仓库 `unity-hybridclr-ce-benchmark`。CE 结果默认只产出一次后复用；缓存缺失或 `HOTC233_REFRESH_HYBRIDCLR_CE=1` 才刷新。
+- **Pro 终态**；**分层 floor：typeof 1000%、公开算术项 500%、其它 base 300%**。低于 100% 是 CE 基线 blocker。
+- 每行必须输出 `floorPercent`、`floorScope`、`floorSource`、`floorStatus`；`HOTC233_COMMUNITY_NEAR_PERCENT` 只作诊断覆盖，报告必须标注 override。
 - **废弃**：`flywheel` 作性能验收、`docs/flywheel-automation.md`、`docs/webgl-performance.md`、`docs/performance-peak-plan.md` 作性能依据。
 - 修改 loader、解释器、benchmark 形状或报告字段时，同步更新 `benchmark-docs/` 与两份 `AGENTS.md`。
 
@@ -183,16 +184,16 @@
 ## RuntimeFast 与 minigame 健康检查
 
 - `HotUpdateBinaryLoader` 默认且唯一生产 profile 为 `RuntimeFast`；`RuntimeOptions` 与其它 profile 名只作兼容别名，**不得**在热路径增加更慢分支。
-- **WebGL 性能验收**走 `benchmark-docs/methodology.md` 中的 `hotc233ctl benchmark`；必须生成并归档 `benchmark-docs/results/latest-hotc-vs-hybridclr.*`。
+- **WebGL 性能验收**只作专项，日常生产性能验收走 `benchmark-docs/methodology.md` 中的 `hotc233ctl local-benchmark`。
 - 微信小游戏/minigame(WebGL2) 热更必须关闭 `weixinMiniGameUseSlimMetaFileFormat` 和全部 `m_SlimFeaturesWeixinMiniGame`。
-- 只读报告守门：`go run ./hotc233ctl validate-reports -project <demo>`；`HOTC233_ENFORCE_BEAT_COMMUNITY=1` 启用 L1（全面超越社区版）。
+- 只读报告守门：`go run ./hotc233ctl validate-reports -project <demo>`；本机 `local-benchmark` 负责分层 floor 对比。
 - 修改解释器 opcode 时，必须同步 `Instruction.h`、`Instruction.cpp`、`Interpreter_Execute.cpp`、transform 选择逻辑和宿主 `hotc233ctl validate-reports` 的指令表守门；**P1 只允许改专用 transform / `TryExecuteHotc233FastPath`**，禁止以优化通用 dispatch switch 充当性能工作。
 - **禁止**为开发便利在 release 解释器保留 profiler、多 dispatch 模式或实验 opcode；SSA/多核编译等仅能在 L1 全绿且 callsite 架构落地后再立项。
 - 修改 loader、解释器、transform 策略、报告字段或配置导入器时，同步更新 `benchmark-docs/`、两份 `AGENTS.md` 和 CI 守门。
 
 ## 包结构与复制接入
 
-- `hotc233-unity` 必须保持可复制到任意宿主项目直接编译；不要依赖 `unity-hotc233-demo` 的 EditorForBuild、场景或生成目录。
+- `hotc233-unity` 必须保持可复制到任意宿主项目直接编译；不要依赖 `unity-hotc233-benchmark` 的 EditorForBuild、场景或生成目录。
 - 包内 asmdef 分层目标为 `Runtime`、`Editor`、`Plugin_xxx`：运行时代码只在 `Runtime`，编辑器生成/分析代码只在 `Editor`，第三方预编译依赖必须放在明确命名的 `Plugin_dnlib`、`Plugin_LZ4` 等目录。
 - 调整 `Plugin_xxx/` 时必须验证 `Hotc233.Editor.asmdef`、Unity plugin import settings、CI 和 package export；不得让 Runtime asmdef 引用 dnlib/LZ4。
 - 复制接入习惯必须贴近 HybridCLR 社区版：用户配置热更 asmdef、AOT metadata、执行 Generate/All、发布 `.dll.bytes`，但不要求执行外部 install。

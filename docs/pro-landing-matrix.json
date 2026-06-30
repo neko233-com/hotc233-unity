@@ -153,9 +153,9 @@
       "hybridClrDoc": "https://www.hybridclr.cn/docs/business/codeprotection",
       "phase": "P0",
       "status": "landed",
-      "hotc233Paths": ["Runtime/Hotc233LoadPolicy.cs:CreateXorProtected"],
+      "hotc233Paths": ["Runtime/Hotc233LoadPolicy.cs:CreateAesCbcHmacProtected", "Runtime/Hotc233LoadPolicy.cs:CreateXorProtected"],
       "probes": ["Hotc233CommercialCapabilityVerifier.codeProtection"],
-      "acceptance": "XOR 示例 + hash 校验 + 错误 hash 拒绝；生产级 AES/provider 后续接入。"
+      "acceptance": "AES-CBC + HMAC-SHA256 认证 payload 往返、随机 IV、篡改拒绝、名称绑定拒绝、SHA256 明文完整性校验；XOR 仅保留 legacy/dev 示例。"
     },
     {
       "id": "access-control",

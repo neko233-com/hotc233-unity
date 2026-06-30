@@ -122,8 +122,8 @@
 ## AI 从 0 复刻耗时评估方法
 
 1. **切机制**：按本章六域 + 上表一行 base 为最小 PR。
-2. **先验收形状**：`HOTC233_LOCAL_OFFICIAL_COUNT=1` + 无 crash。
-3. **再验收性能**：profile OFF 的 `local-benchmark` 全表 14 行。
+2. **先验收形状**：profile OFF 的 `local-benchmark`，官方/base 固定 1000 次，business 固定 10 次。
+3. **再定位弱项**：只用 `HOTC233_LOCAL_BENCHMARK_FILTER` 过滤行，禁止改次数。
 4. **记录耗时**：机制 ID、PR 链接、前后 `hotc/社区`、是否触发 WA-009 止损。
 
 **禁止项**：未绿 L1 不得启动 threaded dispatch / 全局 RegI32；不得用 profiler ON 的数据报「已赢 Pro」。

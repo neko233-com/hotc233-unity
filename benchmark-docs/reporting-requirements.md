@@ -13,7 +13,7 @@
 | 快速兼容性 | `go run ./tools/hotc233ctl compat-fast -project . -timeout 15m` | Editor 内 AB 热更加载；不构建 Player、不跑性能；0 crash、0 correctness failure、0 timeout |
 | 兼容性 | `validate-reports` + Unity 真实热更兼容套件 | 每个调用形状至少 5 次；包含随机输入/随机顺序；0 crash、0 correctness failure、0 timeout |
 | Unity API 真实热更 | `unity-realworld-benchmark` | `hotupdate-unity-*` 全量行输出；报告不得少行；raw API 形状失败时必须修 runtime/native 路径或显式列入不准发布项 |
-| 官方性能 | `local-benchmark` | 14 条官方 base 全表；hotc233、HybridCLR 社区版、Pro 估算、xLua 列不得省略 |
+| 官方性能 | `local-benchmark` | 14 条官方 base 全表；hotc233、HybridCLR CE、Pro 估算列不得省略；base 固定 1000 次 |
 | 业务性能 | `local-benchmark` 默认业务表 | 业务热更场景全表；不得只汇报快的子集 |
 
 兼容性套件的随机规则：同一 API 形状至少跑 5 次，输入需覆盖边界值与普通值，例如 `iterations`、bool toggles、Vector3/Quaternion、string tag/name、layer、组件启用状态。随机用于防止只针对固定测试写专用 bypass；随机失败视为 correctness failure。
@@ -24,7 +24,7 @@
 
 - 任一兼容性行 crash、timeout、少行或 correctness failure。
 - 任一 hotc233 专用 Unity API kernel 只返回 checksum、但真实 raw API native ABI 未有独立兼容测试覆盖。
-- `性能报告.md` 使用 stale `Generated/` 残留、手写数字、或省略 HybridCLR/xLua/业务表。
+- `性能报告.md` 使用 stale `Generated/` 残留、手写数字、或省略 HybridCLR CE / Pro 估算 / 业务表。
 - 为了通过测试而修改用户热更代码写法；除非该写法本身不可确定或 Unity/IL2CPP 不支持。
 
 ## 必报字段
@@ -39,11 +39,9 @@
 | hotc / Pro | `hotc233PercentOfProfessionalTarget`（L2 方向） |
 | 追社区还需 | `hybridClrCatchUpMultiplier`（>1 表示 hotc 仍慢） |
 | 追 Pro 还需 | `professionalCatchUpMultiplier` |
-| **xLua（最后一列）** | 同机 demo Player 内 Tencent xLua 跑同形状 Lua 脚本；`xluaOpsPerSecond` + `hotc233PercentOfXlua`（参照项，非 L1 门禁） |
-
 ## 必报元信息（表头或表前 bullet）
 
-1. **口径**：平台（默认 `StandaloneWindows64 IL2CPP Player`）、迭代次数（167 口径 / 334 medium / 1670 large）、是否 warmup=0。
+1. **口径**：平台（默认 `StandaloneWindows64 IL2CPP Player`）、迭代次数（official/base 固定 1000；business 固定 10）、是否 warmup=0。
 2. **Loader profile**：必须 `RuntimeFast`。
 3. **Opcode profiler 是否开启**（见下节）——**与社区版对比时必须声明**；社区版是 PC 直跑、无 hotc233 诊断开关。
 4. **L1 / L2 结论**：是否全面超越社区版；距 Pro 目标差距最大的 3 行。
@@ -62,8 +60,6 @@ Player 参数：`-hotc233-performance-suite`（`local-benchmark` 默认开启；
 - hotc233 与 HybridCLR 社区版必须使用同名 `business-realworld-*` 行、同迭代数、同平台、同 Player 口径计算 `hotc / HybridCLR`；不得通过增大任一侧迭代次数来换取稳定读数。
 - 默认商业版报告必须包含 10 条业务行及对应 10 条社区版同名行；缺行、`hotc-only`、`not-required-for-business` 都是 blocker，不能作为生产结论。
 - `headless` 只能验证已生成报告的结构与门禁，不得替代真实 Player 对比；业务性能百分比只能来自 `local-benchmark` 或明确标注的平台专项 Player 报告。
-
-**xLua 对照（demo 内，表格最后一列）**：`tools/setup-xlua.ps1` 安装 `Assets/XLua` → Player 内 `-hotc233-performance-suite` 顺序跑 Lua 探针 → 报告列 `xLua` / `hotc / xLua`。关闭：`HOTC233_INCLUDE_XLUA_BENCHMARK=0` 或 `-hotc233-skip-xlua-benchmark`。
 
 架构说明可选写入 [`benchmark-docs/performance-architecture-notes.md`](performance-architecture-notes.md)，会并入 `性能报告.md` 的「架构要点」节。
 

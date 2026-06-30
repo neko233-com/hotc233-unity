@@ -57,7 +57,7 @@ Stage D  Pro 商业能力           泛型共享 + metadata + Hotfix/加固
 | 子模块 | 状态 |
 |---|---|
 | `enableFullGenericSharing` | partial |
-| `Hotc233LoadPolicy` / SHA256 | partial |
+| `Hotc233LoadPolicy` / AES-HMAC / SHA256 | landed |
 | metadata bytes/peak/load 三表 | planned |
 
 ---
@@ -71,7 +71,7 @@ Stage D  Pro 商业能力           泛型共享 + metadata + Hotfix/加固
 | 标准解释优化 | **in-progress** | WebGL base JSON | Stage A/B/C |
 | 离线指令优化 | partial | opcode profile | 仅 typed IR lowering |
 | Hotfix / 热重载 | partial | Replace/Reload API | 包内示例 + 回滚 |
-| 代码加固 | partial | XOR + hash | AES provider |
+| 代码加固 | landed | AES-CBC + HMAC-SHA256 + SHA256 | KMS/平台密钥接入 |
 | 访问控制 | partial | AllowOnly | Editor 配置 |
 | Assembly.Load 优化 | partial | loader cache | hit/ms 报告 |
 | 解释器栈诊断 | **landed** | `GetInterpreterStackTraceJson` | PDB WebGL |
