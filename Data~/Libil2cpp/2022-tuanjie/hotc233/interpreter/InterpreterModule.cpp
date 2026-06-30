@@ -1465,6 +1465,62 @@ namespace interpreter
 		return false;
 	}
 
+	static bool IsDictionaryIntTryGetValueMethod(const MethodInfo* method)
+	{
+		if (!method
+			|| !method->name
+			|| std::strcmp(method->name, "TryGetValue") != 0
+			|| !method->klass
+			|| !method->klass->name
+			|| std::strcmp(method->klass->name, "Dictionary`2") != 0
+			|| !hotc233::metadata::IsInstanceMethod(method)
+			|| method->parameters_count != 2
+			|| !method->return_type
+			|| method->return_type->type != IL2CPP_TYPE_BOOLEAN)
+		{
+			return false;
+		}
+		const Il2CppType* keyType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[0]));
+		const Il2CppType* valueByRefType = GET_METHOD_PARAMETER_TYPE(method->parameters[1]);
+		return keyType
+			&& keyType->type == IL2CPP_TYPE_I4
+			&& valueByRefType
+			&& valueByRefType->byref;
+	}
+
+	static void Managed2NativeCallDictionaryIntTryGetValue(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!IsDictionaryIntTryGetValueMethod(method) || !method->invoker_method)
+		{
+			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+			return;
+		}
+		if (method->methodPointerCallByInterp == InterpreterModule::NotSupportNative2Managed)
+		{
+			InitAndGetInterpreterDirectlyCallMethodPointer(method);
+		}
+		if (method->methodPointerCallByInterp == InterpreterModule::NotSupportNative2Managed)
+		{
+			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+			return;
+		}
+		void* thisPtr = localVarBase[argVarIndexs[0]].obj;
+		void* invokeParams[2];
+		invokeParams[0] = localVarBase + argVarIndexs[1];
+		invokeParams[1] = (localVarBase + argVarIndexs[2])->ptr;
+		ClearManaged2NativeReturnStorage(method, ret);
+#if HOTC233_UNITY_2021_OR_NEW
+		Il2CppMethodPointer invokerTarget = method->methodPointer != nullptr ? method->methodPointer : method->methodPointerCallByInterp;
+		if (method->has_full_generic_sharing_signature && method->methodPointerCallByInterp != nullptr)
+		{
+			invokerTarget = method->methodPointerCallByInterp;
+		}
+		method->invoker_method(invokerTarget, method, thisPtr, invokeParams, ret);
+#else
+		InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
+#endif
+	}
+
 	Managed2NativeCallMethod InterpreterModule::GetManaged2NativeMethodPointer(const MethodInfo* method, bool forceStatic)
 	{
 		if (IsFullGenericVariableValueTypeReturn(method))
@@ -1478,6 +1534,10 @@ namespace interpreter
 		if (method->methodPointerCallByInterp == NotSupportNative2Managed)
 		{
 			return Managed2NativeCallByReflectionInvoke;
+		}
+		if (!forceStatic && IsDictionaryIntTryGetValueMethod(method))
+		{
+			return Managed2NativeCallDictionaryIntTryGetValue;
 		}
 		char sigName[kMaxSignatureNameLength];
 		ComputeSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
