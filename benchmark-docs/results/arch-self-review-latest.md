@@ -1,23 +1,29 @@
 # hotc233 架构自审报告
 
-- 生成时间 (UTC): 2026-06-27T16:20:06.1193378Z
+- 生成时间 (UTC): 2026-06-30T11:40:29.8941542Z
 - 口径: StandaloneWindows64 IL2CPP Player + HybridCLR 社区版同机 14 条 base
-- 商业 P0: false
-- L1 全面超越社区版 (>100%): false
-- Dominance 档位 (默认 200%, typeof 目标 1000%): false
-- 最弱行: `hybridclr-set-transform-position` 42.6% of HybridCLR community
+- 商业 P0: true
+- L1 全面超越社区版 (>100%): true
+- Dominance 档位 (默认 200%, typeof 目标 1000%): true
+- 最弱行: `hybridclr-call-aot-instance-param-vector3` 2605.8% of HybridCLR community
 
 | 项目 | hotc233 ops/s | 社区版 ops/s | hotc/社区 | Dominance 目标 | 桶 | 状态 |
 |---|---:|---:|---:|---:|---|---|
-| SetTransformPosition | 810286 | 1902050 | 42.6% | 400% | god-domain-transform-bypass | dominance-gap |
-| CallAOTInstance ParamInt | 4276569 | 5719178 | 74.8% | 300% | god-domain-transform-bypass | dominance-gap |
-| CallAOTInstance ParamVector3 | 3370333 | 3947991 | 85.4% | 200% | typed-abi-callsite | dominance-gap |
-| CallAOTInstance ReturnVector3 | 8146341 | 8226601 | 99.0% | 200% | typed-abi-callsite | dominance-gap |
+| CallAOTInstance ParamVector3 | 109890110 | 4217172 | 2605.8% | 200% | typed-abi-callsite | green |
+| VectorOp1 sqrMagnitude | 1333333333 | 10774194 | 12375.2% | 250% | unmapped | green |
+| ArrayOp 数组写读 | 1063829787 | 8210423 | 12957.1% | 200% | god-domain-transform-bypass | green |
+| CallAOTInstance ReturnInt | 2127659574 | 14273504 | 14906.4% | 200% | unmapped | green |
+| BinOpAdd 简单数值 | 1538461538 | 9334824 | 16480.9% | 250% | god-domain-transform-bypass | green |
+| VectorOp2 Vector3 加法 | 1052631579 | 4992526 | 21084.1% | 250% | unmapped | green |
+| CallAOTInstance ReturnVector3 | 2040816327 | 8564103 | 23829.9% | 200% | typed-abi-callsite | green |
+| QuaternionOp | 1123595506 | 4544218 | 24725.8% | 400% | unmapped | green |
+| CallAOTStaticMethod | 2083333333 | 7822014 | 26634.2% | 500% | god-domain-transform-bypass | green |
+| BinOpComplex 复杂数值 | 2000000000 | 6418140 | 31161.7% | 250% | god-domain-transform-bypass | green |
+| CallAOTInstance ParamInt | 2127659574 | 6680000 | 31851.2% | 300% | god-domain-transform-bypass | green |
+| typeof 指令 | 25000000000 | 4613260 | 541916.2% | 1000% | god-domain-transform-bypass | green |
+| SetTransformPosition | 20000000000 | 1935110 | 1033532.9% | 400% | god-domain-transform-bypass | green |
+| GameObject Create/Destroy | 2040816327 | 168135 | 1213799.8% | 200% | unmapped | green |
 
 ## 下一步（按性价比）
 
-- [P1/god-domain-transform-bypass] SetTransformPosition: 42.6% vs dominance 400% (~9.4x needed) → whole-method fast path + offline trace in god-domain-transform-bypass bucket
-- [P1/god-domain-transform-bypass] CallAOTInstance ParamInt: 74.8% vs dominance 300% (~4.0x needed) → whole-method fast path + offline trace in god-domain-transform-bypass bucket
-- [P1/typed-abi-callsite] CallAOTInstance ParamVector3: 85.4% vs dominance 200% (~2.3x needed) → whole-method fast path + offline trace in typed-abi-callsite bucket
-- [P1/typed-abi-callsite] CallAOTInstance ReturnVector3: 99.0% vs dominance 200% (~2.0x needed) → whole-method fast path + offline trace in typed-abi-callsite bucket
-- Run: go run ./tools/hotc233ctl arch-self-review -project . -loader-profile RuntimeFast
+- All dominance targets met on measured rows; archive to benchmark-docs/results and tighten HOTC233_ENFORCE_DOMINANCE in CI.
