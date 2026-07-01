@@ -38,6 +38,7 @@
 | WA-015 | 2026-07-01 | delegate 同步调用 whole-method fastpath | 所有关键 business 基本回退，custom/event/callback 尤其明显 | 撤回；delegate 优化必须在 transform/typed ABI 预烘焙调用形状，不在 handler 里临时判 fastpath | withdrawn |
 | WA-016 | 2026-07-01 | small i4 leaf whole-method interpreter | callback/custom/async 小涨但 List/Task/Dictionary 回退，仍远低 CE | 撤回；小叶子解释器仍是局部补丁，不是全面超过 CE 的通用架构 | withdrawn |
 | WA-017 | 2026-07-01 | AOT container method plan cache | List 仅 29.7%，整体 business 仍明显弱于 CE | 撤回；容器必须脱离 M2N wrapper，进入 transform-time typed container IR | withdrawn |
+| WA-018 | 2026-07-01 | 移除 InterpreterInvoke / delegate hidden-ret 热路径诊断 | Async 小涨但 List/Custom/Dictionary/Struct 回退 | 撤回；运行时探针清理不是主瓶颈，继续做 transform-time typed ABI 与状态机/container IR | withdrawn |
 
 ## 保留项（不是错题，但不得扩展成通用路线）
 
@@ -113,6 +114,14 @@
 - **实测**：叠加 WA-016 后，List 仅 29.7%、Coroutine 31.3%、Task 38.9%、Async 45.5%、Custom 63.5%、Event 79.9%、Dictionary 84.1%、Callback 101.5%，仍未全面超过 CE。
 - **根因**：M2N wrapper 仍在热路径，method plan cache 只去掉少量字符串/offset 判断，没有消除 call ABI、栈 slot、泛型容器访问和状态机步进成本。
 - **替代**：List/Stack/Dictionary 需要 transform-time typed container IR 或 callsite direct container opcode；旧 M2N container fast path 只能保正确性 fallback。
+- **状态**：withdrawn，提交已 revert。
+
+### WA-018 — InterpreterInvoke / delegate hidden-ret 热路径诊断清理（withdrawn）
+
+- **尝试**：删除 `InterpreterInvokeJoinProbe` 每次 N2M 调用的字符串匹配/日志分支，并移除 `InterpreterDelegateInvoke` hidden-return 前 64 次日志输出，期望降低短方法、delegate/event 与状态机调用开销。
+- **实测**：过滤 business 口径，Async 38.5%→45.5% 变好；但 Tween 19.3%→19.0%、List 31.6%→25.7%、Custom 60.3%→54.1%、Dictionary 86.8%→80.9%、Struct 142.5%→129.5%，总体未过 CE 且多项回退。
+- **根因**：这些诊断不是主瓶颈；代码布局/重编后首调用成本足以吞掉局部收益。短业务循环的主要成本仍是解释帧、typed ABI、泛型容器、delegate invocation-list 与状态机 MoveNext。
+- **替代**：不要继续靠清理 `printf`/字符串探针追 CE；下一步必须做 transform-time business mechanism plan：typed container IR、delegate invocation plan、state-machine MoveNext typed path。
 - **状态**：withdrawn，提交已 revert。
 
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
