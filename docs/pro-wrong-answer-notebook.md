@@ -31,6 +31,8 @@
 | WA-008 | 2026-06 | static 专用 opcode | 局部提升、总体不稳定 | 并入 typed ABI callsite，不单开 static opcode 线 | withdrawn |
 | WA-009 | 2026-06-27 | 通用 dispatch + M2N 桥接 + Execute fallback 微优化 | CallAOTStatic 8%→37% 仍无 Pro bypass；profile 无 RunStaticF4CallTrace | **断舍离**：GodDomain；禁止投资 Interpreter_Execute switch；见 `god-domain-architecture.md` | blocked |
 | WA-010 | 2026-06-30 | 放开 scalar value-type generated M2N，绕过 shared-struct reflection guard | `Dictionary<TKey,TValue>.TryGetValue` fully-shared generic native crash `-1073741819` | 禁止粗暴放开 fully-shared generic M2N；必须显式解决 rgctx/MethodInfo ABI | blocked |
+| WA-011 | 2026-07-01 | AOT 容器 `max_length` 直读 + M2N probe 清理 | Dictionary 小涨但 List/Coroutine 回退 | 撤回；容器优化必须按 callsite/method kind 证明净收益 | withdrawn |
+| WA-012 | 2026-07-01 | List/Stack 专用 M2N wrapper 分派 | List/callback/event 明显回退；一次 C++ 构建错误已修后仍回退 | 撤回；不得用 wrapper 扩散替代真实 List/Stack IR 或状态机优化 | withdrawn |
 
 ## 保留项（不是错题，但不得扩展成通用路线）
 
@@ -67,6 +69,22 @@
 - **教训**：业务字典优化不能通过移除 shared-struct guard 侥幸获得；必须做 fully-shared generic aware 的 typed ABI 或专门安全桥接。
 - **替代**：新增显式 fully-shared generic M2N ABI 探针，确认 `methodPointerCallByInterp` 所需 rgctx/MethodInfo 形状后再落地 direct bridge。
 - **状态**：blocked，代码已撤回。
+
+### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
+
+- **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
+- **实测**：过滤 business 跑修正编译错误后，`business-realworld-list-pool-rent-return` 从已知 30.3%/31.6% 区间降到 27.5%，`callback-chain` 从 98.8%/105.3% 过滤短跑降到 68.8%，`event-multicast` 从 83.8% 降到 65.8%。
+- **根因**：新增 wrapper 扩大 M2N 间接层和代码体积，未减少真正主成本；10 次 business 口径下还放大首调用/代码布局噪声。
+- **替代**：List/Stack 后续只做 transform 期 callsite/method kind 预烘焙，或更上层的 List 小循环 IR；每次必须用 `list-pool-rent-return` 过滤 + 完整 14+10 双验收。
+- **状态**：withdrawn，提交已 revert。
+
+### WA-011 — AOT 容器 `max_length` 直读 + M2N probe 清理（withdrawn）
+
+- **尝试**：把 Dictionary/List/Stack fast path 中的 `Array::GetLength` 改为直接读 `Il2CppArray::max_length`，并移除 Dictionary/Nullable M2N probe。
+- **实测**：Dictionary 85.7%→86.8% 仅小涨，但 List 30.3%→27.7%、Coroutine 31.7%→27.4% 回退。
+- **根因**：这不是主要热成本，代码布局变化抵消/超过微优化收益。
+- **替代**：保留已验证的 Dictionary offset cache；String key/hash/equality 与状态机/小方法才是下一步。
+- **状态**：withdrawn，提交已 revert。
 
 ### WA-007 — RunI4LinearTrace v4（blocked）
 
