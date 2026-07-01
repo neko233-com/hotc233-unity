@@ -4457,8 +4457,15 @@ namespace interpreter
 }
 
 #define CALL_INTERP_RET_PREPARED(nextIp, methodInfo, preparedImi, argBasePtr, retPtr) { \
-	SAVE_CUR_FRAME(nextIp) \
-	PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(methodInfo, preparedImi, argBasePtr, retPtr); \
+	if (preparedImi && IsSafeGenericHotc233CallFastPath(preparedImi->hotc233FastPathKind, retPtr) && TryExecuteHotc233FastPath(preparedImi, argBasePtr, retPtr)) \
+	{ \
+		ip = (byte*)(nextIp); \
+	} \
+	else \
+	{ \
+		SAVE_CUR_FRAME(nextIp) \
+		PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(methodInfo, preparedImi, argBasePtr, retPtr); \
+	} \
 }
 
 #pragma endregion
