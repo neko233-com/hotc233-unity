@@ -8465,8 +8465,7 @@ else \
 				int32_t needDataSlotNum = (resolvedTotalArgNum + 3) / 4;
 				int32_t argIdxDataIndex;
 				uint16_t* __argIdxs;
-				const int32_t virtualCallCacheSlotNum = isMultiDelegate ? 0 : 4;
-				AllocResolvedData(resolveDatas, needDataSlotNum + virtualCallCacheSlotNum, argIdxDataIndex, __argIdxs);
+				AllocResolvedData(resolveDatas, needDataSlotNum, argIdxDataIndex, __argIdxs);
 
 				__argIdxs[0] = GetEvalStackOffset(callArgEvalStackIdxBase);
 				for (uint8_t i = 0; i < shareMethod->parameters_count; i++)

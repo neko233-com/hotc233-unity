@@ -1,6 +1,6 @@
 # hotc233 Pro 错题本
 
-更新时间：2026-07-01
+更新时间：2026-06-26  
 用途：记录**已实测失败或已撤回**的优化路线，强制调整架构设计，直到达到 HybridCLR Pro 纯解释性能与公开商业能力。  
 配套：`pro-landing-matrix.json`（能力落地矩阵）、`hybridclr-pro-landing-roadmap.md`（实施路线）。
 
@@ -33,7 +33,6 @@
 | WA-010 | 2026-06-30 | 放开 scalar value-type generated M2N，绕过 shared-struct reflection guard | `Dictionary<TKey,TValue>.TryGetValue` fully-shared generic native crash `-1073741819` | 禁止粗暴放开 fully-shared generic M2N；必须显式解决 rgctx/MethodInfo ABI | blocked |
 | WA-011 | 2026-07-01 | AOT 容器 `max_length` 直读 + M2N probe 清理 | Dictionary 小涨但 List/Coroutine 回退 | 撤回；容器优化必须按 callsite/method kind 证明净收益 | withdrawn |
 | WA-012 | 2026-07-01 | List/Stack 专用 M2N wrapper 分派 | List/callback/event 明显回退；一次 C++ 构建错误已修后仍回退 | 撤回；不得用 wrapper 扩散替代真实 List/Stack IR 或状态机优化 | withdrawn |
-| WA-013 | 2026-07-01 | prepared interpreted call generic fast path | Async/Task 小涨但 List/Coroutine/虚派发/delegate/Dictionary 回退 | 撤回；prepared call 入口不再堆通用 fastpath 判断，改做 callsite 级缓存/typed ABI | withdrawn |
 
 ## 保留项（不是错题，但不得扩展成通用路线）
 
@@ -70,14 +69,6 @@
 - **教训**：业务字典优化不能通过移除 shared-struct guard 侥幸获得；必须做 fully-shared generic aware 的 typed ABI 或专门安全桥接。
 - **替代**：新增显式 fully-shared generic M2N ABI 探针，确认 `methodPointerCallByInterp` 所需 rgctx/MethodInfo 形状后再落地 direct bridge。
 - **状态**：blocked，代码已撤回。
-
-### WA-013 — prepared interpreted call generic fast path（withdrawn）
-
-- **尝试**：让 `CALL_INTERP_RET_PREPARED` 在建新解释帧前，对已解析的 `InterpMethodInfo` 尝试 `IsSafeGenericHotc233CallFastPath` + `TryExecuteHotc233FastPath`。
-- **实测**：过滤 business 口径，Async 38.5%→45.5%、Task 38.9%→41.2%；但 List 31.6%→29.7%、Coroutine 31.8%→30.8%、Custom class dispatch 60.3%→51.8%、callback 82.8%→71.1%、event 82.0%→72.1%、Dictionary 86.8%→84.4%。
-- **根因**：prepared call 热入口增加额外分支和 fastpath 检查，没有减少主要 frame/ABI/容器桥成本；对短业务 10 次口径还放大代码布局和首调用成本。
-- **替代**：只在 transform/callsite 级预烘焙目标方法与 ABI，或按虚派发/接口/委托共享 callsite cache 证明净收益；不要在通用 prepared call 宏里补判断。
-- **状态**：withdrawn，提交已 revert。
 
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
