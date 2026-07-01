@@ -164,6 +164,22 @@
 - **替代**：prepared callee fastpath 不能塞进通用宏。后续应在 transform 期生成窄 opcode/side-table，或把 small-i4 leaf/virtual-return lowering 放到独立冷编译单元和明确 handler 内；任何改 `Interpreter_Execute.cpp` 热宏的路线必须先做编译时长 smoke。
 - **状态**：withdrawn，代码已撤回。
 
+### WA-024 — SmallI4AddLeaf 栈上小表 evaluator（withdrawn）
+
+- **尝试**：为 `Ldloc/Ldc/Add/Ret i4` 小叶子方法增加 whole-method evaluator，使用栈上 96 槽小表模拟无对象、无字段、无分支的四路 `arg + const` 聚合，目标覆盖 `Task.WhenAll` 同类同步 helper。
+- **实测**：过滤 `business-realworld-task-whenall,async-await-loop,custom-class-dispatch`，构建正常且未触发 `re83h2fuc10b.obj` 超时，但 Task.WhenAll 从上一轮 36.84% 降到 33.33%；Async 45.45%、Custom 66.97% 未继续受益。
+- **根因**：小表 evaluator 仍是一个微型解释循环，未消掉 Task 聚合主成本；额外分类/执行分支和局部小表读写抵消收益。
+- **替代**：不要再做“无分支小 opcode 白名单解释器”。Task/async 应走状态机/聚合方法的 transform-time side-table plan，或独立 helper 直接计算 affine sum；先用 `RuntimeApi.GetMethodOpcodeProfile` 接入真实 business method profile，再写窄 lowering。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-025 — `mul const` 后接二元操作 whole-method helper（withdrawn）
+
+- **尝试**：识别 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4 + LdcVarConst_4 + Add/Sub/Xor + RetVar_ret_4` 的 48 字节小方法，作为 `AsyncComputeSync` 与业务虚派发 `Tick` 同类形状的通用 whole-method helper。
+- **实测**：严格 operand 校验版本未命中，profile 显示 `AsyncComputeSync`、`WarriorActor.Tick`、`MageActor.Tick`、`RangerActor.Tick` 仍为 `fastPathKind=1`；放宽到 opcode 序列后，过滤 `custom-class-dispatch,async-await-loop,task-whenall` 回退到 Custom 35.27%、Async 38.46%、Task 31.82%。
+- **根因**：call fastpath 阶段没有完整解释帧，直接按 IR local slot 读取参数/临时槽不可靠；放宽 transform 分类会把小方法推入错误/低效 helper，虚派发场景还会放大 fallback 和代码布局成本。
+- **替代**：小整数业务 helper 需要真正的 baked side-table 参数计划，明确记录参数槽与常量槽，不能在 runtime 里临时猜 IR local slot。先保留 business opcode profile 诊断，再做 transform-time plan。
+- **状态**：withdrawn，代码已撤回。
+
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
 - **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
