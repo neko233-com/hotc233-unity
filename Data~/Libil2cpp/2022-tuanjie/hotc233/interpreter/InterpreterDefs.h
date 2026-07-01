@@ -201,5 +201,6 @@ namespace hotc233
 			uint32_t hotc233FastPathKind;
 			uint32_t hotc233FastPathParam;
 		};
+
 	}
 }

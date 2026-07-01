@@ -30,6 +30,16 @@
 - 如果某项无法量化，必须明确写出原因、缺失数据、替代指标和下一步补数命令；未补齐前不得把该项标为完成。
 - 向用户汇报必须包含数据来源：本地命令输出、宿主 `Assets/EditorForBuild/Generated/*.json`、包内 `benchmark-docs/results/*.json`、CI 链接或具体日志路径；禁止凭记忆或 stale 报告下结论。
 
+## 批量修复优先规范
+
+- 默认先尽可能修复同一机制桶内的全部已知问题，再运行性能验证；禁止按单个 benchmark、单个 API、单个业务类型逐个补丁式修复和逐个验证。
+- 每轮开始前必须从最新报告枚举失败全集，包含 business blocker、official/base 分层 floor、商业能力、metadata、内存/GC、opcode profile 命中和相关日志路径。
+- 失败项必须归入共同机制：typed ABI、callsite 预烘焙、virtual/interface dispatch、delegate/event、async/coroutine 状态机、generic List/Dictionary/String、metadata loader、内存/GC 等。优先修公共机制，只有 Unity 高频 API 或官方 base 专用口径允许专用 transform。
+- 验证节奏必须成批：机制桶修完后跑 filtered benchmark；多个机制桶修完且无编译/native 阻断后跑完整 14 base + 10 business。不得在每个小改动后立刻用 benchmark 当交互式调试器。
+- 允许短验证的例外仅限解除阻断：C++/C# 编译错误、native crash、Player 无法启动、报告字段损坏、数据缓存污染。解除后仍必须回到批量修复流程。
+- 同一路线连续两轮无收益或回退，必须写入 `docs/pro-wrong-answer-notebook.md` 和根 `性能现状.md`，并撤回或隔离该路线；不得继续叠加特判。
+- release/tag 前必须完成全部已知必要问题修复，并以完整门禁证明 official/base、business、商业机制、metadata、内存/GC 全部正常。
+
 ## 架构与性能（商业 P0 落地后再推进，2026-06-27 起）
 
 **GodDomain（专用架构）**：性能主路径不是「把通用 opcode dispatch 做快」，而是 **识别热形状 → 专用 transform → whole-method bypass → 不进 14k 行 switch 循环**。权威说明：`benchmark-docs/god-domain-architecture.md`。旧 dispatch/M2N 桥接路线已归档：`benchmark-docs/archive/generic-dispatch-bridge-retired.md`。

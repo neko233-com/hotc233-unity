@@ -233,14 +233,6 @@ namespace interpreter
 		{
 			return false;
 		}
-		std::printf("[hotc233][ReflectionInvokeProbe] MethodBase.Invoke receiverClass=%s.%s receiver=%p expected=%s.%s assignable=%d\n",
-			reflectionMethodObject->klass->namespaze ? reflectionMethodObject->klass->namespaze : "",
-			reflectionMethodObject->klass->name ? reflectionMethodObject->klass->name : "",
-			(void*)reflectionMethodObject,
-			method->klass && method->klass->namespaze ? method->klass->namespaze : "",
-			method->klass && method->klass->name ? method->klass->name : "",
-			method->klass && il2cpp::vm::Object::IsInst(reflectionMethodObject, method->klass) ? 1 : 0);
-		std::fflush(stdout);
 		if (!method->klass || !il2cpp::vm::Object::IsInst(reflectionMethodObject, method->klass))
 		{
 			return false;
@@ -273,13 +265,6 @@ namespace interpreter
 		{
 			((StackObject*)ret)->obj = result;
 		}
-		std::printf("[hotc233][ReflectionInvokeProbe] direct MethodBase.Invoke thisClass=%s.%s target=%p params=%p result=%p\n",
-			reflectionMethodObject->klass->namespaze ? reflectionMethodObject->klass->namespaze : "",
-			reflectionMethodObject->klass->name ? reflectionMethodObject->klass->name : "",
-			(void*)target,
-			(void*)parameters,
-			(void*)result);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -310,17 +295,6 @@ namespace interpreter
 			return false;
 		}
 		bool acceptedCtorReceiver = isConstructorInfoObject(reflectionCtorObject);
-		std::printf("[hotc233][ReflectionCtorProbe] enter arg0=%u arg1=%u receiverClass=%s.%s accepted=%d declared=%s.%s::%s receiver=%p\n",
-			(uint32_t)argIdxs[0],
-			(uint32_t)argIdxs[1],
-			reflectionCtorObject->klass->namespaze ? reflectionCtorObject->klass->namespaze : "",
-			reflectionCtorObject->klass->name ? reflectionCtorObject->klass->name : "",
-			acceptedCtorReceiver ? 1 : 0,
-			method->klass->namespaze ? method->klass->namespaze : "",
-			method->klass->name ? method->klass->name : "",
-			method->name ? method->name : "",
-			(void*)reflectionCtorObject);
-		std::fflush(stdout);
 		if (!acceptedCtorReceiver)
 		{
 			return false;
@@ -346,13 +320,6 @@ namespace interpreter
 		{
 			((StackObject*)ret)->obj = instance;
 		}
-		std::printf("[hotc233][ReflectionCtorProbe] direct ConstructorInfo.Invoke ctor=%s.%s::%s params=%p instance=%p\n",
-			ctor->klass->namespaze ? ctor->klass->namespaze : "",
-			ctor->klass->name ? ctor->klass->name : "",
-			ctor->name,
-			(void*)parameters,
-			(void*)instance);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -413,14 +380,6 @@ namespace interpreter
 		{
 			((StackObject*)ret)->obj = (Il2CppObject*)reflected;
 		}
-		std::printf("[hotc233][ReflectionGetCtorProbe] direct RuntimeType.GetConstructor type=%s.%s argc=%u found=%p reflected=%p ret=%p\n",
-			klass->namespaze ? klass->namespaze : "",
-			klass->name ? klass->name : "",
-			(uint32_t)parameterTypes->max_length,
-			(void*)found,
-			(void*)reflected,
-			ret);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -493,15 +452,6 @@ namespace interpreter
 		{
 			((StackObject*)ret)->obj = (Il2CppObject*)reflected;
 		}
-		std::printf("[hotc233][ReflectionGetMethodProbe] direct RuntimeType.GetMethod type=%s.%s name=%s argc=%d found=%p reflected=%p ret=%p\n",
-			klass->namespaze ? klass->namespaze : "",
-			klass->name ? klass->name : "",
-			methodName.c_str(),
-			parameterTypes ? (int)parameterTypes->max_length : -1,
-			(void*)found,
-			(void*)reflected,
-			ret);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -534,14 +484,6 @@ namespace interpreter
 		{
 			((StackObject*)ret)->obj = (Il2CppObject*)reflected;
 		}
-		std::printf("[hotc233][ReflectionGetFieldProbe] direct RuntimeType.GetField type=%s.%s name=%s found=%p reflected=%p ret=%p\n",
-			klass->namespaze ? klass->namespaze : "",
-			klass->name ? klass->name : "",
-			fieldName.c_str(),
-			(void*)found,
-			(void*)reflected,
-			ret);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -574,14 +516,6 @@ namespace interpreter
 		{
 			((StackObject*)ret)->obj = (Il2CppObject*)reflected;
 		}
-		std::printf("[hotc233][ReflectionGetPropertyProbe] direct RuntimeType.GetProperty type=%s.%s name=%s found=%p reflected=%p ret=%p\n",
-			klass->namespaze ? klass->namespaze : "",
-			klass->name ? klass->name : "",
-			propertyName.c_str(),
-			(void*)found,
-			(void*)reflected,
-			ret);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -626,25 +560,11 @@ namespace interpreter
 			return false;
 		}
 		Il2CppException* exception = nullptr;
-		std::printf("[hotc233][BoxedInvokeProbe] before %s.%s::%s this=%p params=%p pcount=%d\n",
-			method->klass && method->klass->namespaze ? method->klass->namespaze : "",
-			method->klass && method->klass->name ? method->klass->name : "",
-			method->name ? method->name : "",
-			(void*)thisObj,
-			(void*)boxedArgs,
-			(int)method->parameters_count);
-		std::fflush(stdout);
 		il2cpp::vm::Runtime::InvokeArray(method, thisObj, boxedArgs, &exception);
 		if (exception)
 		{
 			il2cpp::vm::Exception::Raise(exception);
 		}
-		std::printf("[hotc233][BoxedInvokeProbe] after %s.%s::%s this=%p\n",
-			method->klass && method->klass->namespaze ? method->klass->namespaze : "",
-			method->klass && method->klass->name ? method->klass->name : "",
-			method->name ? method->name : "",
-			(void*)thisObj);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -3569,6 +3489,15 @@ namespace interpreter
 		}
 	}
 
+	static bool TryExecutePreparedGenericHotc233FastPath(const InterpMethodInfo* preparedImi, StackObject* argBasePtr, void* retPtr)
+	{
+		if (!preparedImi || !IsSafeGenericHotc233CallFastPath(preparedImi->hotc233FastPathKind, retPtr))
+		{
+			return false;
+		}
+		return TryExecuteHotc233FastPath(preparedImi, argBasePtr, retPtr);
+	}
+
 		IL2CPP_FORCE_INLINE bool TryExecuteHotc233CallFastPath(const MethodInfo* methodInfo, StackObject* argBasePtr, void* retPtr)
 		{
 			if (!methodInfo)
@@ -4461,6 +4390,70 @@ namespace interpreter
 	PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(methodInfo, preparedImi, argBasePtr, retPtr); \
 }
 
+#define CALL_INTERP_VOID_PREPARED(nextIp, methodInfo, preparedImi, argBasePtr) { \
+	SAVE_CUR_FRAME(nextIp) \
+	PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(methodInfo, preparedImi, argBasePtr, nullptr); \
+}
+
+#define CALL_INTERP_RET_PREPARED_FAST(nextIp, methodInfo, preparedImi, argBasePtr, retPtr) { \
+	if (TryExecutePreparedGenericHotc233FastPath(preparedImi, argBasePtr, retPtr)) \
+	{ \
+		ip = (byte*)(nextIp); \
+	} \
+	else \
+	{ \
+		SAVE_CUR_FRAME(nextIp) \
+		PREPARE_NEW_FRAME_FROM_INTERPRETER_PREPARED(methodInfo, preparedImi, argBasePtr, retPtr); \
+	} \
+}
+
+struct Hotc233VirtualInterpCacheEntry
+{
+	const MethodInfo* declaredMethod;
+	Il2CppClass* objectKlass;
+	MethodInfo* actualMethod;
+	InterpMethodInfo* actualImi;
+};
+
+static thread_local Hotc233VirtualInterpCacheEntry s_hotc233VirtualInterpCache[16];
+
+IL2CPP_FORCE_INLINE uint32_t GetHotc233VirtualInterpCacheIndex(Il2CppClass* objectKlass, const MethodInfo* declaredMethod)
+{
+	uintptr_t klassBits = (uintptr_t)objectKlass >> 4;
+	uintptr_t methodBits = (uintptr_t)declaredMethod >> 4;
+	return (uint32_t)((klassBits ^ methodBits ^ (methodBits >> 7)) & 15u);
+}
+
+IL2CPP_FORCE_INLINE bool TryGetHotc233VirtualInterpCache(Il2CppObject* obj, const MethodInfo* declaredMethod, MethodInfo** actualMethod, InterpMethodInfo** actualImi)
+{
+	if (!obj || !declaredMethod || !actualMethod || !actualImi)
+	{
+		return false;
+	}
+	Il2CppClass* objectKlass = obj->klass;
+	const Hotc233VirtualInterpCacheEntry& entry = s_hotc233VirtualInterpCache[GetHotc233VirtualInterpCacheIndex(objectKlass, declaredMethod)];
+	if (entry.declaredMethod == declaredMethod && entry.objectKlass == objectKlass && entry.actualMethod)
+	{
+		*actualMethod = entry.actualMethod;
+		*actualImi = entry.actualImi;
+		return true;
+	}
+	return false;
+}
+
+IL2CPP_FORCE_INLINE void StoreHotc233VirtualInterpCache(Il2CppObject* obj, const MethodInfo* declaredMethod, MethodInfo* actualMethod, InterpMethodInfo* actualImi)
+{
+	if (!obj || !declaredMethod || !actualMethod)
+	{
+		return;
+	}
+	Hotc233VirtualInterpCacheEntry& entry = s_hotc233VirtualInterpCache[GetHotc233VirtualInterpCacheIndex(obj->klass, declaredMethod)];
+	entry.declaredMethod = declaredMethod;
+	entry.objectKlass = obj->klass;
+	entry.actualMethod = actualMethod;
+	entry.actualImi = actualImi;
+}
+
 #pragma endregion
 
 #pragma region delegate
@@ -4931,25 +4924,6 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 		{
 			for (;;)
 			{
-				static int s_opcodeTraceCount = 0;
-				const char* _traceMethodName = frame && frame->method ? frame->method->name : nullptr;
-				const char* _traceClassName = frame && frame->method && frame->method->klass ? frame->method->klass->name : nullptr;
-				if (s_opcodeTraceCount < 300 && _traceMethodName &&
-					(std::strcmp(_traceMethodName, "VerifyValueTuple") == 0 ||
-					 std::strcmp(_traceMethodName, "RunSelfTest") == 0 ||
-					 std::strcmp(_traceMethodName, "ComposeFeatureVerificationMessage") == 0 ||
-					 std::strcmp(_traceMethodName, "ComposeSelfTestMessage") == 0 ||
-					 std::strcmp(_traceMethodName, "VerifyLambda") == 0 ||
-					 (std::strcmp(_traceMethodName, "Run") == 0 && _traceClassName && std::strcmp(_traceClassName, "CSharpUsageProbe") == 0)))
-				{
-					s_opcodeTraceCount++;
-					std::printf("[hotc233][OpcodeTrace] method=%s offset=%lld opcode=%u size=%u\n",
-						_traceMethodName,
-						(long long)(ip - ipBase),
-						(uint32_t)(*(HiOpcodeEnum*)ip),
-						(unsigned)g_instructionSizes[(int)(*(HiOpcodeEnum*)ip)]);
-					std::fflush(stdout);
-				}
 #if !HOTC233_ENABLE_THREADED_DISPATCH
 				switch (*(HiOpcodeEnum*)ip)
 #else
@@ -10202,31 +10176,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				case HiOpcodeEnum::RetVar_ret_8:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
-					static int s_ret8ProbeCount = 0;
-					const bool _probeRet8 = s_ret8ProbeCount < 80;
-					if (_probeRet8)
-					{
-						s_ret8ProbeCount++;
-						std::printf("[hotc233][Ret8Probe] before method=%s.%s::%s retSlot=%u retPtr=%p value=%p frame=%p\n",
-							frame && frame->method && frame->method->klass && frame->method->klass->namespaze ? frame->method->klass->namespaze : "<null>",
-							frame && frame->method && frame->method->klass && frame->method->klass->name ? frame->method->klass->name : "<null>",
-							frame && frame->method && frame->method->name ? frame->method->name : "<null>",
-							(unsigned)__ret,
-							frame ? frame->ret : nullptr,
-							*(void**)(localVarBase + __ret),
-							(void*)frame);
-						std::fflush(stdout);
-					}
 				    SET_RET_AND_LEAVE_FRAME(8, 8);
-					if (_probeRet8)
-					{
-						std::printf("[hotc233][Ret8Probe] after-load method=%s.%s::%s ipOffset=%lld\n",
-							frame && frame->method && frame->method->klass && frame->method->klass->namespaze ? frame->method->klass->namespaze : "<null>",
-							frame && frame->method && frame->method->klass && frame->method->klass->name ? frame->method->klass->name : "<null>",
-							frame && frame->method && frame->method->name ? frame->method->name : "<null>",
-							(long long)(ip - ipBase));
-						std::fflush(stdout);
-					}
 				    continue;
 				}
 				case HiOpcodeEnum::RetVar_ret_12:
@@ -10289,7 +10239,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
 					MethodInfo* _declaredMethod = _resolvedMethod;
 					_resolvedMethod = ResolveActualReferenceInstanceMethod(_resolvedMethod, localVarBase + _resolvedArgIdxs[0]);
-					bool _hotc233TraceValueTupleCtor = frame
+					bool _hotc233TraceValueTupleCtor = false && frame
 						&& frame->method
 						&& frame->method->name
 						&& std::strcmp(frame->method->name, "VerifyValueTuple") == 0
@@ -10372,7 +10322,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
 					MethodInfo* _declaredMethod = _resolvedMethod;
 					_resolvedMethod = ResolveActualReferenceInstanceMethod(_resolvedMethod, localVarBase + _resolvedArgIdxs[0]);
-					bool _hotc233TraceTypeGetMethod = _resolvedMethod
+					bool _hotc233TraceTypeGetMethod = false && _resolvedMethod
 						&& _resolvedMethod->name
 						&& std::strstr(_resolvedMethod->name, "GetMethod")
 						&& _resolvedMethod->klass
@@ -10432,7 +10382,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						ip += 16;
 						continue;
 					}
-					bool _hotc233TraceReflectionInvoke = _resolvedMethod
+					bool _hotc233TraceReflectionInvoke = false && _resolvedMethod
 						&& _resolvedMethod->name
 						&& std::strcmp(_resolvedMethod->name, "Invoke") == 0
 						&& _resolvedMethod->klass
@@ -10509,7 +10459,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						ip += 24;
 						continue;
 					}
-					bool _hotc233TraceReflectionInvoke = _resolvedMethod
+					bool _hotc233TraceReflectionInvoke = false && _resolvedMethod
 						&& _resolvedMethod->name
 						&& std::strcmp(_resolvedMethod->name, "Invoke") == 0
 						&& _resolvedMethod->klass
@@ -10610,52 +10560,19 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					MethodInfo* __methodInfo = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
 					uint16_t __argBase = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
-					uint8_t __isInstanceMethod = *(uint8_t*)(ip + 12);
-					if (__methodInfo && __methodInfo->name && !std::strcmp(__methodInfo->name, "Compare") && __methodInfo->klass && __methodInfo->klass->name && std::strstr(__methodInfo->klass->name, "NullableComparer"))
+					uint32_t __interpMethodCache = *(uint32_t*)(ip + 12);
+					CHECK_NOT_NULL_THROW((localVarBase + __argBase)->obj);
+					InterpMethodInfo* __calleeImi = (InterpMethodInfo*)imi->resolveDatas[__interpMethodCache];
+					if (!__calleeImi)
 					{
-						StackObject* __probeArgBase = (StackObject*)(void*)(localVarBase + __argBase);
-						std::printf("[hotc233][CallInterpNullableProbe] caller=%s callee=%s.%s::%s argBase=%u ret=%u isInstance=%u full=%d pcount=%d slot0.ptr=%p slot0.u64=%llu slot1.ptr=%p slot1.u64=%llu slot2.ptr=%p slot2.u64=%llu slot3.ptr=%p slot3.u64=%llu\n",
-							frame && frame->method && frame->method->name ? frame->method->name : "",
-							__methodInfo->klass->namespaze ? __methodInfo->klass->namespaze : "",
-							__methodInfo->klass->name ? __methodInfo->klass->name : "",
-							__methodInfo->name ? __methodInfo->name : "",
-							(uint32_t)__argBase,
-							(uint32_t)__ret,
-							(uint32_t)__isInstanceMethod,
-#if HOTC233_UNITY_2021_OR_NEW
-							__methodInfo->has_full_generic_sharing_signature ? 1 : 0,
-#else
-							0,
-#endif
-							(int)__methodInfo->parameters_count,
-							__probeArgBase[0].ptr, (unsigned long long)__probeArgBase[0].u64,
-							__probeArgBase[1].ptr, (unsigned long long)__probeArgBase[1].u64,
-							__probeArgBase[2].ptr, (unsigned long long)__probeArgBase[2].u64,
-							__probeArgBase[3].ptr, (unsigned long long)__probeArgBase[3].u64);
-						std::fflush(stdout);
+						__calleeImi = __methodInfo->interpData ? (InterpMethodInfo*)__methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(__methodInfo);
+						imi->resolveDatas[__interpMethodCache] = (uint64_t)__calleeImi;
 					}
-					if (frame && frame->method && frame->method->name && std::strcmp(frame->method->name, "VerifyValueTuple") == 0)
-					{
-						std::printf("[hotc233][CallInterpRetProbe] caller=%s callee=%s.%s::%s argBase=%u ret=%u isInstance=%u offset=%lld\n",
-							frame->method->name,
-							__methodInfo && __methodInfo->klass && __methodInfo->klass->namespaze ? __methodInfo->klass->namespaze : "",
-							__methodInfo && __methodInfo->klass && __methodInfo->klass->name ? __methodInfo->klass->name : "",
-							__methodInfo && __methodInfo->name ? __methodInfo->name : "",
-							(uint32_t)__argBase,
-							(uint32_t)__ret,
-							(uint32_t)__isInstanceMethod,
-							(long long)(ip - ipBase));
-						std::fflush(stdout);
-					}
-					if (__isInstanceMethod)
-					{
-						CHECK_NOT_NULL_THROW((localVarBase + __argBase)->obj);
-					}
-					InterpMethodInfo* __calleeImi = __methodInfo->interpData ? (InterpMethodInfo*)__methodInfo->interpData : InterpreterModule::GetInterpMethodInfo(__methodInfo);
 					RuntimeInitClassCCtorWithoutInitClass(__methodInfo);
 					void* __retPtr = (void*)(localVarBase + __ret);
 					StackObject* __argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
-					if (TryExecuteHotc233CallFastPath(__methodInfo, __argBasePtr, __retPtr))
+					if (__calleeImi && __calleeImi->hotc233FastPathKind > Hotc233FastPath_Unsupported &&
+						TryExecuteHotc233CallFastPath(__methodInfo, __argBasePtr, __retPtr))
 					{
 						ip += 16;
 						continue;
@@ -10721,7 +10638,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
 				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
+					Il2CppObject* _cacheObj = _objPtr->obj;
 				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+					InterpMethodInfo* _cachedActualImi = nullptr;
+				    MethodInfo* _actualMethod = nullptr;
+					bool _virtualCacheHit = TryGetHotc233VirtualInterpCache(_cacheObj, _declaredMethod, &_actualMethod, &_cachedActualImi);
 					bool _hotc233TraceDictionarySetItem = false;
 					if (_hotc233TraceDictionarySetItem)
 					{
@@ -10735,7 +10656,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							(uint32_t)_argIdxData[2]);
 						std::fflush(stdout);
 					}
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, _declaredMethod);
+				    if (!_virtualCacheHit)
+				    {
+				        _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_cacheObj, _declaredMethod);
+				    }
 					if (_hotc233TraceDictionarySetItem)
 					{
 						std::printf("[hotc233][CallVirtualProbe] after actual=%s.%s::%s interp=%d method=%p\n",
@@ -10752,10 +10676,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
-				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        InterpMethodInfo* _actualImi = _virtualCacheHit ? _cachedActualImi : (_actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod));
+						if (!_virtualCacheHit)
+						{
+							StoreHotc233VirtualInterpCache(_cacheObj, _declaredMethod, _actualMethod, _actualImi);
+						}
 				        if (_actualImi)
 				        {
-				            CALL_INTERP_VOID((ip + 16), _actualMethod, _objPtr);
+				            CALL_INTERP_VOID_PREPARED((ip + 16), _actualMethod, _actualImi, _objPtr);
 				        }
 				        else
 				        {
@@ -10777,6 +10705,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    else 
 				    {
+						if (!_virtualCacheHit)
+						{
+							StoreHotc233VirtualInterpCache(_cacheObj, _declaredMethod, _actualMethod, nullptr);
+						}
 				        frame->ip = ip + 2;
 						if (_hotc233TraceDictionarySetItem)
 						{
@@ -10818,35 +10750,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __ret = *(uint16_t*)(ip + 2);
 				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
+					Il2CppObject* _cacheObj = _objPtr->obj;
 				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, _declaredMethod);
-				    void* _ret = (void*)(localVarBase + __ret);
-					bool _hotc233TraceNullableCompare = _actualMethod && _actualMethod->name && !std::strcmp(_actualMethod->name, "Compare") && _actualMethod->klass && _actualMethod->klass->name && std::strstr(_actualMethod->klass->name, "NullableComparer");
-					if (_hotc233TraceNullableCompare)
+					InterpMethodInfo* _cachedActualImi = nullptr;
+				    MethodInfo* _actualMethod = nullptr;
+					bool _virtualCacheHit = TryGetHotc233VirtualInterpCache(_cacheObj, _declaredMethod, &_actualMethod, &_cachedActualImi);
+					if (!_virtualCacheHit)
 					{
-						std::printf("[hotc233][CallVirtualNullableProbe] declared=%s.%s::%s actual=%s.%s::%s ret=%u arg0=%u arg1=%u arg2=%u full=%d cachedM2N=%p slot0.ptr=%p slot1.ptr=%p slot2.ptr=%p\n",
-							_declaredMethod && _declaredMethod->klass && _declaredMethod->klass->namespaze ? _declaredMethod->klass->namespaze : "",
-							_declaredMethod && _declaredMethod->klass && _declaredMethod->klass->name ? _declaredMethod->klass->name : "",
-							_declaredMethod && _declaredMethod->name ? _declaredMethod->name : "",
-							_actualMethod && _actualMethod->klass && _actualMethod->klass->namespaze ? _actualMethod->klass->namespaze : "",
-							_actualMethod && _actualMethod->klass && _actualMethod->klass->name ? _actualMethod->klass->name : "",
-							_actualMethod && _actualMethod->name ? _actualMethod->name : "",
-							(uint32_t)__ret,
-							(uint32_t)_argIdxData[0],
-							(uint32_t)_argIdxData[1],
-							(uint32_t)_argIdxData[2],
-#if HOTC233_UNITY_2021_OR_NEW
-							_actualMethod->has_full_generic_sharing_signature ? 1 : 0,
-#else
-							0,
-#endif
-							(void*)imi->resolveDatas[__managed2NativeMethod],
-							(localVarBase + _argIdxData[0])->ptr,
-							(localVarBase + _argIdxData[1])->ptr,
-							(localVarBase + _argIdxData[2])->ptr);
-						std::fflush(stdout);
+						_actualMethod = GET_OBJECT_VIRTUAL_METHOD(_cacheObj, _declaredMethod);
 					}
-					if (_hotc233TraceNullableCompare && _actualMethod->parameters_count == 2)
+				    void* _ret = (void*)(localVarBase + __ret);
+					bool _hotc233NullableCompare = _actualMethod && _actualMethod->name && !std::strcmp(_actualMethod->name, "Compare") && _actualMethod->klass && _actualMethod->klass->name && std::strstr(_actualMethod->klass->name, "NullableComparer");
+					if (_hotc233NullableCompare && _actualMethod->parameters_count == 2)
 					{
 						const bool _leftHasValue = *((uint8_t*)(localVarBase + _argIdxData[1])) != 0;
 						const bool _rightHasValue = *((uint8_t*)(localVarBase + _argIdxData[2])) != 0;
@@ -10863,7 +10778,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
-				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        InterpMethodInfo* _actualImi = _virtualCacheHit ? _cachedActualImi : (_actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod));
+						if (!_virtualCacheHit)
+						{
+							StoreHotc233VirtualInterpCache(_cacheObj, _declaredMethod, _actualMethod, _actualImi);
+						}
 				        if (_actualImi)
 				        {
 				            CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _objPtr, _ret);
@@ -10888,6 +10807,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    else 
 				    {
+						if (!_virtualCacheHit)
+						{
+							StoreHotc233VirtualInterpCache(_cacheObj, _declaredMethod, _actualMethod, nullptr);
+						}
 				        frame->ip = ip + 2;
 				        if (!InitAndGetInterpreterDirectlyCallMethodPointer(_actualMethod))
 				        {
@@ -10923,7 +10846,15 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint8_t __retLocationType = *(uint8_t*)(ip + 2);
 				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, ((MethodInfo*)imi->resolveDatas[__methodInfo]));
+					Il2CppObject* _cacheObj = _objPtr->obj;
+				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+					InterpMethodInfo* _cachedActualImi = nullptr;
+				    MethodInfo* _actualMethod = nullptr;
+					bool _virtualCacheHit = TryGetHotc233VirtualInterpCache(_cacheObj, _declaredMethod, &_actualMethod, &_cachedActualImi);
+					if (!_virtualCacheHit)
+					{
+						_actualMethod = GET_OBJECT_VIRTUAL_METHOD(_cacheObj, _declaredMethod);
+					}
 				    void* _ret = (void*)(localVarBase + __ret);
 				    if (IS_CLASS_VALUE_TYPE(_actualMethod->klass))
 				    {
@@ -10931,7 +10862,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
-				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        InterpMethodInfo* _actualImi = _virtualCacheHit ? _cachedActualImi : (_actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod));
+						if (!_virtualCacheHit)
+						{
+							StoreHotc233VirtualInterpCache(_cacheObj, _declaredMethod, _actualMethod, _actualImi);
+						}
 				        if (_actualImi)
 				        {
 				            CALL_INTERP_RET_PREPARED((ip + 24), _actualMethod, _actualImi, _objPtr, _ret);
@@ -10957,6 +10892,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    else 
 				    {
+						if (!_virtualCacheHit)
+						{
+							StoreHotc233VirtualInterpCache(_cacheObj, _declaredMethod, _actualMethod, nullptr);
+						}
 				        frame->ip = ip + 2;
 				        if (!InitAndGetInterpreterDirectlyCallMethodPointer(_actualMethod))
 				        {
@@ -10988,13 +10927,24 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					MethodInfo* __method = ((MethodInfo*)imi->resolveDatas[*(uint32_t*)(ip + 4)]);
 					uint16_t __argBase = *(uint16_t*)(ip + 2);
 				    StackObject* _argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_argBasePtr->obj, __method);
+					Il2CppObject* _cacheObj = _argBasePtr->obj;
+					InterpMethodInfo* _cachedActualImi = nullptr;
+				    MethodInfo* _actualMethod = nullptr;
+					bool _virtualCacheHit = TryGetHotc233VirtualInterpCache(_cacheObj, __method, &_actualMethod, &_cachedActualImi);
+					if (!_virtualCacheHit)
+					{
+						_actualMethod = GET_OBJECT_VIRTUAL_METHOD(_cacheObj, __method);
+					}
 				    if (IS_CLASS_VALUE_TYPE(_actualMethod->klass))
 				    {
 				        _argBasePtr->obj += 1;
 				    }
 				    if (!(hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod)))
 				    {
+						if (!_virtualCacheHit)
+						{
+							StoreHotc233VirtualInterpCache(_cacheObj, __method, _actualMethod, nullptr);
+						}
 				        uint16_t* _argIdxData = (uint16_t*)alloca(sizeof(uint16_t) * ((uint32_t)_actualMethod->parameters_count + 1u));
 				        for (uint32_t _argIdx = 0; _argIdx <= (uint32_t)_actualMethod->parameters_count; ++_argIdx)
 				        {
@@ -11004,7 +10954,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				        ip += 8;
 				        continue;
 				    }
-				    InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				    InterpMethodInfo* _actualImi = _virtualCacheHit ? _cachedActualImi : (_actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod));
+					if (!_virtualCacheHit)
+					{
+						StoreHotc233VirtualInterpCache(_cacheObj, __method, _actualMethod, _actualImi);
+					}
 				    if (_actualImi)
 				    {
 				        SAVE_CUR_FRAME(ip + 8)
@@ -11028,28 +10982,14 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint16_t __argBase = *(uint16_t*)(ip + 2);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
 				    StackObject* _argBasePtr = (StackObject*)(void*)(localVarBase + __argBase);
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_argBasePtr->obj, __method);
-				    if (_actualMethod && _actualMethod->name && !std::strcmp(_actualMethod->name, "Compare") && _actualMethod->klass && _actualMethod->klass->name && std::strstr(_actualMethod->klass->name, "NullableComparer"))
-				    {
-				        std::printf("[hotc233][CallInterpNullableProbe] virtual caller=%s callee=%s.%s::%s argBase=%u ret=%u full=%d pcount=%d slot0.ptr=%p slot0.u64=%llu slot1.ptr=%p slot1.u64=%llu slot2.ptr=%p slot2.u64=%llu slot3.ptr=%p slot3.u64=%llu\n",
-				            frame && frame->method && frame->method->name ? frame->method->name : "",
-				            _actualMethod->klass->namespaze ? _actualMethod->klass->namespaze : "",
-				            _actualMethod->klass->name ? _actualMethod->klass->name : "",
-				            _actualMethod->name ? _actualMethod->name : "",
-				            (uint32_t)__argBase,
-				            (uint32_t)__ret,
-#if HOTC233_UNITY_2021_OR_NEW
-				            _actualMethod->has_full_generic_sharing_signature ? 1 : 0,
-#else
-				            0,
-#endif
-				            (int)_actualMethod->parameters_count,
-				            _argBasePtr[0].ptr, (unsigned long long)_argBasePtr[0].u64,
-				            _argBasePtr[1].ptr, (unsigned long long)_argBasePtr[1].u64,
-				            _argBasePtr[2].ptr, (unsigned long long)_argBasePtr[2].u64,
-				            _argBasePtr[3].ptr, (unsigned long long)_argBasePtr[3].u64);
-				        std::fflush(stdout);
-				    }
+					Il2CppObject* _cacheObj = _argBasePtr->obj;
+					InterpMethodInfo* _cachedActualImi = nullptr;
+				    MethodInfo* _actualMethod = nullptr;
+					bool _virtualCacheHit = TryGetHotc233VirtualInterpCache(_cacheObj, __method, &_actualMethod, &_cachedActualImi);
+					if (!_virtualCacheHit)
+					{
+						_actualMethod = GET_OBJECT_VIRTUAL_METHOD(_cacheObj, __method);
+					}
 				    if (IS_CLASS_VALUE_TYPE(_actualMethod->klass))
 				    {
 				        _argBasePtr->obj += 1;
@@ -11057,6 +10997,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    void* _ret = (void*)(localVarBase + __ret);
 				    if (!(hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod)))
 				    {
+						if (!_virtualCacheHit)
+						{
+							StoreHotc233VirtualInterpCache(_cacheObj, __method, _actualMethod, nullptr);
+						}
 				        uint16_t* _argIdxData = (uint16_t*)alloca(sizeof(uint16_t) * ((uint32_t)_actualMethod->parameters_count + 1u));
 				        for (uint32_t _argIdx = 0; _argIdx <= (uint32_t)_actualMethod->parameters_count; ++_argIdx)
 				        {
@@ -11066,7 +11010,11 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				        ip += 16;
 				        continue;
 				    }
-				    InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				    InterpMethodInfo* _actualImi = _virtualCacheHit ? _cachedActualImi : (_actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod));
+					if (!_virtualCacheHit)
+					{
+						StoreHotc233VirtualInterpCache(_cacheObj, __method, _actualMethod, _actualImi);
+					}
 				    if (_actualImi)
 				    {
 				        CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _argBasePtr, _ret);
@@ -11309,7 +11257,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						StackObject* _cachedArgBase = nullptr;
 						if (TryGetCachedSingleInterpDelegatePrepared(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, &_cachedMethod, &_cachedMethodImi, &_cachedArgBase))
 						{
-							CALL_INTERP_RET_PREPARED((ip + 20), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
+							CALL_INTERP_RET_PREPARED_FAST((ip + 20), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
@@ -11339,7 +11287,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								if (methodImi)
 								{
 									StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
-									CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, fastArgBase, _ret);
+									CALL_INTERP_RET_PREPARED_FAST((ip + 20), method, methodImi, fastArgBase, _ret);
 									continue;
 								}
 							}
@@ -11386,7 +11334,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							if (methodImi)
 							{
 								StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
-								CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, _argBasePtr, _ret);
+								CALL_INTERP_RET_PREPARED_FAST((ip + 20), method, methodImi, _argBasePtr, _ret);
 								continue;
 							}
 						}
@@ -11491,7 +11439,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						StackObject* _cachedArgBase = nullptr;
 						if (TryGetCachedSingleInterpDelegatePrepared(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, &_cachedMethod, &_cachedMethodImi, &_cachedArgBase))
 						{
-							CALL_INTERP_RET_PREPARED((ip + 24), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
+							CALL_INTERP_RET_PREPARED_FAST((ip + 24), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
@@ -11529,7 +11477,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 										std::fflush(stdout);
 									}
 									StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
-									CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
+									CALL_INTERP_RET_PREPARED_FAST((ip + 24), method, methodImi, fastArgBase, _ret);
 									continue;
 								}
 							}
@@ -11582,7 +11530,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 									std::fflush(stdout);
 								}
 								StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
-								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
+								CALL_INTERP_RET_PREPARED_FAST((ip + 24), method, methodImi, _argBasePtr, _ret);
 								continue;
 							}
 						}
@@ -11654,7 +11602,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 						StackObject* _cachedArgBase = nullptr;
 						if (TryGetCachedSingleInterpDelegatePrepared(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, &_cachedMethod, &_cachedMethodImi, &_cachedArgBase))
 						{
-							CALL_INTERP_RET_PREPARED((ip + 24), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
+							CALL_INTERP_RET_PREPARED_FAST((ip + 24), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
@@ -11674,7 +11622,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								if (methodImi)
 								{
 									StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
-									CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
+									CALL_INTERP_RET_PREPARED_FAST((ip + 24), method, methodImi, fastArgBase, _ret);
 									continue;
 								}
 							}
@@ -11721,7 +11669,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							if (methodImi)
 							{
 								StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
-								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
+								CALL_INTERP_RET_PREPARED_FAST((ip + 24), method, methodImi, _argBasePtr, _ret);
 								continue;
 							}
 						}

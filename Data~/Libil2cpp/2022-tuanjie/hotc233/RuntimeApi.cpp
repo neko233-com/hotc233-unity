@@ -273,6 +273,9 @@ namespace hotc233
 		AppendJsonEscaped(os, methodInfo->name);
 		os << "\"";
 		os << ",\"codeLength\":" << imi->codeLength;
+		os << ",\"argStackObjectSize\":" << imi->argStackObjectSize;
+		os << ",\"localStackSize\":" << imi->localStackSize;
+		os << ",\"maxStackSize\":" << imi->maxStackSize;
 		os << ",\"instructionCount\":" << instructionCount;
 		os << ",\"fastPathKind\":" << imi->hotc233FastPathKind;
 		os << ",\"malformed\":" << (malformed ? "true" : "false");
@@ -300,8 +303,29 @@ namespace hotc233
 			}
 			os << "{\"offset\":" << row.offset
 				<< ",\"opcode\":" << row.opcode
-				<< ",\"instructionSize\":" << row.instructionSize
-				<< "}";
+				<< ",\"instructionSize\":" << row.instructionSize;
+			os << ",\"operandsU16\":[";
+			uint32_t operandBytes = row.instructionSize > 2 ? (uint32_t)row.instructionSize - 2u : 0u;
+			uint32_t operandU16Count = std::min<uint32_t>(operandBytes / 2u, 8u);
+			for (uint32_t operandIndex = 0; operandIndex < operandU16Count; ++operandIndex)
+			{
+				if (operandIndex > 0)
+				{
+					os << ",";
+				}
+				os << *(uint16_t*)(imi->codes + row.offset + 2u + operandIndex * 2u);
+			}
+			os << "],\"operandsU32\":[";
+			uint32_t operandU32Count = std::min<uint32_t>(operandBytes / 4u, 4u);
+			for (uint32_t operandIndex = 0; operandIndex < operandU32Count; ++operandIndex)
+			{
+				if (operandIndex > 0)
+				{
+					os << ",";
+				}
+				os << *(uint32_t*)(imi->codes + row.offset + 2u + operandIndex * 4u);
+			}
+			os << "]}";
 		}
 		os << "]}";
 		return NewJsonString(os.str());

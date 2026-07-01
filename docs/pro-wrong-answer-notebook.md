@@ -39,6 +39,7 @@
 | WA-016 | 2026-07-01 | small i4 leaf whole-method interpreter | callback/custom/async 小涨但 List/Task/Dictionary 回退，仍远低 CE | 撤回；小叶子解释器仍是局部补丁，不是全面超过 CE 的通用架构 | withdrawn |
 | WA-017 | 2026-07-01 | AOT container method plan cache | List 仅 29.7%，整体 business 仍明显弱于 CE | 撤回；容器必须脱离 M2N wrapper，进入 transform-time typed container IR | withdrawn |
 | WA-018 | 2026-07-01 | 移除 InterpreterInvoke / delegate hidden-ret 热路径诊断 | Async 小涨但 List/Custom/Dictionary/Struct 回退 | 撤回；运行时探针清理不是主瓶颈，继续做 transform-time typed ABI 与状态机/container IR | withdrawn |
+| WA-047 | 2026-07-01 | 48-byte static leaf fastpath in generic call path | `AsyncComputeSync`/`Actor.Tick` 命中但 business 退到 1/8 | 停止 48-byte 小叶子路线；对照 CE 补通用 call/state/container/delegate 机制 | withdrawn |
 
 ## 保留项（不是错题，但不得扩展成通用路线）
 
@@ -194,6 +195,167 @@
 - **实测**：单行过滤 `custom-class-dispatch` 从完整基线 60.3% 提到 68.9%，但仍低于 CE；宽过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain` 结果为 0/8 通过，Coroutine 15.1%、Event 19.5%、List 29.5%、Task 41.2%、Async 41.7%、Custom 68.9%、Dictionary 76.0%、Callback 86.9%。
 - **根因**：业务弱项主成本不在单个 `Tick` 小叶子的 4 条 opcode，而在调用者短循环、虚派发解析、状态机/delegate/container 固定成本和代码布局；小叶子 fastpath 局部改善不足以抵消整体路径风险。
 - **替代**：下一步不要继续堆单 leaf fastpath。做虚派发 inline cache、方法级 loop plan、MoveNext typed lowering、delegate/event invocation-list plan 与 List/Dictionary fused container plan。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-028 — `CallInterp_void/static_void` 一次解析 + prepared frame（withdrawn）
+
+- **尝试**：把 void 解释器调用改成先解析 `InterpMethodInfo`，再走 `CALL_INTERP_RET_PREPARED`，并在无返回调用上复用 fastpath 检查，目标是通用减少解释帧入口固定成本。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T09:45:27.7638606Z`，只有 callback 104.66% 通过；Coroutine 27.39%、List 29.19%、Async 35.71%、Task 38.89%、Custom 65.77%、Event 73.72%、Dictionary 87.03%，整体弱于只保留 `CallInterp_ret` cache 的上一轮。
+- **根因**：void 调用路径的主要成本不等于一次 `GetInterpMethodInfo`；强行把 void 走 prepared-ret 框架增加了额外分支、cctor/fastpath 检查和代码布局扰动，短 business 口径下负收益更明显。
+- **替代**：保留实例 `CallInterp_ret` callsite cache；void 路径后续只允许基于 callsite side-table 的窄验证，优先推进虚派发 inline cache、MoveNext typed lowering、delegate/event invocation-list plan 和容器循环计划。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-029 — 同步 `ExecutePrepared` 入口 + `CallInterpVirtual_ret` receiver cache（withdrawn）
+
+- **尝试**：新增 `Interpreter::ExecutePrepared`，让 delegate multicast 等必须同步跑完子调用的路径复用已解析 `InterpMethodInfo`；同时在 `CallInterpVirtual_ret` 用 receiver class 缓存实际派发 `MethodInfo`，目标覆盖 event/callback、自定义 class 虚派发和常见多态热更调用。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T09:54:36.313276Z`，仍只有 callback 107.3% 通过；List 24.1%、Coroutine 28.7%、Async 33.3%、Task 36.8%、Custom 47.1%、Event 81.8%、Dictionary 83.3%，相比只保留 `CallInterp_ret` cache 的 09:39 结果整体回退。
+- **根因**：同步 prepared 入口没有改变 multicast/状态机/容器短循环的主成本，反而在超大解释器翻译单元里增加入口分支和代码布局压力；`CallInterpVirtual_ret` 单槽 receiver cache 对多派生类型轮换场景命中率低，还增加 side-table 读写成本。
+- **替代**：不要继续在通用解释器入口叠 cache。下一步做 transform-time 大颗粒度计划：MoveNext typed lowering、List/Dictionary 容器循环 plan、delegate/event invocation-list plan、String/hash/equality direct path；虚派发要做多形态 callsite plan 或方法级 lowering，而不是单槽 runtime cache。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-030 — AOT 容器 method-kind runtime cache（withdrawn）
+
+- **尝试**：把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 的字符串分类缓存为 `MethodInfo* -> kind`，让 `Managed2NativeCallAotContainerInvoker` 每次调用少做 method-name `strcmp`。
+- **实测**：第一次编译暴露 bool/enum 返回误替换，修复后过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T10:18:13.8110847Z`，仍只有 Dictionary 193.7% 通过；List 36.7%、Async 62.5%、Coroutine 76.0%、Task 77.8%、Callback 89.9%、Custom 54.9%、Event 54.4%，不优于 10:08 的已知结果。
+- **根因**：容器弱项不是 method-name 分类本身；新增 unordered_map 查询和代码布局扰动抵消了少量 `strcmp` 收益，且没有触及 List pool 的主成本：泛型 List 小循环、字段 offset plan、bounds/version 更新、元素搬运与调用边界。
+- **替代**：容器下一步必须做 callsite/method-level plan：transform 期预烘焙 List/Dictionary 访问计划，或把 Rent/Return 类小循环 lowering 成 typed container op；不要再做 runtime method-kind 微 cache。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-031 — 小型 i4 straight-line 通用 fastpath（withdrawn）
+
+- **尝试**：把无分支、无异常、只含 i4 copy/const/binop/ret 的小方法分类为 `I4SmallStraightLine`，在 `TryExecuteHotc233FastPath` 内用小型解释循环直接执行，目标服务 callback/custom/async 状态机中的短叶子方法。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T10:35:51.027083Z`，2/8 通过；Callback 108.4%、Dictionary 147.8% 通过，但 List 59.1%、Async 62.5%、Custom 69.5%、Event 71.0%、Coroutine 72.1%、Task 87.5% 仍失败，且 List/Custom/Event/Coroutine 相比 10:26 的有效基线明显回退。
+- **根因**：通用 “扫小方法 bytecode 再解释一次” 仍是 runtime switch，而不是 typed ABI 或 callsite lowering；它偶然改善 callback，但扩大了代码体积和调用侧判断，并让一批本可走原 fastpath/普通解释的短业务方法落入更慢路径。
+- **替代**：不再做运行时通用小 bytecode loop。下一步改为 transform-time typed plan：delegate/event invocation-list plan、MoveNext/async 状态机 lowering、List/Dictionary typed container op、virtual/interface callsite plan。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-032 — prepared 调用宏内联 fastpath 检查（aborted）
+
+- **尝试**：把 `CALL_INTERP_RET_PREPARED` 改成进入新解释帧前先调用 `IsSafeGenericHotc233CallFastPath` + `TryExecuteHotc233FastPath`，目标让虚派发、delegate、CallInd 等 prepared callsite 共享现有 whole-method fastpath。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，命令生成日志 `Hotc233Data/AutomationLogs/20260701T103950.639681400Z-Tuanjie.exe.log`；IL2CPP 构建停在单个 `cl.exe` lump obj 超过 8 分钟，未产出可用 performance JSON，手动中止。
+- **根因**：把 fastpath 判断塞进高频 prepared 宏会膨胀解释器主翻译单元和 C++ 优化负担，违反“测试要快”和生产构建成本要求；即使可能有 runtime 收益，也不能接受编译成本爆炸。
+- **替代**：prepared fastpath 只能做窄 callsite IR 或 helper out-of-line 验证，不再在大宏中内联公共检查。优先做 transform-time delegate/event plan、virtual/interface polymorphic callsite plan 和状态机 typed lowering。
+- **状态**：aborted，代码已撤回。
+
+### WA-033 — `CallInterpVirtual_ret` 4-entry receiver cache（withdrawn）
+
+- **尝试**：给解释器虚派发返回调用加 4-entry `{receiver class, MethodInfo, InterpMethodInfo}` 小型多态 cache，目标覆盖真实业务中多个派生类轮换的 custom class dispatch。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T11:04:13.7517264Z`，1/8 通过；Event 93.9%、List 89.6%、Dictionary 213.2% 有提升，但 Custom 76.0%→71.6%、Callback 115.4%→97.4%、Coroutine 77.4%→75.8%、Async 71.4%→62.5% 回退。
+- **根因**：在虚派发 opcode 热路径做线性 cache 查找和 resolveData 写回增加了所有虚调用固定成本；3 类型轮换场景下省掉 `GET_OBJECT_VIRTUAL_METHOD` 不足以抵消 cache 搜索、分支和代码布局扰动。
+- **替代**：虚派发需要 transform-time typed callsite plan 或 devirtualization/lowering，不再在 opcode 内做 runtime 多态 cache。Custom dispatch 优先做 sealed/known actor 方法级 lowering，或用更粗粒度的方法 trace。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-034 — `i4 * const +/- const` whole-method fastpath（withdrawn）
+
+- **尝试**：识别 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4 + LdcVarConst_4 + Add/Sub/Xor + RetVar_ret_4` 的 48 字节 typed IR，打包源 slot、乘数和尾常量到 `hotc233FastPathParam`，执行端直接计算，目标覆盖 `seed*31+7`、业务 actor `Tick` 等短叶子方法。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T11:27:25.007265Z`，2/8 通过；List 90.5%、Event 94.8%、Dictionary 216.5% 小涨，但 Async 71.4%→62.5%、Coroutine 77.4%→68.4%、Custom 76.0%→71.6%、Callback 115.4%→106.3% 回退。
+- **根因**：真实业务短方法没有稳定落入该单一 48 字节形状，新增 kind 和 virtual-ret 窄尝试带来的代码布局/分支成本超过命中的收益；这仍然太像局部形状猜测，不是状态机/虚派发的主路径解决方案。
+- **替代**：不要继续扩“小公式”枚举。下一步应做可观测的 transform profiling，先输出每个 business blocker 的 top hot method 与 fastpath kind 命中情况，再按状态机、容器、delegate/event 做 plan。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-035 — List fast path method-name branch reorder（withdrawn）
+
+- **尝试**：把 `TryManaged2NativeCallListFastPath` 的分支顺序从 `get_Count -> Clear -> Add -> get_Item` 调成 `get_Count -> Add -> get_Item -> Clear`，目标减少 `List<int>.Add/get_Item` 的 `strcmp` 固定成本。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T11:33:04.2279226Z`，2/8 通过；Callback 117.4%、Dictionary 209.9% 通过，但 List 89.1%→86.3%、Event 87.8%→85.1%、Async 71.4%→62.5%、Custom 76.0%→73.7% 回退。
+- **根因**：List pool 弱项不是这几个 `strcmp` 的顺序；代码布局扰动和 Clear/Count 热路径变化抵消了 Add/get_Item 的少量收益。
+- **替代**：容器要做 typed container op 或 method-level lowering，不能继续调字符串分派顺序。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-036 — method-level `copy * const +/- const` 小公式分类（withdrawn）
+
+- **尝试**：把 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4 + LdcVarConst_4 + Add/Sub/Xor + RetVar_ret_4` 识别成新的 method-level `Hotc233FastPathKind`，再把虚派发返回与静态返回调用接到 prepared fastpath，目标覆盖 `AsyncComputeSync` 和 `Actor.Tick` 这类真实业务小叶子方法。
+- **实测**：连续三轮过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`：`2026-07-01T11:41:40Z` 2/8 通过，`2026-07-01T11:43:39Z` 2/8 通过，`2026-07-01T11:44:57Z` 3/8 通过；但 `opcode-profile-business.json` 中 `AsyncComputeSync`、`WarriorActor.Tick`、`MageActor.Tick`、`RangerActor.Tick` 始终仍为 `fastPathKind=1`，分类未命中。
+- **根因**：method-level 分类对 transform 后 slot 边界、initLocals、本地临时与 eval stack 形状过敏；为了命中而继续放宽会回到 WA-031/WA-034 的“小公式枚举”陷阱，且不能解决状态机、容器、event 的共同主成本。
+- **替代**：撤掉新增 `Hotc233FastPathKind` 与分类器；若要覆盖这种直线序列，只允许在已有融合 opcode handler 内做带 codeLength 边界的窄 peephole，随后仍以状态机、container、delegate/event 机制桶为主。
+- **状态**：withdrawn，method-level 分类代码已撤回；保留的 peephole 需要后续批量验证。
+
+### WA-037 — 直线 opcode peephole + `List<int>` 返回少清零（withdrawn）
+
+- **尝试**：在已有 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4` handler 内窄识别后继 `LdcVarConst_4 + Add/Sub/Xor + RetVar_ret_4`，并减少 `List<int>.get_Count/get_Item` fast path 对 `StackObject` 的整块清零，目标同时覆盖 Async/Custom 小叶子与 List pool 固定成本。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T11:52:25.9919798Z`，仅 Dictionary 191.0% 通过；Async 55.6%、Custom 65.2%、Coroutine 76.3%、List 87.1%、Task 87.5%、Event 89.3%、Callback 99.4%。
+- **根因**：execute 层直线窥视增加了融合 opcode 热路径的后继读取和分支，实际短业务方法的主成本仍在调用边界、状态机、容器/委托结构；List 少清零节省不足以抵消代码布局与调用路径扰动。
+- **替代**：撤回 execute peephole 和 List 少清零；下一步必须做更粗粒度机制桶：状态机 MoveNext lowering、delegate/event invocation-list plan、List/Dictionary typed container op、virtual/interface callsite plan。
+- **状态**：withdrawn，代码撤回。
+
+### WA-038 — virtual prepared callsite 复用 delegate-only fastpath helper（withdrawn）
+
+- **尝试**：把已经验证有收益的 delegate-only `CALL_INTERP_RET_PREPARED_FAST` helper 扩到 `CallVirtual_ret` 和 `CallInterpVirtual_ret`，希望虚派发小叶子方法也能在进入解释帧前执行现有 safe fastpath。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T12:04:33.2393861Z`。隔离回原 `CALL_INTERP_RET_PREPARED` 后，Async 41.7%→62.5%、Task 58.3%→87.5%、Coroutine 66.7%→81.1%、Callback 115.0%→120.4%、Dictionary 199.3%→214.8%；但 List 85.9%→71.5%、Event 87.1%→84.1%、Custom 70.9% 持平，仍只有 2/8 通过。
+- **根因**：delegate helper 的收益来自单播闭包/cache 形状；虚派发 callsite 复用同一 helper 会把额外分支和 code layout 成本带到 List/Event 等普通业务路径，且 `Actor.Tick` 仍为 `fastPathKind=1`，没有解决虚派发主瓶颈。
+- **替代**：virtual/interface 只能走 transform-time typed callsite plan 或方法级 devirtualization/lowering；不再把 delegate-only helper 扩到虚派发通用入口。
+- **状态**：withdrawn，virtual/interp virtual callsite 已恢复 `CALL_INTERP_RET_PREPARED`；delegate 分支保留 `_FAST`。
+
+### WA-043 — 独立 `MulConstThenConstRetI4` 48-byte fastpath（withdrawn）
+
+- **尝试**：新增独立 `Hotc233FastPath_MulConstThenConstRetI4`，只识别 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4 + LdcVarConst_4 + Add/Sub/Xor + RetVar_ret_4`，不复用 `CopyConstMulRetI4`，不改 virtual handler，目标覆盖 `AsyncComputeSync`、`Actor.Tick` 这类普通业务短整数 helper。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T13:31:12.5685046Z`，仍仅 2/8 通过；Custom 61.3%、Async 62.5%、Coroutine 76.3%、Task 87.5%、Event 89.9%、List 95.1%、Callback 104.3%、Dictionary 208.3%。
+- **根因**：profile 仍显示 `AsyncComputeSync` 和三个 `Actor.Tick` 为 `fastPathKind=1`，说明 post-hoc 48-byte classifier 没有进入有效运行口径；即使不改 virtual handler，新增 helper/classifier 仍让 Custom、Async、Event、List 相对 12:55 有效基线回退。该路线与 WA-039/WA-040 同属“48-byte 后验公式分类”问题。
+- **替代**：撤回 enum/helper/classifier。后续短 helper 必须从 transform-time side-table 或调用点计划落地，并以 method profile 证明命中；不得继续添加 48-byte post-hoc classifier。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-039 — transform-time `I4MulConstBinConst` leaf fastpath（withdrawn）
+
+- **尝试**：在 transform 后扫描 48 字节 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4 + LdcVarConst_4 + Add/Sub/Xor + RetVar_ret_4`，新增 `Hotc233FastPath_I4MulConstBinConst`，并只在 virtual/interp virtual 返回调用处窄旁路该 kind，目标覆盖 `AsyncComputeSync`、`TaskWhenAllSync`、`Actor.Tick` 等业务小叶子。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T12:34:08.1985372Z`，仅 1/8 通过；Async 55.6%、Custom 55.7%、Callback 65.7%、Coroutine 73.1%、Task 77.8%、List 78.4%、Event 89.9%、Dictionary 188.4%。
+- **根因**：profile 仍显示 `AsyncComputeSync`、`TaskWhenAllSync`、`Actor.Tick`、`FrameStepper.MoveNext` 为 `fastPathKind=1`，说明 post-hoc bytecode classifier 仍未命中真实生成 IMI；新增 enum/helper/virtual 分支扰动 hot interpreter 布局并让 Callback/Custom 明显回退，`re83h2fuc10b.obj` 编译成本也升到约 262s。
+- **替代**：停止做 48 字节后验公式分类。下一步必须在 IR 构造期记录 typed plan/side-table，或先输出真实 operand profile 后再做 lowering；runtime 不再猜 local/eval slot。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-040 — 复用 `CopyConstMulRetI4` 覆盖 48 字节 leaf + virtual 窄旁路（withdrawn）
+
+- **尝试**：按真实 opcode 顺序 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4 + LdcVarConst_4 + Add/Sub/Xor + RetVar_ret_4`，复用已有 `Hotc233FastPath_CopyConstMulRetI4`，并在 virtual/interp virtual ret callsite 只旁路该 kind，目标避免新增 enum，同时覆盖 Async/Task 小 helper 和 Actor.Tick。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T12:47:20.2926235Z`，仅 1/8 通过；Coroutine 47.3%、Async 62.5%、Custom 63.5%、Task 77.8%、Event 80.4%、List 83.6%、Callback 92.1%、Dictionary 209.9%。`re83h2fuc10b.obj` 编译约 279s。
+- **根因**：性能没有形成有效收益，且 callback 从 12:04 的 120.4% 跌到 92.1%；该路线仍把额外判定放进巨型 execute 文件和 virtual 热入口，编译成本继续恶化。过滤运行没有刷新 `opcode-profile-business.json`，无法用旧 profile 证明命中，因此后续必须先增强 method profile 输出 operand/arg/local 诊断。
+- **替代**：撤回 execute/virtual 改动。下一步只允许先用 `RuntimeApi.GetMethodOpcodeProfile` 的 operand 诊断确认真实 ABI，再将 helper 放到 transform side-table 或独立小编译单元，避免污染 `Interpreter_Execute.cpp`。
+- **状态**：withdrawn，代码已撤回；保留 RuntimeApi 诊断增强。
+
+### WA-041 — `StraightLineI4Ret` execute 内小解释器（withdrawn）
+
+- **尝试**：新增 `Hotc233FastPath_StraightLineI4Ret`，transform 识别无分支、无调用、只含 i4 copy/const/binop/ret 的直线小方法，runtime 在 `Interpreter_Execute.cpp` 内用 32-slot 小寄存器数组求值，目标覆盖 `AsyncComputeSync`、`TaskWhenAllSync` 和普通业务小 helper，同时避免读取未建帧 local/eval slot。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T13:10:43.59906Z`，仍仅 2/8 通过；Async 71.4%→62.5%、Custom 76.8%→67.0%、Event 92.3%→83.9%、List 98.1%→97.5%、Callback 117.8%→104.0%，只有 Coroutine 70.2%→75.4% 小涨但仍失败。`re83h2fuc10b.obj` 编译超过 175s。
+- **根因**：把“小解释器”继续放进巨型 execute 翻译单元会扰动代码布局并增加编译成本；即使命中直线小方法，收益也不足以覆盖调用边界、状态机、delegate/event、container 的共同成本。这与 WA-031/WA-037 同属 execute 内二次解释路线。
+- **替代**：撤回 enum、transform classifier 和 execute helper。后续小 helper 只能做 transform-time side-table + 独立小编译单元/typed helper，并且必须先证明可改善 Async/Task 且不拖累 Event/Callback/List。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-042 — List/Stack 返回槽少清零（withdrawn）
+
+- **尝试**：在 `List<T>/Stack<T>` AOT 容器 fast path 中，对 `get_Count`、`List<int>.get_Item`、`Stack<T>.Pop` 的 int/ref 返回只写实际返回槽，不再 `memset(ret, 0, sizeof(StackObject))`，目标让接近 CE 的 `business-realworld-list-pool-rent-return` 从 98.1% 过线。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T13:19:19.1589201Z`，仍 2/8 通过；List 98.1%→69.4% 大幅回退，Coroutine 70.2%→68.1%，Dictionary 218.3%→208.3%，Event 92.3%→94.8% 但仍未过。
+- **根因**：返回槽整块清零在当前 ABI 下不是纯冗余；部分调用/展开路径依赖高位或对象槽处于确定状态。少清零会带来数据形态/代码布局回退，不能作为容器优化方向。
+- **替代**：容器要做 transform-time typed container op 或循环级 plan，而不是改返回槽清零。List pool 的主成本仍在泛型容器调用边界、Add/get_Item 循环和 Stack/List 方法调度。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-044 — ABI 修正后重做 48-byte affine return fastpath（withdrawn）
+
+- **尝试**：在修正 `argStackObjectSize` StackObject 槽单位后，新增 `Hotc233FastPath_MulConstThenConstBinRetI4`，识别 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4 + LdcVarConst_4 + Add/Sub/Xor/And + RetVar_ret_4`，目标覆盖 `AsyncComputeSync` 与三个 `Actor.Tick`，不改 delegate/multicast 入口。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T13:57:21.3986158Z`。新 profile 确认 `AsyncComputeSync` 与 `Warrior/Mage/RangerActor.Tick` 均命中 `fastPathKind=83`，但 business 只有 1/8 通过：Async 62.5%、Custom 64.6%、Coroutine 80.1%、Task 87.5%、Event 89.3%、List 92.4%、Callback 99.7%、Dictionary 214.8%。`re83h2fuc10b.obj` 编译约 170s。
+- **根因**：48-byte affine return 即使命中，也不能覆盖真实主成本：Async/Task 的外层状态机/Task 聚合、Custom 的虚派发入口、Coroutine 的 MoveNext 字段状态流、List pool 的容器调用边界仍占主导。把 helper 放进巨型 `Interpreter_Execute.cpp` 还显著增加编译成本并扰动 Event/Callback/List。
+- **替代**：撤回 enum/classifier/execute helper。短整数 helper 只能作为更大机制桶的一部分落地：transform side-table + 独立小编译单元，或直接做 virtual/interface callsite plan 与状态机/container lowering；禁止再单独提交 48-byte affine return fastpath。
+- **状态**：withdrawn，代码已撤回；保留 ABI 槽单位修正与本机 opcode profile 生成。
+
+### WA-045 — Closure field-add void fastpath in `Interpreter_Execute.cpp`（withdrawn）
+
+- **尝试**：新增 `Hotc233FastPath_ClosureFieldAddVoidI4`，识别闭包方法中“读取捕获字段 -> 计算小整数表达式 -> `+=` 写回字段 -> void 返回”的通用形状，并让 multicast delegate 子调用先尝试 prepared generic fastpath。目标覆盖 event multicast 与 callback 链，同时作为通用闭包字段更新优化。
+- **实测 1**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T14:19:31.6418789Z`。profile 确认 Event/Callback 的 6 个闭包方法命中 `fastPathKind=83`；Event 101.2% 过 CE，Callback 97.1% 近线，但总体只有 2/8：List 62.3%、Async 62.5%、Custom 74.5%、Task 77.8%、Coroutine 79.4% 仍失败。
+- **实测 2**：把 runtime 小数组/小循环收缩成固定短表达式执行器后，生成时间 `2026-07-01T14:27:40.1414862Z`。Callback 131.6%、Dictionary 213.2% 通过，但 Event 96.98% 回落，List 75.9%、Task 87.5%、Custom 62.9%、Coroutine 70.2%、Async 62.5% 仍失败；仍只有 2/8。
+- **根因**：闭包字段更新本身可以命中，但把该执行器放进巨型 `Interpreter_Execute.cpp` 仍会带来代码布局/编译成本扰动；multicast 子调用快路也没有解决真实业务主成本，反而让 List/Task/Custom/Coroutine 相对 14:02 保留基线回退。
+- **替代**：撤回 enum、transform classifier、runtime helper 和 multicast prepared generic 调用。后续 event/callback 只能作为 delegate/closure 机制桶的一部分，以独立小编译单元或 transform side-table 形式实现，并且必须不拖累 List/Task/Custom/Coroutine。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-046 — External affine i4 leaf fastpath（withdrawn）
+
+- **尝试**：把 `arg * const (+/-/^/&) const` 的 48-byte 小叶子从 `Interpreter_Execute.cpp` 挪到独立 `Hotc233FastPath.cpp`，由 transform 编码 `src/mulConst/binConst/op` 到 `hotc233FastPathParam`，execute 只做外部函数调用。目标覆盖 `AsyncComputeSync` 和三个 `Actor.Tick`，避免 WA-044 的大翻译单元 helper 扰动。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T14:53:11.2676609Z`。profile 确认 `AsyncComputeSync` 和 `Warrior/Mage/RangerActor.Tick` 全部命中 `fastPathKind=83`，但 business 仍只有 2/8：Custom 51.0%、Async 62.5%、Coroutine 79.4%、List 84.2%、Task 87.5%、Event 90.1%、Callback 117.4%、Dictionary 221.8%。
+- **根因**：小叶子命中不等于真实业务通过。Async/Task 外层循环、虚派发入口、状态机/容器/事件调用边界仍占主导；即便 helper 独立编译，新增 fastpath kind 和调用分支仍会扰动 Custom/Event/List，且 Async 没有提升。
+- **替代**：撤回 enum、外部文件、transform classifier 和 execute 调用。后续小叶子只允许作为更大 callsite/状态机 lowering 的一部分，而不是单独按 48-byte 方法做发布 blocker 修复。
+- **状态**：withdrawn，代码已撤回。
+
+### WA-047 — 48-byte static leaf fastpath in generic call path（withdrawn）
+
+- **尝试**：新增 `Hotc233FastPath_I4MulConstThenBinConstRet`，在 transform 后识别 `LdlocVarVar_LdcVarConst_4_BinOpMul_i4 + LdcVarConst_4 + Add/Sub/Xor/And + RetVar_ret_4`，并把该 kind 加入普通 static/interp call fastpath 白名单。目标覆盖 `AsyncComputeSync` 和三个 `Actor.Tick`，不改 virtual handler。
+- **实测**：过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain`，生成时间 `2026-07-01T15:30:29.1385158Z`。profile 确认 `AsyncComputeSync`、`WarriorActor.Tick`、`MageActor.Tick`、`RangerActor.Tick` 命中 `fastPathKind=83`，但 business 退到 1/8：Dictionary 191.0% 通过；Callback 95.5%、Event 84.4%、List 70.8%、Async 62.5%、Custom 59.8%、Task 53.8%、Coroutine 50.4% 均失败。
+- **根因**：静态小叶子本身不是主成本。真实 business 瓶颈仍在外层解释调用、虚派发、状态机字段流、泛型容器 bridge、delegate/multicast invoke；即使命中小叶子，也会因新增分类/白名单分支和代码布局扰动让已接近 CE 的行回退。
+- **替代**：撤回 enum、classifier、execute helper 和 call fastpath 白名单。下一轮必须对照 HybridCLR CE 的公开机制补通用层：callsite typed ABI、state-machine lowering、container typed op、delegate invocation plan；不得再提交 48-byte 小叶子独立路线。
 - **状态**：withdrawn，代码已撤回。
 
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）

@@ -4135,10 +4135,7 @@ namespace interpreter
 		uint8_t __pad6;
 		uint8_t __pad7;
 		uint32_t methodInfo;
-		uint8_t isInstanceMethod;
-		uint8_t __pad13;
-		uint8_t __pad14;
-		uint8_t __pad15;
+		uint32_t interpMethodCache;
 	};
 
 	struct IRCallInterpStatic_ret : IRCommon

@@ -1371,46 +1371,9 @@ namespace interpreter
 			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
 			return true;
 		}
-		bool shouldTraceM2N =
-			method->name
-			&& method->klass
-			&& method->klass->name
-			&& ((!std::strcmp(method->name, "set_Item") && std::strstr(method->klass->name, "Dictionary"))
-				|| (!std::strcmp(method->name, "Compare") && std::strstr(method->klass->name, "NullableComparer")));
-		if (shouldTraceM2N)
-		{
-			std::printf("[hotc233][M2NBridgeProbe] %s.%s pcount=%d\n",
-				method->klass->namespaze ? method->klass->namespaze : "",
-				method->klass->name ? method->klass->name : "",
-				(int)method->parameters_count);
-			std::fflush(stdout);
-		}
 		for (uint8_t i = 0; i < method->parameters_count; i++)
 		{
 			const Il2CppType* paramType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i]));
-			if (method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary"))
-			{
-				Il2CppClass* paramKlass = paramType ? il2cpp::vm::Class::FromIl2CppType(paramType) : nullptr;
-				std::printf("[hotc233][M2NBridgeProbe] param%d type=%d klass=%s.%s value=%d generated-bridge=1\n",
-					(int)i,
-					paramType ? (int)paramType->type : -1,
-					paramKlass && paramKlass->namespaze ? paramKlass->namespaze : "",
-					paramKlass && paramKlass->name ? paramKlass->name : "",
-					paramType && IsValueTypeForInvoke(paramType) ? 1 : 0);
-				std::fflush(stdout);
-				continue;
-			}
-			if (method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary"))
-			{
-				Il2CppClass* paramKlass = paramType ? il2cpp::vm::Class::FromIl2CppType(paramType) : nullptr;
-				std::printf("[hotc233][M2NBridgeProbe] param%d type=%d klass=%s.%s value=%d\n",
-					(int)i,
-					paramType ? (int)paramType->type : -1,
-					paramKlass && paramKlass->namespaze ? paramKlass->namespaze : "",
-					paramKlass && paramKlass->name ? paramKlass->name : "",
-					paramType && IsValueTypeForInvoke(paramType) ? 1 : 0);
-				std::fflush(stdout);
-			}
 			if (!paramType->byref && IsValueTypeForInvoke(paramType))
 			{
 				InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
@@ -1547,10 +1510,11 @@ namespace interpreter
 			return false;
 		}
 		DictionaryIntTryGetValueOffsets offsets;
-		auto cached = s_dictionaryIntTryGetValueOffsets.find(method->klass);
-		if (cached != s_dictionaryIntTryGetValueOffsets.end())
+		static thread_local Il2CppClass* s_lastDictionaryIntTryGetValueKlass = nullptr;
+		static thread_local DictionaryIntTryGetValueOffsets s_lastDictionaryIntTryGetValueOffsets = {};
+		if (s_lastDictionaryIntTryGetValueKlass == method->klass)
 		{
-			offsets = cached->second;
+			offsets = s_lastDictionaryIntTryGetValueOffsets;
 			if (!offsets.valid)
 			{
 				return false;
@@ -1558,15 +1522,31 @@ namespace interpreter
 		}
 		else
 		{
-			FieldInfo* entriesField = FindM2NFieldAny(method->klass, "_entries", "entries");
-			if (!entriesField)
+			auto cached = s_dictionaryIntTryGetValueOffsets.find(method->klass);
+			if (cached != s_dictionaryIntTryGetValueOffsets.end())
 			{
-				return false;
+				offsets = cached->second;
+				s_lastDictionaryIntTryGetValueKlass = method->klass;
+				s_lastDictionaryIntTryGetValueOffsets = offsets;
+				if (!offsets.valid)
+				{
+					return false;
+				}
 			}
-			Il2CppArray* entriesForCache = *(Il2CppArray**)((uint8_t*)dict + il2cpp::vm::Field::GetOffset(entriesField));
-			if (!TryBuildDictionaryIntTryGetValueOffsets(method, entriesForCache, offsets))
+			else
 			{
-				return false;
+				FieldInfo* entriesField = FindM2NFieldAny(method->klass, "_entries", "entries");
+				if (!entriesField)
+				{
+					return false;
+				}
+				Il2CppArray* entriesForCache = *(Il2CppArray**)((uint8_t*)dict + il2cpp::vm::Field::GetOffset(entriesField));
+				if (!TryBuildDictionaryIntTryGetValueOffsets(method, entriesForCache, offsets))
+				{
+					return false;
+				}
+				s_lastDictionaryIntTryGetValueKlass = method->klass;
+				s_lastDictionaryIntTryGetValueOffsets = offsets;
 			}
 		}
 		uint8_t* dictBase = (uint8_t*)dict;
@@ -1664,6 +1644,54 @@ namespace interpreter
 
 	static std::unordered_map<Il2CppClass*, ListFieldOffsets> s_listFieldOffsets;
 
+	enum Hotc233ListMethodKind
+	{
+		Hotc233ListMethod_Unsupported = 0,
+		Hotc233ListMethod_Clear,
+		Hotc233ListMethod_GetCount,
+		Hotc233ListMethod_Add,
+		Hotc233ListMethod_GetItem,
+	};
+
+	static Hotc233ListMethodKind GetListMethodKind(const MethodInfo* method)
+	{
+		static thread_local const MethodInfo* s_lastListMethod = nullptr;
+		static thread_local Hotc233ListMethodKind s_lastListMethodKind = Hotc233ListMethod_Unsupported;
+		if (s_lastListMethod == method)
+		{
+			return s_lastListMethodKind;
+		}
+		Hotc233ListMethodKind kind = Hotc233ListMethod_Unsupported;
+		if (method && method->name)
+		{
+			if (method->parameters_count == 0)
+			{
+				if (std::strcmp(method->name, "Clear") == 0)
+				{
+					kind = Hotc233ListMethod_Clear;
+				}
+				else if (std::strcmp(method->name, "get_Count") == 0)
+				{
+					kind = Hotc233ListMethod_GetCount;
+				}
+			}
+			else if (method->parameters_count == 1)
+			{
+				if (std::strcmp(method->name, "Add") == 0)
+				{
+					kind = Hotc233ListMethod_Add;
+				}
+				else if (std::strcmp(method->name, "get_Item") == 0)
+				{
+					kind = Hotc233ListMethod_GetItem;
+				}
+			}
+		}
+		s_lastListMethod = method;
+		s_lastListMethodKind = kind;
+		return kind;
+	}
+
 	static const Il2CppType* GetFirstClassGenericArg(const MethodInfo* method)
 	{
 		if (!method
@@ -1688,10 +1716,19 @@ namespace interpreter
 
 	static bool TryGetListFieldOffsets(const MethodInfo* method, ListFieldOffsets& offsets)
 	{
+		static thread_local Il2CppClass* s_lastListKlass = nullptr;
+		static thread_local ListFieldOffsets s_lastListOffsets = {};
+		if (s_lastListKlass == method->klass)
+		{
+			offsets = s_lastListOffsets;
+			return offsets.valid;
+		}
 		auto cached = s_listFieldOffsets.find(method->klass);
 		if (cached != s_listFieldOffsets.end())
 		{
 			offsets = cached->second;
+			s_lastListKlass = method->klass;
+			s_lastListOffsets = offsets;
 			return offsets.valid;
 		}
 		ListFieldOffsets next = { 0, 0, 0, false, false, false, false };
@@ -1736,6 +1773,8 @@ namespace interpreter
 		next.elementIsInt32 = elementType->type == IL2CPP_TYPE_I4;
 		next.valid = hasItems && hasSize && hasVersion;
 		s_listFieldOffsets.insert({ method->klass, next });
+		s_lastListKlass = method->klass;
+		s_lastListOffsets = next;
 		offsets = next;
 		return next.valid;
 	}
@@ -1760,8 +1799,8 @@ namespace interpreter
 		Il2CppArray* items = *(Il2CppArray**)(listBase + offsets.itemsOffset);
 		int32_t* sizePtr = (int32_t*)(listBase + offsets.sizeOffset);
 		int32_t* versionPtr = (int32_t*)(listBase + offsets.versionOffset);
-		const char* methodName = method->name;
-		if (std::strcmp(methodName, "get_Count") == 0 && method->parameters_count == 0)
+		Hotc233ListMethodKind methodKind = GetListMethodKind(method);
+		if (methodKind == Hotc233ListMethod_GetCount)
 		{
 			if (ret)
 			{
@@ -1770,7 +1809,7 @@ namespace interpreter
 			}
 			return true;
 		}
-		if (std::strcmp(methodName, "Clear") == 0 && method->parameters_count == 0)
+		if (methodKind == Hotc233ListMethod_Clear)
 		{
 			int32_t size = *sizePtr;
 			if (items && size > 0 && (!offsets.elementIsValueType || offsets.elementHasReferences))
@@ -1789,7 +1828,7 @@ namespace interpreter
 			++(*versionPtr);
 			return true;
 		}
-		if (std::strcmp(methodName, "Add") == 0 && method->parameters_count == 1)
+		if (methodKind == Hotc233ListMethod_Add)
 		{
 			if (!items)
 			{
@@ -1827,7 +1866,7 @@ namespace interpreter
 			++(*versionPtr);
 			return true;
 		}
-		if (std::strcmp(methodName, "get_Item") == 0 && method->parameters_count == 1)
+		if (methodKind == Hotc233ListMethod_GetItem)
 		{
 			if (!items)
 			{
@@ -1881,6 +1920,46 @@ namespace interpreter
 
 	static std::unordered_map<Il2CppClass*, StackFieldOffsets> s_stackFieldOffsets;
 
+	enum Hotc233StackMethodKind
+	{
+		Hotc233StackMethod_Unsupported = 0,
+		Hotc233StackMethod_GetCount,
+		Hotc233StackMethod_Push,
+		Hotc233StackMethod_Pop,
+	};
+
+	static Hotc233StackMethodKind GetStackMethodKind(const MethodInfo* method)
+	{
+		static thread_local const MethodInfo* s_lastStackMethod = nullptr;
+		static thread_local Hotc233StackMethodKind s_lastStackMethodKind = Hotc233StackMethod_Unsupported;
+		if (s_lastStackMethod == method)
+		{
+			return s_lastStackMethodKind;
+		}
+		Hotc233StackMethodKind kind = Hotc233StackMethod_Unsupported;
+		if (method && method->name)
+		{
+			if (method->parameters_count == 0)
+			{
+				if (std::strcmp(method->name, "get_Count") == 0)
+				{
+					kind = Hotc233StackMethod_GetCount;
+				}
+				else if (std::strcmp(method->name, "Pop") == 0)
+				{
+					kind = Hotc233StackMethod_Pop;
+				}
+			}
+			else if (method->parameters_count == 1 && std::strcmp(method->name, "Push") == 0)
+			{
+				kind = Hotc233StackMethod_Push;
+			}
+		}
+		s_lastStackMethod = method;
+		s_lastStackMethodKind = kind;
+		return kind;
+	}
+
 	static bool IsStackMethod(const MethodInfo* method)
 	{
 		return method
@@ -1892,10 +1971,19 @@ namespace interpreter
 
 	static bool TryGetStackFieldOffsets(const MethodInfo* method, StackFieldOffsets& offsets)
 	{
+		static thread_local Il2CppClass* s_lastStackKlass = nullptr;
+		static thread_local StackFieldOffsets s_lastStackOffsets = {};
+		if (s_lastStackKlass == method->klass)
+		{
+			offsets = s_lastStackOffsets;
+			return offsets.valid;
+		}
 		auto cached = s_stackFieldOffsets.find(method->klass);
 		if (cached != s_stackFieldOffsets.end())
 		{
 			offsets = cached->second;
+			s_lastStackKlass = method->klass;
+			s_lastStackOffsets = offsets;
 			return offsets.valid;
 		}
 		StackFieldOffsets next = { 0, 0, 0, false, false, false };
@@ -1917,6 +2005,8 @@ namespace interpreter
 		next.elementHasReferences = elementKlass->has_references;
 		next.valid = true;
 		s_stackFieldOffsets.insert({ method->klass, next });
+		s_lastStackKlass = method->klass;
+		s_lastStackOffsets = next;
 		offsets = next;
 		return true;
 	}
@@ -1941,8 +2031,8 @@ namespace interpreter
 		Il2CppArray* array = *(Il2CppArray**)(stackBase + offsets.arrayOffset);
 		int32_t* sizePtr = (int32_t*)(stackBase + offsets.sizeOffset);
 		int32_t* versionPtr = (int32_t*)(stackBase + offsets.versionOffset);
-		const char* methodName = method->name;
-		if (std::strcmp(methodName, "get_Count") == 0 && method->parameters_count == 0)
+		Hotc233StackMethodKind methodKind = GetStackMethodKind(method);
+		if (methodKind == Hotc233StackMethod_GetCount)
 		{
 			if (ret)
 			{
@@ -1962,7 +2052,7 @@ namespace interpreter
 		{
 			return false;
 		}
-		if (std::strcmp(methodName, "Push") == 0 && method->parameters_count == 1)
+		if (methodKind == Hotc233StackMethod_Push)
 		{
 			int32_t size = *sizePtr;
 			if (size < 0 || (uint32_t)size >= length)
@@ -1987,7 +2077,7 @@ namespace interpreter
 			++(*versionPtr);
 			return true;
 		}
-		if (std::strcmp(methodName, "Pop") == 0 && method->parameters_count == 0)
+		if (methodKind == Hotc233StackMethod_Pop)
 		{
 			int32_t size = *sizePtr;
 			if (size <= 0 || (uint32_t)size > length)
@@ -2165,57 +2255,6 @@ namespace interpreter
 		if (method->name
 			&& method->klass
 			&& method->klass->name
-			&& ((!std::strcmp(method->name, "set_Item") && std::strstr(method->klass->name, "Dictionary"))
-				|| (!std::strcmp(method->name, "Compare") && std::strstr(method->klass->name, "NullableComparer"))
-				|| (!std::strcmp(method->name, "Invoke") && method->klass->namespaze && std::strstr(method->klass->namespaze, "System.Reflection"))))
-		{
-			std::printf("[hotc233][M2NProbe] %s.%s sig=%s inflated=%d generic=%d full=%d bridge=%p reflection=%p methodPointer=%p callByInterp=%p invoker=%p pcount=%d\n",
-				method->klass->namespaze ? method->klass->namespaze : "",
-				method->klass->name ? method->klass->name : "",
-				sigName,
-				method->is_inflated ? 1 : 0,
-				method->is_generic ? 1 : 0,
-				method->has_full_generic_sharing_signature ? 1 : 0,
-				(void*)bridge,
-				(void*)Managed2NativeCallByReflectionInvoke,
-				(void*)method->methodPointer,
-				(void*)method->methodPointerCallByInterp,
-				(void*)method->invoker_method,
-				(int)method->parameters_count);
-			for (uint8_t i = 0; i < method->parameters_count; i++)
-			{
-				const Il2CppType* rawType = GET_METHOD_PARAMETER_TYPE(method->parameters[i]);
-				const Il2CppType* inflatedType = InflateMethodParameterTypeIfNeeded(method, rawType);
-				Il2CppClass* inflatedKlass = inflatedType ? il2cpp::vm::Class::FromIl2CppType(inflatedType) : nullptr;
-				std::printf("[hotc233][M2NProbe] param%d raw=%d inflated=%d byref=%d value=%d\n",
-					(int)i,
-					rawType ? (int)rawType->type : -1,
-					inflatedType ? (int)inflatedType->type : -1,
-					rawType && rawType->byref ? 1 : 0,
-					inflatedType && IsValueTypeForInvoke(inflatedType) ? 1 : 0);
-				std::printf("[hotc233][M2NProbe] param%d klass=%s.%s valuetype=%d\n",
-					(int)i,
-					inflatedKlass && inflatedKlass->namespaze ? inflatedKlass->namespaze : "",
-					inflatedKlass && inflatedKlass->name ? inflatedKlass->name : "",
-					inflatedKlass && IS_CLASS_VALUE_TYPE(inflatedKlass) ? 1 : 0);
-				if (inflatedKlass && inflatedKlass->name && std::strcmp(inflatedKlass->name, "Nullable`1") == 0)
-				{
-					void* fieldIter = nullptr;
-					FieldInfo* field = nullptr;
-					while ((field = il2cpp::vm::Class::GetFields(inflatedKlass, &fieldIter)) != nullptr)
-					{
-						std::printf("[hotc233][M2NProbe] param%d field=%s offset=%zu\n",
-							(int)i,
-							il2cpp::vm::Field::GetName(field),
-							il2cpp::vm::Field::GetOffset(field));
-					}
-				}
-			}
-			std::fflush(stdout);
-		}
-		if (method->name
-			&& method->klass
-			&& method->klass->name
 			&& !std::strcmp(method->name, "Compare")
 			&& std::strstr(method->klass->name, "NullableComparer")
 #if HOTC233_UNITY_2021_OR_NEW
@@ -2316,7 +2355,7 @@ namespace interpreter
 	{
 		InterpMethodInfo* imi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
 		bool isInstanceMethod = metadata::IsInstanceMethod(method);
-		bool traceLinqLambda = method
+		bool traceLinqLambda = false && method
 			&& method->klass
 			&& method->name
 			&& (std::strstr(method->name, "VerifyJoin")
@@ -2381,19 +2420,6 @@ namespace interpreter
 		if (!actualRet && invokeMethod && !metadata::IsReturnVoidMethod(invokeMethod))
 		{
 			actualRet = __args[invokeMethod->parameters_count];
-			static int32_t s_invokerHiddenRetTraceCount = 0;
-			if (actualRet && s_invokerHiddenRetTraceCount < 64)
-			{
-				++s_invokerHiddenRetTraceCount;
-				std::printf("[hotc233][InvokerHiddenRetProbe] invoke=%s.%s::%s params=%u ret=%p retU64=%llu\n",
-					invokeMethod->klass ? invokeMethod->klass->namespaze : "<null>",
-					invokeMethod->klass ? invokeMethod->klass->name : "<null>",
-					invokeMethod->name,
-					invokeMethod->parameters_count,
-					actualRet,
-					(unsigned long long)*(uint64_t*)actualRet);
-				std::fflush(stdout);
-			}
 		}
 		Il2CppDelegate** firstSubDel;
 		int32_t subDelCount;

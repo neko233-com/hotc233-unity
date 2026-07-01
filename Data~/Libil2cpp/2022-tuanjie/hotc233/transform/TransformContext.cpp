@@ -8321,11 +8321,15 @@ else \
 						{
 							if (resolvedIsInstanceMethod)
 							{
+								int32_t interpMethodCacheDataIdx = 0;
+								uint64_t* interpMethodCache = nullptr;
+								AllocResolvedData(resolveDatas, 1, interpMethodCacheDataIdx, interpMethodCache);
+								interpMethodCache[0] = 0;
 								CreateAddIR(ir, CallInterp_ret);
-								ir->isInstanceMethod = 1;
 								ir->methodInfo = methodDataIndex;
 								ir->argBase = argBaseOffset;
 								ir->ret = argBaseOffset;
+								ir->interpMethodCache = interpMethodCacheDataIdx;
 							}
 							else
 							{
@@ -11604,7 +11608,7 @@ ir->ele = ele.locOffset;
 		uint32_t codeLength,
 		uint32_t argStackObjectSize)
 	{
-		if (argStackObjectSize < sizeof(int32_t))
+		if (argStackObjectSize < 1)
 		{
 			return false;
 		}
@@ -11628,7 +11632,7 @@ ir->ele = ele.locOffset;
 		}
 
 		// Whole-method trace fast paths tolerate initLocals/exception clauses in the method shell.
-		if (argStackObjectSize >= sizeof(int32_t))
+		if (argStackObjectSize >= 1)
 		{
 			uint32_t totalSteps = 0;
 			if (TrySumStaticF4CallTraceSteps(codes, codeLength, &totalSteps)
@@ -11646,7 +11650,7 @@ ir->ele = ele.locOffset;
 		uint32_t 		godDomainTraceSteps = 0;
 		if (TrySumGodDomainTraceOnlySteps(
 			codes, codeLength, HiOpcodeEnum::RunInstanceVoidI4x5CallTrace, &godDomainTraceSteps)
-			&& argStackObjectSize >= sizeof(int32_t))
+			&& argStackObjectSize >= 1)
 		{
 			return Hotc233FastPath_InstanceVoidI4x5LoopTrace;
 		}
@@ -11654,7 +11658,7 @@ ir->ele = ele.locOffset;
 		godDomainTraceSteps = 0;
 		if (TrySumGodDomainTraceOnlySteps(
 			codes, codeLength, HiOpcodeEnum::RunInstanceVoidV3x4CallTrace, &godDomainTraceSteps)
-			&& argStackObjectSize >= sizeof(int32_t))
+			&& argStackObjectSize >= 1)
 		{
 			return Hotc233FastPath_InstanceVoidV3x4LoopTrace;
 		}
@@ -11662,7 +11666,7 @@ ir->ele = ele.locOffset;
 		godDomainTraceSteps = 0;
 		if (TrySumGodDomainTraceOnlySteps(
 			codes, codeLength, HiOpcodeEnum::RunInstanceVoidV3x1CallTrace, &godDomainTraceSteps)
-			&& argStackObjectSize >= sizeof(int32_t))
+			&& argStackObjectSize >= 1)
 		{
 			return Hotc233FastPath_InstanceVoidV3x1LoopTrace;
 		}
@@ -11670,7 +11674,7 @@ ir->ele = ele.locOffset;
 		godDomainTraceSteps = 0;
 		if (TrySumGodDomainTraceOnlySteps(
 			codes, codeLength, HiOpcodeEnum::RunInstanceGetTransformSetV3CallTrace, &godDomainTraceSteps)
-			&& argStackObjectSize >= sizeof(int32_t))
+			&& argStackObjectSize >= 1)
 		{
 			return Hotc233FastPath_InstanceGetTransformSetV3LoopTrace;
 		}
@@ -11678,7 +11682,7 @@ ir->ele = ele.locOffset;
 		godDomainTraceSteps = 0;
 		if (TrySumGodDomainTraceOnlySteps(
 			codes, codeLength, HiOpcodeEnum::RunInstanceV3ReturnCallTrace, &godDomainTraceSteps)
-			&& argStackObjectSize >= sizeof(int32_t))
+			&& argStackObjectSize >= 1)
 		{
 			return Hotc233FastPath_InstanceV3ReturnLoopTrace;
 		}
@@ -11686,7 +11690,7 @@ ir->ele = ele.locOffset;
 		godDomainTraceSteps = 0;
 		if (TrySumGodDomainTraceOnlySteps(
 			codes, codeLength, HiOpcodeEnum::RunInstanceI4ReturnCallTrace, &godDomainTraceSteps)
-			&& argStackObjectSize >= sizeof(int32_t))
+			&& argStackObjectSize >= 1)
 		{
 			return Hotc233FastPath_InstanceI4ReturnLoopTrace;
 		}
