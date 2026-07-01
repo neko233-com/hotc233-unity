@@ -1611,7 +1611,19 @@ namespace interpreter
 		return true;
 	}
 
-	static bool IsSupportedAotContainerInvokerMethod(const MethodInfo* method)
+	enum AotContainerMethodKind
+	{
+		AotContainerMethod_Unsupported = 0,
+		AotContainerMethod_ListClear,
+		AotContainerMethod_ListGetCount,
+		AotContainerMethod_ListAdd,
+		AotContainerMethod_ListGetItem,
+		AotContainerMethod_StackGetCount,
+		AotContainerMethod_StackPush,
+		AotContainerMethod_StackPop,
+	};
+
+	static AotContainerMethodKind ClassifyAotContainerMethod(const MethodInfo* method)
 	{
 		if (!method
 			|| !method->name
@@ -1621,34 +1633,60 @@ namespace interpreter
 			|| std::strcmp(method->klass->namespaze, "System.Collections.Generic") != 0
 			|| !hotc233::metadata::IsInstanceMethod(method))
 		{
-			return false;
+			return AotContainerMethod_Unsupported;
 		}
 		const char* className = method->klass->name;
 		const char* methodName = method->name;
 		if (std::strcmp(className, "List`1") == 0)
 		{
-			if ((std::strcmp(methodName, "Clear") == 0 || std::strcmp(methodName, "get_Count") == 0) && method->parameters_count == 0)
+			if (method->parameters_count == 0)
 			{
-				return true;
+				if (std::strcmp(methodName, "Clear") == 0)
+				{
+					return AotContainerMethod_ListClear;
+				}
+				if (std::strcmp(methodName, "get_Count") == 0)
+				{
+					return AotContainerMethod_ListGetCount;
+				}
 			}
-			if ((std::strcmp(methodName, "Add") == 0 || std::strcmp(methodName, "get_Item") == 0) && method->parameters_count == 1)
+			if (method->parameters_count == 1)
 			{
-				return true;
+				if (std::strcmp(methodName, "Add") == 0)
+				{
+					return AotContainerMethod_ListAdd;
+				}
+				if (std::strcmp(methodName, "get_Item") == 0)
+				{
+					return AotContainerMethod_ListGetItem;
+				}
 			}
-			return false;
+			return AotContainerMethod_Unsupported;
 		}
 		if (std::strcmp(className, "Stack`1") == 0)
 		{
-			if ((std::strcmp(methodName, "Pop") == 0 || std::strcmp(methodName, "get_Count") == 0) && method->parameters_count == 0)
+			if (method->parameters_count == 0)
 			{
-				return true;
+				if (std::strcmp(methodName, "get_Count") == 0)
+				{
+					return AotContainerMethod_StackGetCount;
+				}
+				if (std::strcmp(methodName, "Pop") == 0)
+				{
+					return AotContainerMethod_StackPop;
+				}
 			}
 			if (std::strcmp(methodName, "Push") == 0 && method->parameters_count == 1)
 			{
-				return true;
+				return AotContainerMethod_StackPush;
 			}
 		}
-		return false;
+		return AotContainerMethod_Unsupported;
+	}
+
+	static bool IsSupportedAotContainerInvokerMethod(const MethodInfo* method)
+	{
+		return ClassifyAotContainerMethod(method) != AotContainerMethod_Unsupported;
 	}
 
 	struct ListFieldOffsets
@@ -1740,7 +1778,7 @@ namespace interpreter
 		return next.valid;
 	}
 
-	static bool TryManaged2NativeCallListFastPath(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	static bool TryManaged2NativeCallListFastPath(AotContainerMethodKind kind, const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
 		if (!IsListMethod(method) || !method->name || !argVarIndexs || !localVarBase)
 		{
@@ -1760,8 +1798,11 @@ namespace interpreter
 		Il2CppArray* items = *(Il2CppArray**)(listBase + offsets.itemsOffset);
 		int32_t* sizePtr = (int32_t*)(listBase + offsets.sizeOffset);
 		int32_t* versionPtr = (int32_t*)(listBase + offsets.versionOffset);
-		const char* methodName = method->name;
-		if (std::strcmp(methodName, "get_Count") == 0 && method->parameters_count == 0)
+		if (kind == AotContainerMethod_Unsupported)
+		{
+			kind = ClassifyAotContainerMethod(method);
+		}
+		if (kind == AotContainerMethod_ListGetCount)
 		{
 			if (ret)
 			{
@@ -1770,7 +1811,7 @@ namespace interpreter
 			}
 			return true;
 		}
-		if (std::strcmp(methodName, "Clear") == 0 && method->parameters_count == 0)
+		if (kind == AotContainerMethod_ListClear)
 		{
 			int32_t size = *sizePtr;
 			if (items && size > 0 && (!offsets.elementIsValueType || offsets.elementHasReferences))
@@ -1789,7 +1830,7 @@ namespace interpreter
 			++(*versionPtr);
 			return true;
 		}
-		if (std::strcmp(methodName, "Add") == 0 && method->parameters_count == 1)
+		if (kind == AotContainerMethod_ListAdd)
 		{
 			if (!items)
 			{
@@ -1827,7 +1868,7 @@ namespace interpreter
 			++(*versionPtr);
 			return true;
 		}
-		if (std::strcmp(methodName, "get_Item") == 0 && method->parameters_count == 1)
+		if (kind == AotContainerMethod_ListGetItem)
 		{
 			if (!items)
 			{
@@ -1921,7 +1962,7 @@ namespace interpreter
 		return true;
 	}
 
-	static bool TryManaged2NativeCallStackFastPath(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	static bool TryManaged2NativeCallStackFastPath(AotContainerMethodKind kind, const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
 		if (!IsStackMethod(method) || !method->name || !argVarIndexs || !localVarBase)
 		{
@@ -1941,8 +1982,11 @@ namespace interpreter
 		Il2CppArray* array = *(Il2CppArray**)(stackBase + offsets.arrayOffset);
 		int32_t* sizePtr = (int32_t*)(stackBase + offsets.sizeOffset);
 		int32_t* versionPtr = (int32_t*)(stackBase + offsets.versionOffset);
-		const char* methodName = method->name;
-		if (std::strcmp(methodName, "get_Count") == 0 && method->parameters_count == 0)
+		if (kind == AotContainerMethod_Unsupported)
+		{
+			kind = ClassifyAotContainerMethod(method);
+		}
+		if (kind == AotContainerMethod_StackGetCount)
 		{
 			if (ret)
 			{
@@ -1962,7 +2006,7 @@ namespace interpreter
 		{
 			return false;
 		}
-		if (std::strcmp(methodName, "Push") == 0 && method->parameters_count == 1)
+		if (kind == AotContainerMethod_StackPush)
 		{
 			int32_t size = *sizePtr;
 			if (size < 0 || (uint32_t)size >= length)
@@ -1987,7 +2031,7 @@ namespace interpreter
 			++(*versionPtr);
 			return true;
 		}
-		if (std::strcmp(methodName, "Pop") == 0 && method->parameters_count == 0)
+		if (kind == AotContainerMethod_StackPop)
 		{
 			int32_t size = *sizePtr;
 			if (size <= 0 || (uint32_t)size > length)
@@ -2022,11 +2066,12 @@ namespace interpreter
 
 	static void Managed2NativeCallAotContainerInvoker(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
-		if (TryManaged2NativeCallListFastPath(method, argVarIndexs, localVarBase, ret))
+		AotContainerMethodKind kind = ClassifyAotContainerMethod(method);
+		if (TryManaged2NativeCallListFastPath(kind, method, argVarIndexs, localVarBase, ret))
 		{
 			return;
 		}
-		if (TryManaged2NativeCallStackFastPath(method, argVarIndexs, localVarBase, ret))
+		if (TryManaged2NativeCallStackFastPath(kind, method, argVarIndexs, localVarBase, ret))
 		{
 			return;
 		}
@@ -2099,6 +2144,62 @@ namespace interpreter
 #endif
 	}
 
+	static void Managed2NativeCallListClear(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!TryManaged2NativeCallListFastPath(AotContainerMethod_ListClear, method, argVarIndexs, localVarBase, ret))
+		{
+			Managed2NativeCallAotContainerInvoker(method, argVarIndexs, localVarBase, ret);
+		}
+	}
+
+	static void Managed2NativeCallListGetCount(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!TryManaged2NativeCallListFastPath(AotContainerMethod_ListGetCount, method, argVarIndexs, localVarBase, ret))
+		{
+			Managed2NativeCallAotContainerInvoker(method, argVarIndexs, localVarBase, ret);
+		}
+	}
+
+	static void Managed2NativeCallListAdd(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!TryManaged2NativeCallListFastPath(AotContainerMethod_ListAdd, method, argVarIndexs, localVarBase, ret))
+		{
+			Managed2NativeCallAotContainerInvoker(method, argVarIndexs, localVarBase, ret);
+		}
+	}
+
+	static void Managed2NativeCallListGetItem(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!TryManaged2NativeCallListFastPath(AotContainerMethod_ListGetItem, method, argVarIndexs, localVarBase, ret))
+		{
+			Managed2NativeCallAotContainerInvoker(method, argVarIndexs, localVarBase, ret);
+		}
+	}
+
+	static void Managed2NativeCallStackGetCount(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!TryManaged2NativeCallStackFastPath(AotContainerMethod_StackGetCount, method, argVarIndexs, localVarBase, ret))
+		{
+			Managed2NativeCallAotContainerInvoker(method, argVarIndexs, localVarBase, ret);
+		}
+	}
+
+	static void Managed2NativeCallStackPush(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!TryManaged2NativeCallStackFastPath(AotContainerMethod_StackPush, method, argVarIndexs, localVarBase, ret))
+		{
+			Managed2NativeCallAotContainerInvoker(method, argVarIndexs, localVarBase, ret);
+		}
+	}
+
+	static void Managed2NativeCallStackPop(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!TryManaged2NativeCallStackFastPath(AotContainerMethod_StackPop, method, argVarIndexs, localVarBase, ret))
+		{
+			Managed2NativeCallAotContainerInvoker(method, argVarIndexs, localVarBase, ret);
+		}
+	}
+
 	static void Managed2NativeCallDictionaryIntTryGetValue(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
 		if (TryManaged2NativeCallDictionaryIntTryGetValueFastPath(method, argVarIndexs, localVarBase, ret))
@@ -2138,9 +2239,27 @@ namespace interpreter
 
 	Managed2NativeCallMethod InterpreterModule::GetManaged2NativeMethodPointer(const MethodInfo* method, bool forceStatic)
 	{
-		if (!forceStatic && IsSupportedAotContainerInvokerMethod(method))
+		if (!forceStatic)
 		{
-			return Managed2NativeCallAotContainerInvoker;
+			switch (ClassifyAotContainerMethod(method))
+			{
+			case AotContainerMethod_ListClear:
+				return Managed2NativeCallListClear;
+			case AotContainerMethod_ListGetCount:
+				return Managed2NativeCallListGetCount;
+			case AotContainerMethod_ListAdd:
+				return Managed2NativeCallListAdd;
+			case AotContainerMethod_ListGetItem:
+				return Managed2NativeCallListGetItem;
+			case AotContainerMethod_StackGetCount:
+				return Managed2NativeCallStackGetCount;
+			case AotContainerMethod_StackPush:
+				return Managed2NativeCallStackPush;
+			case AotContainerMethod_StackPop:
+				return Managed2NativeCallStackPop;
+			default:
+				break;
+			}
 		}
 		if (IsFullGenericVariableValueTypeReturn(method))
 		{
