@@ -36,6 +36,8 @@
 | WA-013 | 2026-07-01 | prepared interpreted call generic fast path | Async/Task 小涨但 List/Coroutine/虚派发/delegate/Dictionary 回退 | 撤回；prepared call 入口不再堆通用 fastpath 判断，改做 callsite 级 typed ABI | withdrawn |
 | WA-014 | 2026-07-01 | 普通 `CallVirtual_*` receiver class callsite cache | callback/custom 小涨但 List/event/task/Dictionary 回退，仍远低 CE | 撤回；单纯虚表解析缓存不是主瓶颈，需状态机/容器/委托各自共享 ABI 层 | withdrawn |
 | WA-015 | 2026-07-01 | delegate 同步调用 whole-method fastpath | 所有关键 business 基本回退，custom/event/callback 尤其明显 | 撤回；delegate 优化必须在 transform/typed ABI 预烘焙调用形状，不在 handler 里临时判 fastpath | withdrawn |
+| WA-016 | 2026-07-01 | small i4 leaf whole-method interpreter | callback/custom/async 小涨但 List/Task/Dictionary 回退，仍远低 CE | 撤回；小叶子解释器仍是局部补丁，不是全面超过 CE 的通用架构 | withdrawn |
+| WA-017 | 2026-07-01 | AOT container method plan cache | List 仅 29.7%，整体 business 仍明显弱于 CE | 撤回；容器必须脱离 M2N wrapper，进入 transform-time typed container IR | withdrawn |
 
 ## 保留项（不是错题，但不得扩展成通用路线）
 
@@ -96,6 +98,22 @@
 - **根因**：delegate handler 里的运行时 fastpath 判定增加了分支、取 IMI 与代码布局成本；真正瓶颈仍是调用形状、参数 ABI 与容器/状态机热循环，没有在 transform 阶段被预烘焙。
 - **替代**：delegate/callback/event 只做 transform 期 callsite plan：固定 invocation-list 形状、typed arg copy、直接 prepared target 表；运行时 handler 不再临时分类。
 - **状态**：withdrawn，代码已撤回。
+
+### WA-016 — small i4 leaf whole-method interpreter（withdrawn）
+
+- **尝试**：为无分支、无字段、无对象操作、`ret i4` 的小方法增加 `Hotc233FastPath_SmallI4Leaf`，用栈上 64 slot 解释极小 i4 opcode 白名单，覆盖常见 `seed * const + const`、多次 add 等纯整数叶子函数。
+- **实测**：过滤 business 口径，callback 82.8%→105.6%、Custom 60.3%→65.8%、Async 38.5%→45.5%；但 List 31.6%→28.6%、Task 38.9%→35.0%、Dictionary 86.8%→83.3%，Coroutine 基本不变。
+- **根因**：局部小方法解释器仍然增加代码体积/布局成本，且没有解决 List/Dictionary/Coroutine/Async 的共同 ABI 和状态机成本；不满足“全面超过 CE”的发布门槛。
+- **替代**：不要继续扩大小 leaf 白名单；统一进入 typed register IR，把 i4/ref/value slot 作为解释器基础形态。
+- **状态**：withdrawn，提交已 revert。
+
+### WA-017 — AOT container method plan cache（withdrawn）
+
+- **尝试**：按 `MethodInfo*` 缓存 `List<T>`/`Stack<T>` 方法 kind 与字段 offset，在 `Managed2NativeCallAotContainerInvoker` 前置 plan 执行，减少每次方法名/klass 判断。
+- **实测**：叠加 WA-016 后，List 仅 29.7%、Coroutine 31.3%、Task 38.9%、Async 45.5%、Custom 63.5%、Event 79.9%、Dictionary 84.1%、Callback 101.5%，仍未全面超过 CE。
+- **根因**：M2N wrapper 仍在热路径，method plan cache 只去掉少量字符串/offset 判断，没有消除 call ABI、栈 slot、泛型容器访问和状态机步进成本。
+- **替代**：List/Stack/Dictionary 需要 transform-time typed container IR 或 callsite direct container opcode；旧 M2N container fast path 只能保正确性 fallback。
+- **状态**：withdrawn，提交已 revert。
 
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
