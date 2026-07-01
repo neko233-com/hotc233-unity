@@ -2020,8 +2020,307 @@ namespace interpreter
 		return false;
 	}
 
+	enum class AotContainerMethodKind : uint8_t
+	{
+		None,
+		ListCount,
+		ListClear,
+		ListAdd,
+		ListGetItem,
+		StackCount,
+		StackPush,
+		StackPop,
+	};
+
+	struct AotContainerMethodPlan
+	{
+		AotContainerMethodKind kind;
+		ListFieldOffsets listOffsets;
+		StackFieldOffsets stackOffsets;
+		bool valid;
+	};
+
+	static std::unordered_map<const MethodInfo*, AotContainerMethodPlan> s_aotContainerMethodPlans;
+
+	static bool TryGetAotContainerMethodPlan(const MethodInfo* method, AotContainerMethodPlan& plan)
+	{
+		auto cached = s_aotContainerMethodPlans.find(method);
+		if (cached != s_aotContainerMethodPlans.end())
+		{
+			plan = cached->second;
+			return plan.valid;
+		}
+
+		AotContainerMethodPlan next = {};
+		next.kind = AotContainerMethodKind::None;
+		next.valid = false;
+		if (!IsSupportedAotContainerInvokerMethod(method) || !method->name)
+		{
+			s_aotContainerMethodPlans.insert({ method, next });
+			plan = next;
+			return false;
+		}
+
+		if (IsListMethod(method) && TryGetListFieldOffsets(method, next.listOffsets))
+		{
+			if (std::strcmp(method->name, "get_Count") == 0 && method->parameters_count == 0)
+			{
+				next.kind = AotContainerMethodKind::ListCount;
+			}
+			else if (std::strcmp(method->name, "Clear") == 0 && method->parameters_count == 0)
+			{
+				next.kind = AotContainerMethodKind::ListClear;
+			}
+			else if (std::strcmp(method->name, "Add") == 0 && method->parameters_count == 1)
+			{
+				next.kind = AotContainerMethodKind::ListAdd;
+			}
+			else if (std::strcmp(method->name, "get_Item") == 0 && method->parameters_count == 1)
+			{
+				next.kind = AotContainerMethodKind::ListGetItem;
+			}
+		}
+		else if (IsStackMethod(method) && TryGetStackFieldOffsets(method, next.stackOffsets))
+		{
+			if (std::strcmp(method->name, "get_Count") == 0 && method->parameters_count == 0)
+			{
+				next.kind = AotContainerMethodKind::StackCount;
+			}
+			else if (std::strcmp(method->name, "Push") == 0 && method->parameters_count == 1)
+			{
+				next.kind = AotContainerMethodKind::StackPush;
+			}
+			else if (std::strcmp(method->name, "Pop") == 0 && method->parameters_count == 0)
+			{
+				next.kind = AotContainerMethodKind::StackPop;
+			}
+		}
+		next.valid = next.kind != AotContainerMethodKind::None;
+		s_aotContainerMethodPlans.insert({ method, next });
+		plan = next;
+		return next.valid;
+	}
+
+	static bool TryManaged2NativeCallAotContainerPlan(const AotContainerMethodPlan& plan, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	{
+		if (!argVarIndexs || !localVarBase)
+		{
+			return false;
+		}
+		switch (plan.kind)
+		{
+		case AotContainerMethodKind::ListCount:
+		case AotContainerMethodKind::ListClear:
+		case AotContainerMethodKind::ListAdd:
+		case AotContainerMethodKind::ListGetItem:
+		{
+			Il2CppObject* listObject = localVarBase[argVarIndexs[0]].obj;
+			if (!listObject)
+			{
+				return false;
+			}
+			const ListFieldOffsets& offsets = plan.listOffsets;
+			uint8_t* listBase = (uint8_t*)listObject;
+			Il2CppArray* items = *(Il2CppArray**)(listBase + offsets.itemsOffset);
+			int32_t* sizePtr = (int32_t*)(listBase + offsets.sizeOffset);
+			int32_t* versionPtr = (int32_t*)(listBase + offsets.versionOffset);
+			if (plan.kind == AotContainerMethodKind::ListCount)
+			{
+				if (ret)
+				{
+					std::memset(ret, 0, sizeof(StackObject));
+					*(int32_t*)ret = *sizePtr;
+				}
+				return true;
+			}
+			if (plan.kind == AotContainerMethodKind::ListClear)
+			{
+				int32_t size = *sizePtr;
+				if (items && size > 0 && (!offsets.elementIsValueType || offsets.elementHasReferences))
+				{
+					uint32_t length = (uint32_t)items->max_length;
+					uint32_t elementSize = items->klass->element_size;
+					if ((uint32_t)size > length || elementSize == 0)
+					{
+						return false;
+					}
+					uint8_t* elementData = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(items);
+					std::memset(elementData, 0, (size_t)elementSize * (size_t)size);
+					il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)elementData, (size_t)elementSize * (size_t)size);
+				}
+				*sizePtr = 0;
+				++(*versionPtr);
+				return true;
+			}
+			if (!items)
+			{
+				return false;
+			}
+			uint32_t elementSize = items->klass->element_size;
+			if (elementSize == 0)
+			{
+				return false;
+			}
+			if (plan.kind == AotContainerMethodKind::ListAdd)
+			{
+				uint32_t length = (uint32_t)items->max_length;
+				int32_t size = *sizePtr;
+				if (size < 0 || (uint32_t)size >= length)
+				{
+					return false;
+				}
+				uint8_t* element = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(items) + (size_t)elementSize * (size_t)size;
+				if (offsets.elementIsValueType)
+				{
+					if (offsets.elementIsInt32)
+					{
+						*(int32_t*)element = localVarBase[argVarIndexs[1]].i32;
+					}
+					else
+					{
+						std::memcpy(element, localVarBase + argVarIndexs[1], (size_t)elementSize);
+						if (offsets.elementHasReferences)
+						{
+							il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element, (size_t)elementSize);
+						}
+					}
+				}
+				else
+				{
+					*(Il2CppObject**)element = localVarBase[argVarIndexs[1]].obj;
+					il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element);
+				}
+				*sizePtr = size + 1;
+				++(*versionPtr);
+				return true;
+			}
+			int32_t index = localVarBase[argVarIndexs[1]].i32;
+			int32_t size = *sizePtr;
+			if (index < 0 || index >= size)
+			{
+				return false;
+			}
+			uint8_t* element = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(items) + (size_t)elementSize * (size_t)index;
+			if (ret)
+			{
+				std::memset(ret, 0, sizeof(StackObject));
+				if (offsets.elementIsValueType)
+				{
+					if (offsets.elementIsInt32)
+					{
+						*(int32_t*)ret = *(int32_t*)element;
+					}
+					else
+					{
+						std::memcpy(ret, element, (size_t)elementSize);
+					}
+				}
+				else
+				{
+					((StackObject*)ret)->obj = *(Il2CppObject**)element;
+				}
+			}
+			return true;
+		}
+		case AotContainerMethodKind::StackCount:
+		case AotContainerMethodKind::StackPush:
+		case AotContainerMethodKind::StackPop:
+		{
+			Il2CppObject* stackObject = localVarBase[argVarIndexs[0]].obj;
+			if (!stackObject)
+			{
+				return false;
+			}
+			const StackFieldOffsets& offsets = plan.stackOffsets;
+			uint8_t* stackBase = (uint8_t*)stackObject;
+			Il2CppArray* array = *(Il2CppArray**)(stackBase + offsets.arrayOffset);
+			int32_t* sizePtr = (int32_t*)(stackBase + offsets.sizeOffset);
+			int32_t* versionPtr = (int32_t*)(stackBase + offsets.versionOffset);
+			if (plan.kind == AotContainerMethodKind::StackCount)
+			{
+				if (ret)
+				{
+					std::memset(ret, 0, sizeof(StackObject));
+					*(int32_t*)ret = *sizePtr;
+				}
+				return true;
+			}
+			if (!array)
+			{
+				return false;
+			}
+			uint32_t length = (uint32_t)array->max_length;
+			uint32_t elementSize = array->klass->element_size;
+			uint8_t* elementData = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(array);
+			if (!elementData || elementSize == 0)
+			{
+				return false;
+			}
+			if (plan.kind == AotContainerMethodKind::StackPush)
+			{
+				int32_t size = *sizePtr;
+				if (size < 0 || (uint32_t)size >= length)
+				{
+					return false;
+				}
+				uint8_t* element = elementData + (size_t)elementSize * (size_t)size;
+				if (offsets.elementIsValueType)
+				{
+					std::memcpy(element, localVarBase + argVarIndexs[1], (size_t)elementSize);
+					if (offsets.elementHasReferences)
+					{
+						il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element, (size_t)elementSize);
+					}
+				}
+				else
+				{
+					*(Il2CppObject**)element = localVarBase[argVarIndexs[1]].obj;
+					il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element);
+				}
+				*sizePtr = size + 1;
+				++(*versionPtr);
+				return true;
+			}
+			int32_t size = *sizePtr;
+			if (size <= 0 || (uint32_t)size > length)
+			{
+				return false;
+			}
+			int32_t nextSize = size - 1;
+			uint8_t* element = elementData + (size_t)elementSize * (size_t)nextSize;
+			if (ret)
+			{
+				if (offsets.elementIsValueType)
+				{
+					std::memcpy(ret, element, (size_t)elementSize);
+				}
+				else
+				{
+					std::memset(ret, 0, sizeof(StackObject));
+					((StackObject*)ret)->obj = *(Il2CppObject**)element;
+				}
+			}
+			std::memset(element, 0, (size_t)elementSize);
+			if (!offsets.elementIsValueType || offsets.elementHasReferences)
+			{
+				il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element, (size_t)elementSize);
+			}
+			*sizePtr = nextSize;
+			++(*versionPtr);
+			return true;
+		}
+		default:
+			return false;
+		}
+	}
+
 	static void Managed2NativeCallAotContainerInvoker(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
+		AotContainerMethodPlan plan;
+		if (TryGetAotContainerMethodPlan(method, plan) && TryManaged2NativeCallAotContainerPlan(plan, argVarIndexs, localVarBase, ret))
+		{
+			return;
+		}
 		if (TryManaged2NativeCallListFastPath(method, argVarIndexs, localVarBase, ret))
 		{
 			return;
