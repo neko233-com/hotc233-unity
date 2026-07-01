@@ -1371,9 +1371,46 @@ namespace interpreter
 			InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
 			return true;
 		}
+		bool shouldTraceM2N =
+			method->name
+			&& method->klass
+			&& method->klass->name
+			&& ((!std::strcmp(method->name, "set_Item") && std::strstr(method->klass->name, "Dictionary"))
+				|| (!std::strcmp(method->name, "Compare") && std::strstr(method->klass->name, "NullableComparer")));
+		if (shouldTraceM2N)
+		{
+			std::printf("[hotc233][M2NBridgeProbe] %s.%s pcount=%d\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				(int)method->parameters_count);
+			std::fflush(stdout);
+		}
 		for (uint8_t i = 0; i < method->parameters_count; i++)
 		{
 			const Il2CppType* paramType = InflateMethodParameterTypeIfNeeded(method, GET_METHOD_PARAMETER_TYPE(method->parameters[i]));
+			if (method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary"))
+			{
+				Il2CppClass* paramKlass = paramType ? il2cpp::vm::Class::FromIl2CppType(paramType) : nullptr;
+				std::printf("[hotc233][M2NBridgeProbe] param%d type=%d klass=%s.%s value=%d generated-bridge=1\n",
+					(int)i,
+					paramType ? (int)paramType->type : -1,
+					paramKlass && paramKlass->namespaze ? paramKlass->namespaze : "",
+					paramKlass && paramKlass->name ? paramKlass->name : "",
+					paramType && IsValueTypeForInvoke(paramType) ? 1 : 0);
+				std::fflush(stdout);
+				continue;
+			}
+			if (method->name && !std::strcmp(method->name, "set_Item") && method->klass && method->klass->name && std::strstr(method->klass->name, "Dictionary"))
+			{
+				Il2CppClass* paramKlass = paramType ? il2cpp::vm::Class::FromIl2CppType(paramType) : nullptr;
+				std::printf("[hotc233][M2NBridgeProbe] param%d type=%d klass=%s.%s value=%d\n",
+					(int)i,
+					paramType ? (int)paramType->type : -1,
+					paramKlass && paramKlass->namespaze ? paramKlass->namespaze : "",
+					paramKlass && paramKlass->name ? paramKlass->name : "",
+					paramType && IsValueTypeForInvoke(paramType) ? 1 : 0);
+				std::fflush(stdout);
+			}
 			if (!paramType->byref && IsValueTypeForInvoke(paramType))
 			{
 				InterpreterModule::Managed2NativeCallByReflectionInvoke(method, argVarIndexs, localVarBase, ret);
@@ -1543,7 +1580,7 @@ namespace interpreter
 		}
 		int32_t key = localVarBase[argVarIndexs[1]].i32;
 		int32_t hashCode = key & 0x7fffffff;
-		uint32_t bucketLength = (uint32_t)buckets->max_length;
+		uint32_t bucketLength = il2cpp::vm::Array::GetLength(buckets);
 		if (bucketLength == 0)
 		{
 			std::memset(valueOut, 0, (size_t)offsets.valueSize);
@@ -1553,7 +1590,7 @@ namespace interpreter
 		int32_t bucketIndex = hashCode % (int32_t)bucketLength;
 		int32_t* bucketData = (int32_t*)il2cpp::vm::Array::GetFirstElementAddress(buckets);
 		int32_t entryIndex = bucketData[bucketIndex] - 1;
-		uint32_t entryLength = (uint32_t)entries->max_length;
+		uint32_t entryLength = il2cpp::vm::Array::GetLength(entries);
 		uint8_t* entryData = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(entries);
 		while (entryIndex >= 0 && (uint32_t)entryIndex < entryLength)
 		{
@@ -1738,7 +1775,7 @@ namespace interpreter
 			int32_t size = *sizePtr;
 			if (items && size > 0 && (!offsets.elementIsValueType || offsets.elementHasReferences))
 			{
-				uint32_t length = (uint32_t)items->max_length;
+				uint32_t length = il2cpp::vm::Array::GetLength(items);
 				uint32_t elementSize = items->klass->element_size;
 				if ((uint32_t)size > length || elementSize == 0)
 				{
@@ -1758,7 +1795,7 @@ namespace interpreter
 			{
 				return false;
 			}
-			uint32_t length = (uint32_t)items->max_length;
+			uint32_t length = il2cpp::vm::Array::GetLength(items);
 			uint32_t elementSize = items->klass->element_size;
 			int32_t size = *sizePtr;
 			if (size < 0 || (uint32_t)size >= length || elementSize == 0)
@@ -1918,7 +1955,7 @@ namespace interpreter
 		{
 			return false;
 		}
-		uint32_t length = (uint32_t)array->max_length;
+		uint32_t length = il2cpp::vm::Array::GetLength(array);
 		uint32_t elementSize = array->klass->element_size;
 		uint8_t* elementData = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(array);
 		if (!elementData || elementSize == 0)
@@ -2125,6 +2162,57 @@ namespace interpreter
 		ComputeSignature(method, !forceStatic, sigName, sizeof(sigName) - 1);
 		auto it = s_managed2natives.find(sigName);
 		Managed2NativeCallMethod bridge = it != s_managed2natives.end() ? it->second : Managed2NativeCallByReflectionInvoke;
+		if (method->name
+			&& method->klass
+			&& method->klass->name
+			&& ((!std::strcmp(method->name, "set_Item") && std::strstr(method->klass->name, "Dictionary"))
+				|| (!std::strcmp(method->name, "Compare") && std::strstr(method->klass->name, "NullableComparer"))
+				|| (!std::strcmp(method->name, "Invoke") && method->klass->namespaze && std::strstr(method->klass->namespaze, "System.Reflection"))))
+		{
+			std::printf("[hotc233][M2NProbe] %s.%s sig=%s inflated=%d generic=%d full=%d bridge=%p reflection=%p methodPointer=%p callByInterp=%p invoker=%p pcount=%d\n",
+				method->klass->namespaze ? method->klass->namespaze : "",
+				method->klass->name ? method->klass->name : "",
+				sigName,
+				method->is_inflated ? 1 : 0,
+				method->is_generic ? 1 : 0,
+				method->has_full_generic_sharing_signature ? 1 : 0,
+				(void*)bridge,
+				(void*)Managed2NativeCallByReflectionInvoke,
+				(void*)method->methodPointer,
+				(void*)method->methodPointerCallByInterp,
+				(void*)method->invoker_method,
+				(int)method->parameters_count);
+			for (uint8_t i = 0; i < method->parameters_count; i++)
+			{
+				const Il2CppType* rawType = GET_METHOD_PARAMETER_TYPE(method->parameters[i]);
+				const Il2CppType* inflatedType = InflateMethodParameterTypeIfNeeded(method, rawType);
+				Il2CppClass* inflatedKlass = inflatedType ? il2cpp::vm::Class::FromIl2CppType(inflatedType) : nullptr;
+				std::printf("[hotc233][M2NProbe] param%d raw=%d inflated=%d byref=%d value=%d\n",
+					(int)i,
+					rawType ? (int)rawType->type : -1,
+					inflatedType ? (int)inflatedType->type : -1,
+					rawType && rawType->byref ? 1 : 0,
+					inflatedType && IsValueTypeForInvoke(inflatedType) ? 1 : 0);
+				std::printf("[hotc233][M2NProbe] param%d klass=%s.%s valuetype=%d\n",
+					(int)i,
+					inflatedKlass && inflatedKlass->namespaze ? inflatedKlass->namespaze : "",
+					inflatedKlass && inflatedKlass->name ? inflatedKlass->name : "",
+					inflatedKlass && IS_CLASS_VALUE_TYPE(inflatedKlass) ? 1 : 0);
+				if (inflatedKlass && inflatedKlass->name && std::strcmp(inflatedKlass->name, "Nullable`1") == 0)
+				{
+					void* fieldIter = nullptr;
+					FieldInfo* field = nullptr;
+					while ((field = il2cpp::vm::Class::GetFields(inflatedKlass, &fieldIter)) != nullptr)
+					{
+						std::printf("[hotc233][M2NProbe] param%d field=%s offset=%zu\n",
+							(int)i,
+							il2cpp::vm::Field::GetName(field),
+							il2cpp::vm::Field::GetOffset(field));
+					}
+				}
+			}
+			std::fflush(stdout);
+		}
 		if (method->name
 			&& method->klass
 			&& method->klass->name
