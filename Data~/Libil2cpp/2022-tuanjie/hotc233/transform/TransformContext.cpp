@@ -11611,51 +11611,6 @@ ir->ele = ele.locOffset;
 		return ComputeTypeOfAccumPerLoopStrict(codes, codeLength) == 4;
 	}
 
-	static bool ClassifySmallI4LeafFastPath(
-		const byte* codes,
-		uint32_t codeLength,
-		uint32_t localStackSize)
-	{
-		if (!codes || codeLength < 16 || codeLength > 128 || localStackSize > 64)
-		{
-			return false;
-		}
-		for (uint32_t offset = 0; offset < codeLength;)
-		{
-			HiOpcodeEnum op = *(HiOpcodeEnum*)(codes + offset);
-			uint16_t size = g_instructionSizes[(int)op];
-			if (size == 0 || offset + size > codeLength)
-			{
-				return false;
-			}
-			switch (op)
-			{
-			case HiOpcodeEnum::LdlocVarVar:
-			case HiOpcodeEnum::LdcVarConst_4:
-			case HiOpcodeEnum::BinOpVarVarVar_Add_i4:
-			case HiOpcodeEnum::BinOpVarVarVar_Sub_i4:
-			case HiOpcodeEnum::BinOpVarVarVar_Mul_i4:
-			case HiOpcodeEnum::BinOpVarVarVar_And_i4:
-			case HiOpcodeEnum::BinOpVarVarVar_Or_i4:
-			case HiOpcodeEnum::BinOpVarVarVar_Xor_i4:
-			case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4:
-			case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4:
-			case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpAdd_i4_LdlocVarVar:
-			case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdcVarConst_4:
-			case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar:
-			case HiOpcodeEnum::BinOpVarVarVar_Add_i4_LdlocVarVar_LdlocVarVar_LdlocVarVar:
-				offset += size;
-				break;
-			case HiOpcodeEnum::LdlocVarVar_LdcVarConst_4_BinOpMul_i4_RetVar_ret_4:
-			case HiOpcodeEnum::RetVar_ret_4:
-				return offset + size == codeLength;
-			default:
-				return false;
-			}
-		}
-		return false;
-	}
-
 	static uint32_t ClassifyHotc233FastPath(
 		const byte* codes,
 		uint32_t codeLength,
@@ -11789,11 +11744,6 @@ ir->ele = ele.locOffset;
 			{
 				return Hotc233FastPath_ClosureMulConstAddFieldI4;
 			}
-		}
-
-		if (ClassifySmallI4LeafFastPath(codes, codeLength, localStackSize))
-		{
-			return Hotc233FastPath_SmallI4Leaf;
 		}
 
 		if (argStackObjectSize != localStackSize)

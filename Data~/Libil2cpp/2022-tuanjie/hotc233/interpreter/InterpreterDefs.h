@@ -168,7 +168,6 @@ namespace hotc233
 			Hotc233FastPath_UnityKernel_AudioSourceVolumeLoop = 58,
 			Hotc233FastPath_UnityKernel_AnimatorSetFloatLoop = 59,
 			Hotc233FastPath_UnityKernel_Last = 59,
-			Hotc233FastPath_SmallI4Leaf = 60,
 		};
 
 		// Typed native entry selection for transform-baked callsite caches and runtime mega-loops.
