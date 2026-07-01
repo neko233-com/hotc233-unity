@@ -35,6 +35,7 @@
 | WA-012 | 2026-07-01 | List/Stack 专用 M2N wrapper 分派 | List/callback/event 明显回退；一次 C++ 构建错误已修后仍回退 | 撤回；不得用 wrapper 扩散替代真实 List/Stack IR 或状态机优化 | withdrawn |
 | WA-013 | 2026-07-01 | prepared interpreted call generic fast path | Async/Task 小涨但 List/Coroutine/虚派发/delegate/Dictionary 回退 | 撤回；prepared call 入口不再堆通用 fastpath 判断，改做 callsite 级 typed ABI | withdrawn |
 | WA-014 | 2026-07-01 | 普通 `CallVirtual_*` receiver class callsite cache | callback/custom 小涨但 List/event/task/Dictionary 回退，仍远低 CE | 撤回；单纯虚表解析缓存不是主瓶颈，需状态机/容器/委托各自共享 ABI 层 | withdrawn |
+| WA-015 | 2026-07-01 | delegate 同步调用 whole-method fastpath | 所有关键 business 基本回退，custom/event/callback 尤其明显 | 撤回；delegate 优化必须在 transform/typed ABI 预烘焙调用形状，不在 handler 里临时判 fastpath | withdrawn |
 
 ## 保留项（不是错题，但不得扩展成通用路线）
 
@@ -87,6 +88,14 @@
 - **根因**：业务弱项主成本不在普通虚表解析本身；额外 resolveData 与入口分支带来的代码布局/首调用成本抵消局部收益。
 - **替代**：状态机 MoveNext、delegate multicast、List/Dictionary 泛型容器桥要分别在 typed ABI 或 transform 层解决；不要把普通虚调用缓存当作大一统方案。
 - **状态**：withdrawn，提交已 revert。
+
+### WA-015 — delegate 同步调用 whole-method fastpath（withdrawn）
+
+- **尝试**：在 `TryInvokeInterpDelegateSynchronously` 中，对已分类 `InterpMethodInfo` 调用 `IsSafeGenericHotc233CallFastPath` + `TryExecuteHotc233FastPath`，试图让 multicast/callback 子 delegate 绕开解释帧。
+- **实测**：过滤 business 口径，List 31.6%→25.3%、Coroutine 31.8%→30.5%、Task 38.9%→33.3%、Async 38.5%→41.7%、Custom class dispatch 60.3%→45.6%、event 82.0%→51.5%、callback 82.8%→72.0%、Dictionary 86.8%→82.8%、Struct 142.5%→132.6%。
+- **根因**：delegate handler 里的运行时 fastpath 判定增加了分支、取 IMI 与代码布局成本；真正瓶颈仍是调用形状、参数 ABI 与容器/状态机热循环，没有在 transform 阶段被预烘焙。
+- **替代**：delegate/callback/event 只做 transform 期 callsite plan：固定 invocation-list 形状、typed arg copy、直接 prepared target 表；运行时 handler 不再临时分类。
+- **状态**：withdrawn，代码已撤回。
 
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
