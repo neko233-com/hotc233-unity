@@ -156,6 +156,14 @@
 - **替代**：停止推进“单容器方法独立 opcode”作为主线。List/Dictionary 需要更高层的 pattern：方法级/循环级 container plan、状态机/业务方法 whole-method bypass、typed register IR 上的容器 access lowering，并且必须同时验证 Coroutine/Async/Custom/Event 不回退。
 - **状态**：withdrawn，代码已撤回。
 
+### WA-023 — `CALL_INTERP_RET_PREPARED` 宏内通用 fastpath（withdrawn）
+
+- **尝试**：让 `CALL_INTERP_RET_PREPARED` 在进入新解释帧前，使用已取得的 `preparedImi` 调用 `IsSafeGenericHotc233CallFastPath` + `TryExecuteHotc233FastPath`，目标是覆盖虚派发、delegate cache 与其它 prepared callee 的小返回值方法。
+- **实测**：过滤 `business-realworld-custom-class-dispatch` 时，`Interpreter_Execute.cpp` 所在 IL2CPP 大翻译单元 `re83h2fuc10b.obj` 编译超过 400s 仍未完成，远慢于上一轮约 180s；已中断本轮自动化构建，没有可接受的性能报告。
+- **根因**：在大解释器宏入口增加跨全局 inline fastpath 检查，会放大 MSVC 优化器在超大 switch/宏翻译单元上的编译成本；即使运行时可能受益，构建时间风险已不符合“测试要快”和生产可维护要求。
+- **替代**：prepared callee fastpath 不能塞进通用宏。后续应在 transform 期生成窄 opcode/side-table，或把 small-i4 leaf/virtual-return lowering 放到独立冷编译单元和明确 handler 内；任何改 `Interpreter_Execute.cpp` 热宏的路线必须先做编译时长 smoke。
+- **状态**：withdrawn，代码已撤回。
+
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
 - **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
