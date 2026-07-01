@@ -157,6 +157,9 @@
 - 宿主 `Assets/EditorForBuild/Generated/` 仅作当次运行临时产物；结论必须同步到 `benchmark-docs/性能报告.md` 与 `benchmark-docs/results/`。
 - 所有菜单、MCP 工具、日志需要输出报告绝对路径或 `benchmark-docs/README.md`。
 - **性能汇报**：每次 benchmark 后必须输出 **14 条 base 全量三列对比表**（hotc / 社区 / Pro 估算），并声明 **opcode profiler 开/关**（默认关；见 `benchmark-docs/reporting-requirements.md`）。
+- **增量状态报告硬门禁**：每次宿主运行 `validate-reports`、过滤 `local-benchmark` 或完整 `local-benchmark` 后，都必须更新根工作区 `性能现状.md`，写明命令、生成时间、报告路径、失败行、blocker 数、撤回路线和下一步假设；失败结果不得只留在 `Generated/` 或聊天记录里。
+- 完整 14 base + 10 business `local-benchmark` 后，必须同时刷新本包 `benchmark-docs/性能报告.md`、`benchmark-docs/results/latest-hotc-vs-hybridclr.json` 和对应 Markdown 摘要；过滤定位只更新增量状态，不得替代完整权威报告。
+- release/tag 前若 `性能现状.md` 不是最近一次验证结果，视为性能门禁未完成。
 
 ## 性能对标规范（2026-06-27 起）
 

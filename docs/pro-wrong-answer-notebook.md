@@ -180,6 +180,14 @@
 - **替代**：小整数业务 helper 需要真正的 baked side-table 参数计划，明确记录参数槽与常量槽，不能在 runtime 里临时猜 IR local slot。先保留 business opcode profile 诊断，再做 transform-time plan。
 - **状态**：withdrawn，代码已撤回。
 
+### WA-026 — 参数 buffer 版 static affine helper（withdrawn）
+
+- **尝试**：在 `TryExecuteHotc233CallFastPath` 阶段仅从调用参数 buffer 读取一个 `int32` 参数，识别 `arg * const + const` 与四路 `arg + const` 聚合，避免再次进入解释帧，目标覆盖 `async-await-loop` 与 `task-whenall` 的静态同步 helper。
+- **实测**：过滤 `async-await-loop,task-whenall`，Async 38.5%→31.25%，Task 38.9%→35.0%，仍显著低于 CE 且回退；报告生成时间 `2026-07-01T09:06:09.315531Z`。
+- **根因**：单个静态 helper 的直接计算不是 async/task 业务弱项主成本；状态机调度、awaiter/Task 聚合、解释帧切换和短循环 warmup 仍占主导。把窄 affine 逻辑塞进通用 call fastpath 还会增加热分支与代码布局风险。
+- **替代**：async/task 必须走状态机级通用机制：MoveNext typed lowering、awaiter/Task 聚合 callsite plan、delegate continuation cache 和可验证的 side-table；不要再为单个同步 helper 写 call fastpath 特判。
+- **状态**：withdrawn，代码已撤回。
+
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
 - **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
