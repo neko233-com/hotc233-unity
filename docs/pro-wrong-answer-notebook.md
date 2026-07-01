@@ -148,6 +148,14 @@
 - **替代**：禁止继续在 CallCommon handler 里堆容器分支。容器优化必须 transform 期生成独立 fused opcode/side-table，或 whole-method/container-loop bypass；fallback 只能在独立冷路径里处理。
 - **状态**：withdrawn，代码已撤回。
 
+### WA-022 — List<int> 独立单调用 fused opcode（withdrawn）
+
+- **尝试**：在 transform 阶段识别 `List<int>.Clear/get_Count/Add/get_Item`，生成独立 `ListInt32Call` opcode，在单 dispatch 内烘焙 `_items/_size/_version` offset，并仅在扩容/越界时 fallback 到原 AOT method pointer。
+- **实测**：过滤 `business-realworld-list-pool-rent-return`，List 31.6%→30.88%，构建成功但仍低于 CE 且略低于稳定基线。
+- **根因**：单个容器方法的 fused opcode 没有覆盖业务 List pool 的整体模式；短循环主要成本还包含解释帧、循环控制、池化调用链、泛型容器多调用组合与首轮 warmup。仅把 `List<int>` 单调用换成 direct opcode，收益不足以抵消新增 opcode/codegen 布局成本。
+- **替代**：停止推进“单容器方法独立 opcode”作为主线。List/Dictionary 需要更高层的 pattern：方法级/循环级 container plan、状态机/业务方法 whole-method bypass、typed register IR 上的容器 access lowering，并且必须同时验证 Coroutine/Async/Custom/Event 不回退。
+- **状态**：withdrawn，代码已撤回。
+
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
 - **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
