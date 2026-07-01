@@ -33,9 +33,15 @@ hybridclr-binop-add / hybridclr-binop-complex: 500%
 
 公开图里的 500% 只覆盖对应算术操作，不扩展到所有 benchmark。低于自身 floor 的 base 行进入下一轮生产级优化清单；低于 100% 则说明连 CE 基础线都没有超过，必须优先排查架构方向。
 
+业务发布门禁：
+
+- `business-realworld-*` 默认 floor 为 `100%` CE，用于 release/tag 前硬验收。
+- `HOTC233_ENFORCE_BUSINESS_FLOOR=<percent>` 可显式提高业务 floor，例如 300。
+- `HOTC233_OBSERVE_BUSINESS_BENCHMARK=1` 只允许诊断观察，不得用于发布插件库。
+
 报告字段要求：
 
-- `floorPercent`: 本行生效 floor；business 默认 `0`。
+- `floorPercent`: 本行生效 floor；business 发布默认 `100`，诊断观察时为 `0`。
 - `floorScope`: `typeof-public-pro-target`、`hybridclr-business-edition-arithmetic`、`general-base-production-target`、`observe-only` 等。
 - `floorSource`: 说明 floor 来自 HybridCLR 官方 Pro/Business 公开口径、hotc233 生产目标或显式环境变量。
 - `floorStatus`: `passed`、`failed` 或 `observe-only`。

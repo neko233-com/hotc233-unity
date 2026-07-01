@@ -23,9 +23,11 @@ HybridCLR 商业版相对 CE 的公开表格显示不同操作的收益不同；
 typeof: 1000%
 HybridCLR 商业版公开算术项对应行: 500%
 其它官方 base: 尽量全面 300%+
+business-realworld: 发布/tag 默认必须 >=100% CE
 ```
 
 该 floor 只用来判断 hotc233 是否进入生产级性能区间；Pro 目标列仍作为更高阶参考。不要把 500% 错扩展到所有 benchmark。
+`business-realworld-*` 是真实业务发布门禁：日常定位可显式设置 `HOTC233_OBSERVE_BUSINESS_BENCHMARK=1` 临时观察，但该模式不得用于发布插件库或打 tag。
 
 ## 唯一日常命令
 

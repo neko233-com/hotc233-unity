@@ -165,7 +165,7 @@
 - **业务代码性能对比**：`business-realworld-*` 只允许作为追加商业观察/业务门禁，必须使用 hotc233 与 HybridCLR 独立工程同名、同迭代、同平台、同 Player 报告计算百分比；禁止通过增大迭代次数制造稳定读数；缺少社区版同名行时必须判为 blocker。
 - **唯一日常验收命令**：宿主 `go run ./tools/hotc233ctl local-benchmark`；顺序探针，禁止 multitask / `-parallel-captures`。
 - **同机社区版参照**：同级子仓库 `unity-hybridclr-ce-benchmark`。CE 结果默认只产出一次后复用；缓存缺失或 `HOTC233_REFRESH_HYBRIDCLR_CE=1` 才刷新。
-- **Pro 终态**；**分层 floor：typeof 1000%、公开算术项 500%、其它 base 300%**。低于 100% 是 CE 基线 blocker。
+- **Pro 终态**；**分层 floor：typeof 1000%、公开算术项 500%、其它 base 300%**。低于 100% 是 CE 基线 blocker；`business-realworld-*` 发布/tag 默认也必须逐行 `>=100% CE`，诊断 observe-only 不得发布。
 - 每行必须输出 `floorPercent`、`floorScope`、`floorSource`、`floorStatus`；`HOTC233_COMMUNITY_NEAR_PERCENT` 只作诊断覆盖，报告必须标注 override。
 - **废弃**：`flywheel` 作性能验收、`docs/flywheel-automation.md`、`docs/webgl-performance.md`、`docs/performance-peak-plan.md` 作性能依据。
 - 修改 loader、解释器、benchmark 形状或报告字段时，同步更新 `benchmark-docs/` 与两份 `AGENTS.md`。

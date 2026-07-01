@@ -14,7 +14,7 @@
 | 兼容性 | `validate-reports` + Unity 真实热更兼容套件 | 每个调用形状至少 5 次；包含随机输入/随机顺序；0 crash、0 correctness failure、0 timeout |
 | Unity API 真实热更 | `unity-realworld-benchmark` | `hotupdate-unity-*` 全量行输出；报告不得少行；raw API 形状失败时必须修 runtime/native 路径或显式列入不准发布项 |
 | 官方性能 | `local-benchmark` | 14 条官方 base 全表；hotc233、HybridCLR CE、Pro 估算列不得省略；base 固定 1000 次 |
-| 业务性能 | `local-benchmark` 默认业务表 | 业务热更场景全表；不得只汇报快的子集 |
+| 业务性能 | `local-benchmark` 默认业务表 | 业务热更场景全表；发布/tag 前每行必须 `>=100%` HybridCLR CE；不得只汇报快的子集 |
 
 兼容性套件的随机规则：同一 API 形状至少跑 5 次，输入需覆盖边界值与普通值，例如 `iterations`、bool toggles、Vector3/Quaternion、string tag/name、layer、组件启用状态。随机用于防止只针对固定测试写专用 bypass；随机失败视为 correctness failure。
 
@@ -47,11 +47,11 @@
 4. **L1 / L2 结论**：是否全面超越社区版；距 Pro 目标差距最大的 3 行。
 5. **报告路径**：`Generated/performance-local-hotc-vs-hybridclr-base.md`（临时）；**自动生成** [`benchmark-docs/性能报告.md`](性能报告.md)（含 base + business 双表 + 自动摘要）；机器可读 [`benchmark-docs/results/latest-hotc-vs-hybridclr.json`](results/latest-hotc-vs-hybridclr.json)。
 
-## 业务场景表（追加，非 L1 硬门禁）
+## 业务场景表（追加，发布硬门禁）
 
 | 前缀 | 来源 | L1 | 拉伸门禁 |
 |---|---|---|---|
-| `business-realworld-*` | `Assets/CodeHotUpdate/Feature/RealWorldBusinessPerformanceProbe.cs`（HybridCLR 同形状在 `hybridclr-benchmark-demo`） | 不参与 | 可选 `HOTC233_ENFORCE_BUSINESS_FLOOR=500`（默认 500%） |
+| `business-realworld-*` | `Assets/CodeHotUpdate/Feature/RealWorldBusinessPerformanceProbe.cs`（HybridCLR 同形状在 `unity-hybridclr-ce-benchmark`） | 不参与官方 base floor | 默认 `>=100% CE`；可用 `HOTC233_ENFORCE_BUSINESS_FLOOR=<percent>` 提高；`HOTC233_OBSERVE_BUSINESS_BENCHMARK=1` 仅诊断 |
 
 Player 参数：`-hotc233-performance-suite`（`local-benchmark` 默认开启；`HOTC233_INCLUDE_BUSINESS_BENCHMARK=0` 仅跑官方 14 条）。
 
@@ -59,6 +59,7 @@ Player 参数：`-hotc233-performance-suite`（`local-benchmark` 默认开启；
 
 - hotc233 与 HybridCLR 社区版必须使用同名 `business-realworld-*` 行、同迭代数、同平台、同 Player 口径计算 `hotc / HybridCLR`；不得通过增大任一侧迭代次数来换取稳定读数。
 - 默认商业版报告必须包含 10 条业务行及对应 10 条社区版同名行；缺行、`hotc-only`、`not-required-for-business` 都是 blocker，不能作为生产结论。
+- 发布插件库/tag 前，所有业务行必须 `floorStatus=passed`；诊断 observe-only 报告只能用于定位，不得作为 release 证据。
 - `headless` 只能验证已生成报告的结构与门禁，不得替代真实 Player 对比；业务性能百分比只能来自 `local-benchmark` 或明确标注的平台专项 Player 报告。
 
 架构说明可选写入 [`benchmark-docs/performance-architecture-notes.md`](performance-architecture-notes.md)，会并入 `性能报告.md` 的「架构要点」节。

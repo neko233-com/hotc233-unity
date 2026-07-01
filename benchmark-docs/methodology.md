@@ -47,7 +47,8 @@ Remove-Item Env:\HOTC233_REFRESH_HYBRIDCLR_CE -ErrorAction SilentlyContinue
 
 - 生产 floor 分层：`typeof=1000%`，HybridCLR 商业版公开算术项对应行 `500%`，其它官方 base 默认 `300%`。
 - 任一 base 行低于自身分层 floor 即未达到当前生产性能目标。
+- 任一 business 行低于 `100%` CE 即不得发布/tag；只能通过 `HOTC233_OBSERVE_BUSINESS_BENCHMARK=1` 做诊断观察报告。
 - JSON 每行必须输出 `floorPercent`、`floorScope`、`floorSource`、`floorStatus`；Markdown 表格必须展示 floor 与 status。
 - `HOTC233_COMMUNITY_NEAR_PERCENT` 只允许作为诊断覆盖，报告必须显式标注 override，不代表默认生产 floor。
-- business 行只作为实际业务风险观察；当启用 business floor 时必须同名、同次数、同平台比较。
+- business 行必须同名、同次数、同平台比较；缺 CE 同名行、低于 CE、或诊断 observe-only 模式都不能作为发布结论。
 - WebGL/小游戏专项不替代本机日常 floor。
