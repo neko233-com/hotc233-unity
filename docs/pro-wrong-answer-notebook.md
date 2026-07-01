@@ -132,6 +132,14 @@
 - **替代**：容器必须走 transform-time typed container IR：直接烘焙 `List<T>`/`Dictionary<TKey,TValue>` 字段 offset、元素 ABI、fallback callsite，并把 `get_Count/Clear/get_Item/Add/TryGetValue` 做成通用容器 IR 或 typed helper；旧 M2N 容器 fast path 只保正确性 fallback。
 - **状态**：withdrawn，代码已撤回；禁止继续把 `CallCommon` 改路到 M2N invoker 当作生产级优化。
 
+### WA-020 — List get_Count/get_Item 普通 IR 展开（withdrawn）
+
+- **尝试**：把 `List<T>.get_Count` 展开为 `_size` 字段读取，把 `List<T>.get_Item(int)` 展开为 `_items` 字段读取 + array element IR，复用现有 `Ldfld*` / `GetArrayElement*` opcode，不新增容器专用 opcode。
+- **实测**：过滤 `business-realworld-list-pool-rent-return`，List 31.6%→29.3%，仍低于 CE 且低于现有基线；构建成功但性能回退。
+- **根因**：普通 IR 展开把一次方法调用换成多个 interpreter dispatch；虽然消除了 M2N/CallCommon 边界，但没有融合 `_items/_size/range/element copy`，短循环里 dispatch 数增加抵消并超过收益。
+- **替代**：List/Dictionary 必须做 fused direct container opcode/helper：单 dispatch 内完成字段读、范围检查、元素 copy/写入，并携带 fallback callsite；不要把容器方法拆成更多普通 IR。
+- **状态**：withdrawn，代码已撤回。
+
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
 - **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
