@@ -302,26 +302,6 @@ namespace hotc233
 			delegate->invoke_impl = InitAndGetInterpreterDelegateInvokeMethodPointer(delegate);
 			delegate->invoke_impl_this = (Il2CppObject*)delegate;
 		}
-		if (method && method->name && std::strstr(method->name, "VerifyJoin"))
-		{
-			std::printf("[hotc233][ConstructDelegateJoinProbe] del=%p klass=%s.%s target=%p method=%s.%s::%s methodPtr=%p invokeImpl=%p invokeThis=%p methodPointer=%p callByInterp=%p invoker=%p retType=%d pcount=%d\n",
-				(void*)delegate,
-				delegate->object.klass && delegate->object.klass->namespaze ? delegate->object.klass->namespaze : "",
-				delegate->object.klass && delegate->object.klass->name ? delegate->object.klass->name : "",
-				(void*)target,
-				method->klass && method->klass->namespaze ? method->klass->namespaze : "",
-				method->klass && method->klass->name ? method->klass->name : "",
-				method->name,
-				(void*)delegate->method_ptr,
-				(void*)delegate->invoke_impl,
-				(void*)delegate->invoke_impl_this,
-				(void*)method->methodPointer,
-				(void*)method->methodPointerCallByInterp,
-				(void*)method->invoker_method,
-				method->return_type ? (int)method->return_type->type : -1,
-				(int)method->parameters_count);
-			std::fflush(stdout);
-		}
 #if HOTC233_ENABLE_WRITE_BARRIERS
 		if (target)
 		{

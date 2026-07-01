@@ -623,43 +623,11 @@ namespace interpreter
 			return false;
 		}
 		void* actualRet = GetHiddenFullSharedDelegateReturnBuffer(invokeMethod, args, ret);
-		if (del && del->delegate.method && del->delegate.method->name && std::strstr(del->delegate.method->name, "b__14"))
-		{
-			std::printf("[hotc233][DelegateInvokeJoinProbe] entry invoke=%s.%s::%s target=%s.%s::%s del=%p arg0=%p arg1=%p ret=%p actualRet=%p retI4Before=%d\n",
-				invokeMethod && invokeMethod->klass && invokeMethod->klass->namespaze ? invokeMethod->klass->namespaze : "",
-				invokeMethod && invokeMethod->klass && invokeMethod->klass->name ? invokeMethod->klass->name : "",
-				invokeMethod && invokeMethod->name ? invokeMethod->name : "<null>",
-				del->delegate.method->klass && del->delegate.method->klass->namespaze ? del->delegate.method->klass->namespaze : "",
-				del->delegate.method->klass && del->delegate.method->klass->name ? del->delegate.method->klass->name : "",
-				del->delegate.method->name,
-				(void*)del,
-				args ? args[0].ptr : nullptr,
-				args ? args[1].ptr : nullptr,
-				ret,
-				actualRet,
-				actualRet ? *(int32_t*)actualRet : 0);
-			std::fflush(stdout);
-		}
 		if (!ret && actualRet)
 		{
 			TraceHiddenDelegateReturn("invoke-before", invokeMethod, method, args, actualRet);
 		}
 		bool handled = ExecuteNative2ManagedDelegateInvoke(del, invokeMethod, args + 1, actualRet);
-		if (del && del->delegate.method && del->delegate.method->name && std::strstr(del->delegate.method->name, "b__14"))
-		{
-			std::printf("[hotc233][DelegateInvokeJoinProbe] exit invoke=%s.%s::%s target=%s.%s::%s handled=%d actualRet=%p retI4After=%d retU64=%llu\n",
-				invokeMethod && invokeMethod->klass && invokeMethod->klass->namespaze ? invokeMethod->klass->namespaze : "",
-				invokeMethod && invokeMethod->klass && invokeMethod->klass->name ? invokeMethod->klass->name : "",
-				invokeMethod && invokeMethod->name ? invokeMethod->name : "<null>",
-				del->delegate.method->klass && del->delegate.method->klass->namespaze ? del->delegate.method->klass->namespaze : "",
-				del->delegate.method->klass && del->delegate.method->klass->name ? del->delegate.method->klass->name : "",
-				del->delegate.method->name,
-				handled ? 1 : 0,
-				actualRet,
-				actualRet ? *(int32_t*)actualRet : 0,
-				actualRet ? (unsigned long long)*(uint64_t*)actualRet : 0ULL);
-			std::fflush(stdout);
-		}
 		if (!ret && actualRet)
 		{
 			TraceHiddenDelegateReturn("invoke-after", invokeMethod, method, args, actualRet);

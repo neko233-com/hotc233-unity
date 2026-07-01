@@ -4476,9 +4476,9 @@ inline StackObject* TryPrepareClosedInstanceInterpDelegate(uint16_t invokeParamC
 	return argBasePtr;
 }
 
-IL2CPP_FORCE_INLINE bool TryExecuteCachedSingleInterpDelegateFastPath(uint64_t* cache, Il2CppMulticastDelegate* del, uint16_t invokeParamCount, StackObject* argBasePtr, void* ret)
+IL2CPP_FORCE_INLINE bool TryGetCachedSingleInterpDelegatePrepared(uint64_t* cache, Il2CppMulticastDelegate* del, uint16_t invokeParamCount, StackObject* argBasePtr, const MethodInfo** methodOut, InterpMethodInfo** imiOut, StackObject** argBaseOut)
 {
-	if (cache == nullptr || del == nullptr || argBasePtr == nullptr || del->delegate.method == nullptr)
+	if (cache == nullptr || del == nullptr || argBasePtr == nullptr || del->delegate.method == nullptr || methodOut == nullptr || imiOut == nullptr || argBaseOut == nullptr)
 	{
 		return false;
 	}
@@ -4486,32 +4486,42 @@ IL2CPP_FORCE_INLINE bool TryExecuteCachedSingleInterpDelegateFastPath(uint64_t* 
 	{
 		return false;
 	}
-	InterpMethodInfo* methodImi = (InterpMethodInfo*)cache[1];
-	if (!methodImi || methodImi->hotc233FastPathKind <= Hotc233FastPath_Unsupported)
-	{
-		return false;
-	}
+
 	const MethodInfo* method = del->delegate.method;
-	if (!hotc233::metadata::IsInterpreterImplement(method) || !hotc233::metadata::IsInterpreterMethod(method))
+	InterpMethodInfo* methodImi = (InterpMethodInfo*)cache[1];
+	if (!methodImi || !hotc233::metadata::IsInterpreterImplement(method) || !hotc233::metadata::IsInterpreterMethod(method))
 	{
 		cache[0] = 0;
 		cache[1] = 0;
 		return false;
 	}
-	Il2CppObject* target = del->delegate.target;
-	StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(invokeParamCount, method, target, argBasePtr);
+
+	StackObject* fastArgBase = TryPrepareClosedInstanceInterpDelegate(invokeParamCount, method, del->delegate.target, argBasePtr);
 	if (!fastArgBase)
 	{
+		cache[0] = 0;
+		cache[1] = 0;
 		return false;
 	}
-	if (TryExecuteHotc233FastPath(methodImi, fastArgBase, ret))
+
+	*methodOut = method;
+	*imiOut = methodImi;
+	*argBaseOut = fastArgBase;
+	return true;
+}
+
+IL2CPP_FORCE_INLINE void StoreSingleInterpDelegatePreparedCache(uint64_t* cache, Il2CppMulticastDelegate* del, uint16_t invokeParamCount, const MethodInfo* method, InterpMethodInfo* methodImi)
+{
+	if (cache == nullptr || del == nullptr || method == nullptr || methodImi == nullptr)
 	{
-		return true;
+		return;
 	}
-	argBasePtr->obj = (Il2CppObject*)del;
-	cache[0] = 0;
-	cache[1] = 0;
-	return false;
+	if ((int32_t)invokeParamCount != (int32_t)method->parameters_count || !hotc233::metadata::IsInstanceMethod(method))
+	{
+		return;
+	}
+	cache[0] = (uint64_t)del;
+	cache[1] = (uint64_t)methodImi;
 }
 
 inline bool TryInvokeInterpDelegateSynchronously(uint16_t invokeParamCount, const MethodInfo* method, Il2CppObject* target, uint16_t* argIdxs, StackObject* localVarBase, void* ret)
@@ -11269,7 +11279,6 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				case HiOpcodeEnum::CallDelegateInvoke_void:
 				HOTC233_EXEC_CallDelegateInvoke_void:
 				{
-					static int s_delegateVoidProbeCount = 0;
 					uint32_t __managed2NativeStaticMethod = *(uint32_t*)(ip + 4);
 					uint32_t __managed2NativeInstanceMethod = *(uint32_t*)(ip + 8);
 					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
@@ -11285,7 +11294,6 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					const bool _probeDelegateVoid = false;
 					if (_probeDelegateVoid)
 					{
-						s_delegateVoidProbeCount++;
 						std::printf("[hotc233][DelegateVoidProbe] enter imi=%p invokeParamCount=%u del=%p list=%p ip=%p size=%u\n",
 							(void*)imi,
 							(unsigned)__invokeParamCount,
@@ -11296,9 +11304,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					}
 					if (_del->delegates == nullptr)
 					{
-						if (false && TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						const MethodInfo* _cachedMethod = nullptr;
+						InterpMethodInfo* _cachedMethodImi = nullptr;
+						StackObject* _cachedArgBase = nullptr;
+						if (TryGetCachedSingleInterpDelegatePrepared(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, &_cachedMethod, &_cachedMethodImi, &_cachedArgBase))
 						{
-							ip += 20;
+							CALL_INTERP_RET_PREPARED((ip + 20), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
@@ -11327,6 +11338,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								}
 								if (methodImi)
 								{
+									StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
 									CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, fastArgBase, _ret);
 									continue;
 								}
@@ -11373,6 +11385,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							}
 							if (methodImi)
 							{
+								StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
 								CALL_INTERP_RET_PREPARED((ip + 20), method, methodImi, _argBasePtr, _ret);
 								continue;
 							}
@@ -11442,7 +11455,6 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				}
 				case HiOpcodeEnum::CallDelegateInvoke_ret:
 				{
-					static int s_delegateRetProbeCount = 0;
 					uint32_t __managed2NativeStaticMethod = *(uint32_t*)(ip + 8);
 					uint32_t __managed2NativeInstanceMethod = *(uint32_t*)(ip + 12);
 					uint32_t __argIdxs = *(uint32_t*)(ip + 16);
@@ -11462,7 +11474,6 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					const bool _probeDelegateRet = false;
 					if (_probeDelegateRet)
 					{
-						s_delegateRetProbeCount++;
 						std::printf("[hotc233][DelegateRetProbe] enter imi=%p offset=%lld invokeParamCount=%u ret=%u retSize=%u del=%p list=%p size=24\n",
 							(void*)imi,
 							(long long)(ip - ipBase),
@@ -11475,9 +11486,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					}
 					if (_del->delegates == nullptr)
 					{
-						if (false && TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						const MethodInfo* _cachedMethod = nullptr;
+						InterpMethodInfo* _cachedMethodImi = nullptr;
+						StackObject* _cachedArgBase = nullptr;
+						if (TryGetCachedSingleInterpDelegatePrepared(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, &_cachedMethod, &_cachedMethodImi, &_cachedArgBase))
 						{
-							ip += 24;
+							CALL_INTERP_RET_PREPARED((ip + 24), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
@@ -11514,6 +11528,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 											(unsigned)_resolvedArgIdxs[0]);
 										std::fflush(stdout);
 									}
+									StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
 									CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
 									continue;
 								}
@@ -11566,6 +11581,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 										method && method->name ? method->name : "<null>");
 									std::fflush(stdout);
 								}
+								StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
 								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
 								continue;
 							}
@@ -11633,9 +11649,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint64_t* _interpDelegateCache = &imi->resolveDatas[__interpDelegateCache];
 					if (_del->delegates == nullptr)
 					{
-						if (false && TryExecuteCachedSingleInterpDelegateFastPath(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, _ret))
+						const MethodInfo* _cachedMethod = nullptr;
+						InterpMethodInfo* _cachedMethodImi = nullptr;
+						StackObject* _cachedArgBase = nullptr;
+						if (TryGetCachedSingleInterpDelegatePrepared(_interpDelegateCache, _del, __invokeParamCount, _argBasePtr, &_cachedMethod, &_cachedMethodImi, &_cachedArgBase))
 						{
-							ip += 24;
+							CALL_INTERP_RET_PREPARED((ip + 24), _cachedMethod, _cachedMethodImi, _cachedArgBase, _ret);
 							continue;
 						}
 						const MethodInfo* method = _del->delegate.method;
@@ -11654,6 +11673,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								}
 								if (methodImi)
 								{
+									StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
 									CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, fastArgBase, _ret);
 									continue;
 								}
@@ -11700,6 +11720,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							}
 							if (methodImi)
 							{
+								StoreSingleInterpDelegatePreparedCache(_interpDelegateCache, _del, __invokeParamCount, method, methodImi);
 								CALL_INTERP_RET_PREPARED((ip + 24), method, methodImi, _argBasePtr, _ret);
 								continue;
 							}
