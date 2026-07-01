@@ -712,12 +712,6 @@ namespace interpreter
 		{
 			il2cpp_array_setref(array, index, value);
 		}
-		std::printf("[hotc233][ArrayValueProbe] direct Array.SetValue array=%p index=%d raw=%lld value=%p\n",
-			(void*)array,
-			index,
-			(long long)rawIndex,
-			(void*)value);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -744,12 +738,6 @@ namespace interpreter
 		}
 		Il2CppObject* value = il2cpp_array_get(array, Il2CppObject*, index);
 		((StackObject*)ret)->obj = value;
-		std::printf("[hotc233][ArrayValueProbe] direct Array.GetValue array=%p index=%d raw=%lld value=%p\n",
-			(void*)array,
-			index,
-			(long long)rawIndex,
-			(void*)value);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -841,12 +829,6 @@ namespace interpreter
 			{
 				std::memcpy(entry + hotc233::metadata::GetFieldOffset(valueField), localVarBase + argIdxs[2], il2cpp::vm::Class::GetValueSize(valueKlass, nullptr));
 				++(*versionSlot);
-				std::printf("[hotc233][DictionaryAdapter] replace %s.%s key=%p index=%d\n",
-					method->klass->namespaze ? method->klass->namespaze : "",
-					method->klass->name ? method->klass->name : "",
-					(void*)key,
-					entryIndex);
-				std::fflush(stdout);
 				return true;
 			}
 			entryIndex = *(int32_t*)(entry + hotc233::metadata::GetFieldOffset(nextField));
@@ -866,13 +848,6 @@ namespace interpreter
 		*bucket = newIndex + 1;
 		*countSlot = newIndex + 1;
 		++(*versionSlot);
-		std::printf("[hotc233][DictionaryAdapter] add %s.%s key=%p index=%d hash=%d\n",
-			method->klass->namespaze ? method->klass->namespaze : "",
-			method->klass->name ? method->klass->name : "",
-			(void*)key,
-			newIndex,
-			hashCode);
-		std::fflush(stdout);
 		return true;
 	}
 
@@ -935,12 +910,6 @@ namespace interpreter
 			if (entryHash == hashCode && StringEquals(entryKey, key))
 			{
 				std::memcpy(ret, entry + hotc233::metadata::GetFieldOffset(valueField), il2cpp::vm::Class::GetValueSize(valueKlass, nullptr));
-				std::printf("[hotc233][DictionaryAdapter] get %s.%s key=%p index=%d\n",
-					method->klass->namespaze ? method->klass->namespaze : "",
-					method->klass->name ? method->klass->name : "",
-					(void*)key,
-					entryIndex);
-				std::fflush(stdout);
 				return true;
 			}
 			entryIndex = *(int32_t*)(entry + hotc233::metadata::GetFieldOffset(nextField));
@@ -10340,18 +10309,6 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 								_hotc233TupleTarget[0].ptr, (unsigned long long)_hotc233TupleTarget[0].u64,
 								_hotc233TupleTarget[1].ptr, (unsigned long long)_hotc233TupleTarget[1].u64);
 						}
-						std::fflush(stdout);
-					}
-					if (_resolvedMethod && _resolvedMethod->name && !std::strcmp(_resolvedMethod->name, "set_Item") && _resolvedMethod->klass && _resolvedMethod->klass->name && std::strstr(_resolvedMethod->klass->name, "Dictionary"))
-					{
-						std::printf("[hotc233][CallNativeProbe] instance void %s.%s::%s m2n=%p declared=%p actual=%p arg0=%p\n",
-							_resolvedMethod->klass->namespaze ? _resolvedMethod->klass->namespaze : "",
-							_resolvedMethod->klass->name ? _resolvedMethod->klass->name : "",
-							_resolvedMethod->name,
-							(void*)imi->resolveDatas[__managed2NativeMethod],
-							(void*)_declaredMethod,
-							(void*)_resolvedMethod,
-							(void*)(localVarBase + _resolvedArgIdxs[0])->obj);
 						std::fflush(stdout);
 					}
 					Managed2NativeCallMethod _resolvedM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];

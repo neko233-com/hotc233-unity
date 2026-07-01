@@ -1574,16 +1574,32 @@ namespace interpreter
 		}
 		Il2CppObject* dict = localVarBase[argVarIndexs[0]].obj;
 		void* valueOut = (localVarBase + argVarIndexs[2])->ptr;
-		FieldInfo* entriesField = FindM2NFieldAny(method->klass, "_entries", "entries");
-		if (!dict || !valueOut || !entriesField)
+		if (!dict || !valueOut)
 		{
 			return false;
 		}
-		Il2CppArray* entriesForCache = *(Il2CppArray**)((uint8_t*)dict + il2cpp::vm::Field::GetOffset(entriesField));
 		DictionaryIntTryGetValueOffsets offsets;
-		if (!TryBuildDictionaryIntTryGetValueOffsets(method, entriesForCache, offsets))
+		auto cached = s_dictionaryIntTryGetValueOffsets.find(method->klass);
+		if (cached != s_dictionaryIntTryGetValueOffsets.end())
 		{
-			return false;
+			offsets = cached->second;
+			if (!offsets.valid)
+			{
+				return false;
+			}
+		}
+		else
+		{
+			FieldInfo* entriesField = FindM2NFieldAny(method->klass, "_entries", "entries");
+			if (!entriesField)
+			{
+				return false;
+			}
+			Il2CppArray* entriesForCache = *(Il2CppArray**)((uint8_t*)dict + il2cpp::vm::Field::GetOffset(entriesField));
+			if (!TryBuildDictionaryIntTryGetValueOffsets(method, entriesForCache, offsets))
+			{
+				return false;
+			}
 		}
 		uint8_t* dictBase = (uint8_t*)dict;
 		Il2CppArray* buckets = *(Il2CppArray**)(dictBase + offsets.bucketsOffset);
@@ -1667,15 +1683,18 @@ namespace interpreter
 		return false;
 	}
 
-	struct ListIntFieldOffsets
+	struct ListFieldOffsets
 	{
 		size_t itemsOffset;
 		size_t sizeOffset;
 		size_t versionOffset;
+		bool elementIsValueType;
+		bool elementHasReferences;
+		bool elementIsInt32;
 		bool valid;
 	};
 
-	static std::unordered_map<Il2CppClass*, ListIntFieldOffsets> s_listIntFieldOffsets;
+	static std::unordered_map<Il2CppClass*, ListFieldOffsets> s_listFieldOffsets;
 
 	static const Il2CppType* GetFirstClassGenericArg(const MethodInfo* method)
 	{
@@ -1690,32 +1709,38 @@ namespace interpreter
 		return method->klass->generic_class->context.class_inst->type_argv[0];
 	}
 
-	static bool IsListIntMethod(const MethodInfo* method)
+	static bool IsListMethod(const MethodInfo* method)
 	{
-		const Il2CppType* elementType = GetFirstClassGenericArg(method);
 		return method
 			&& method->klass
 			&& method->klass->name
 			&& std::strcmp(method->klass->name, "List`1") == 0
-			&& elementType
-			&& elementType->type == IL2CPP_TYPE_I4;
+			&& GetFirstClassGenericArg(method) != nullptr;
 	}
 
-	static bool TryGetListIntFieldOffsets(Il2CppClass* klass, ListIntFieldOffsets& offsets)
+	static bool TryGetListFieldOffsets(const MethodInfo* method, ListFieldOffsets& offsets)
 	{
-		auto cached = s_listIntFieldOffsets.find(klass);
-		if (cached != s_listIntFieldOffsets.end())
+		auto cached = s_listFieldOffsets.find(method->klass);
+		if (cached != s_listFieldOffsets.end())
 		{
 			offsets = cached->second;
 			return offsets.valid;
 		}
-		ListIntFieldOffsets next = { 0, 0, 0, false };
+		ListFieldOffsets next = { 0, 0, 0, false, false, false, false };
+		const Il2CppType* elementType = GetFirstClassGenericArg(method);
+		Il2CppClass* elementKlass = elementType ? il2cpp::vm::Class::FromIl2CppType(elementType) : nullptr;
+		if (!elementKlass)
+		{
+			s_listFieldOffsets.insert({ method->klass, next });
+			offsets = next;
+			return false;
+		}
 		bool hasItems = false;
 		bool hasSize = false;
 		bool hasVersion = false;
 		void* iter = nullptr;
 		FieldInfo* field = nullptr;
-		while ((field = il2cpp::vm::Class::GetFields(klass, &iter)) != nullptr)
+		while ((field = il2cpp::vm::Class::GetFields(method->klass, &iter)) != nullptr)
 		{
 			const char* name = il2cpp::vm::Field::GetName(field);
 			if (!name)
@@ -1738,15 +1763,18 @@ namespace interpreter
 				hasVersion = true;
 			}
 		}
+		next.elementIsValueType = IS_CLASS_VALUE_TYPE(elementKlass);
+		next.elementHasReferences = elementKlass->has_references;
+		next.elementIsInt32 = elementType->type == IL2CPP_TYPE_I4;
 		next.valid = hasItems && hasSize && hasVersion;
-		s_listIntFieldOffsets.insert({ klass, next });
+		s_listFieldOffsets.insert({ method->klass, next });
 		offsets = next;
 		return next.valid;
 	}
 
-	static bool TryManaged2NativeCallListIntFastPath(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
+	static bool TryManaged2NativeCallListFastPath(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
-		if (!IsListIntMethod(method) || !method->name || !argVarIndexs || !localVarBase)
+		if (!IsListMethod(method) || !method->name || !argVarIndexs || !localVarBase)
 		{
 			return false;
 		}
@@ -1755,8 +1783,8 @@ namespace interpreter
 		{
 			return false;
 		}
-		ListIntFieldOffsets offsets;
-		if (!TryGetListIntFieldOffsets(method->klass, offsets))
+		ListFieldOffsets offsets;
+		if (!TryGetListFieldOffsets(method, offsets))
 		{
 			return false;
 		}
@@ -1776,6 +1804,19 @@ namespace interpreter
 		}
 		if (std::strcmp(methodName, "Clear") == 0 && method->parameters_count == 0)
 		{
+			int32_t size = *sizePtr;
+			if (items && size > 0 && (!offsets.elementIsValueType || offsets.elementHasReferences))
+			{
+				uint32_t length = il2cpp::vm::Array::GetLength(items);
+				uint32_t elementSize = items->klass->element_size;
+				if ((uint32_t)size > length || elementSize == 0)
+				{
+					return false;
+				}
+				uint8_t* elementData = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(items);
+				std::memset(elementData, 0, (size_t)elementSize * (size_t)size);
+				il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)elementData, (size_t)elementSize * (size_t)size);
+			}
 			*sizePtr = 0;
 			++(*versionPtr);
 			return true;
@@ -1787,13 +1828,33 @@ namespace interpreter
 				return false;
 			}
 			uint32_t length = il2cpp::vm::Array::GetLength(items);
+			uint32_t elementSize = items->klass->element_size;
 			int32_t size = *sizePtr;
-			if (size < 0 || (uint32_t)size >= length)
+			if (size < 0 || (uint32_t)size >= length || elementSize == 0)
 			{
 				return false;
 			}
-			int32_t* elements = (int32_t*)il2cpp::vm::Array::GetFirstElementAddress(items);
-			elements[size] = localVarBase[argVarIndexs[1]].i32;
+			uint8_t* element = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(items) + (size_t)elementSize * (size_t)size;
+			if (offsets.elementIsValueType)
+			{
+				if (offsets.elementIsInt32)
+				{
+					*(int32_t*)element = localVarBase[argVarIndexs[1]].i32;
+				}
+				else
+				{
+					std::memcpy(element, localVarBase + argVarIndexs[1], (size_t)elementSize);
+					if (offsets.elementHasReferences)
+					{
+						il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element, (size_t)elementSize);
+					}
+				}
+			}
+			else
+			{
+				*(Il2CppObject**)element = localVarBase[argVarIndexs[1]].obj;
+				il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)element);
+			}
 			*sizePtr = size + 1;
 			++(*versionPtr);
 			return true;
@@ -1810,11 +1871,30 @@ namespace interpreter
 			{
 				return false;
 			}
-			int32_t* elements = (int32_t*)il2cpp::vm::Array::GetFirstElementAddress(items);
+			uint32_t elementSize = items->klass->element_size;
+			if (elementSize == 0)
+			{
+				return false;
+			}
+			uint8_t* element = (uint8_t*)il2cpp::vm::Array::GetFirstElementAddress(items) + (size_t)elementSize * (size_t)index;
 			if (ret)
 			{
 				std::memset(ret, 0, sizeof(StackObject));
-				*(int32_t*)ret = elements[index];
+				if (offsets.elementIsValueType)
+				{
+					if (offsets.elementIsInt32)
+					{
+						*(int32_t*)ret = *(int32_t*)element;
+					}
+					else
+					{
+						std::memcpy(ret, element, (size_t)elementSize);
+					}
+				}
+				else
+				{
+					((StackObject*)ret)->obj = *(Il2CppObject**)element;
+				}
 			}
 			return true;
 		}
@@ -1974,7 +2054,7 @@ namespace interpreter
 
 	static void Managed2NativeCallAotContainerInvoker(const MethodInfo* method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret)
 	{
-		if (TryManaged2NativeCallListIntFastPath(method, argVarIndexs, localVarBase, ret))
+		if (TryManaged2NativeCallListFastPath(method, argVarIndexs, localVarBase, ret))
 		{
 			return;
 		}
