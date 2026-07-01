@@ -140,6 +140,14 @@
 - **替代**：List/Dictionary 必须做 fused direct container opcode/helper：单 dispatch 内完成字段读、范围检查、元素 copy/写入，并携带 fallback callsite；不要把容器方法拆成更多普通 IR。
 - **状态**：withdrawn，代码已撤回。
 
+### WA-021 — CallCommon handler 内 fused List<int> fastpath（withdrawn）
+
+- **尝试**：在现有 `CallCommonNativeInstance_v_0/i4_0/v_i4_1/i4_i4_1` handler 内添加 `List<int>.Clear/get_Count/Add/get_Item` fused fastpath，按 `Il2CppClass*` 缓存 `_items/_size/_version` 字段，未命中或扩容/越界时 fallback 到原 AOT 调用。
+- **实测**：过滤 `business-realworld-list-pool-rent-return`，List 31.6%→23.45%，构建成功但明显回退。
+- **根因**：把分支、字符串方法判定、unordered_map plan cache 塞进巨型 `Interpreter_Execute` 热 handler，会拖累 CallCommon 代码布局与短循环首调用；即使单次容器操作更直接，整体 dispatch/codegen 成本仍更高。
+- **替代**：禁止继续在 CallCommon handler 里堆容器分支。容器优化必须 transform 期生成独立 fused opcode/side-table，或 whole-method/container-loop bypass；fallback 只能在独立冷路径里处理。
+- **状态**：withdrawn，代码已撤回。
+
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
 - **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
