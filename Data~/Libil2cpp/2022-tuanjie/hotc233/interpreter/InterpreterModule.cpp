@@ -2316,30 +2316,6 @@ namespace interpreter
 	{
 		InterpMethodInfo* imi = method->interpData ? (InterpMethodInfo*)method->interpData : InterpreterModule::GetInterpMethodInfo(method);
 		bool isInstanceMethod = metadata::IsInstanceMethod(method);
-		bool traceLinqLambda = method
-			&& method->klass
-			&& method->name
-			&& (std::strstr(method->name, "VerifyJoin")
-				|| std::strstr(method->name, "b__14"));
-		if (traceLinqLambda)
-		{
-			std::printf("[hotc233][InterpreterInvokeJoinProbe] enter %s.%s::%s method=%p methodPtr=%p this=%p args=%p arg0=%p arg1=%p ret=%p retBefore=%llu returnType=%d pcount=%d instance=%d\n",
-				method->klass->namespaze ? method->klass->namespaze : "",
-				method->klass->name ? method->klass->name : "",
-				method->name,
-				(void*)method,
-				(void*)methodPointer,
-				__this,
-				__args,
-				__args && method->parameters_count > 0 ? __args[0] : nullptr,
-				__args && method->parameters_count > 1 ? __args[1] : nullptr,
-				__ret,
-				__ret ? (unsigned long long)*(uint64_t*)__ret : 0ULL,
-				method->return_type ? (int)method->return_type->type : -1,
-				(int)method->parameters_count,
-				isInstanceMethod ? 1 : 0);
-			std::fflush(stdout);
-		}
 		StackObject* args = (StackObject*)alloca(sizeof(StackObject) * imi->argStackObjectSize);
 		if (isInstanceMethod)
 		{
@@ -2354,19 +2330,6 @@ namespace interpreter
 		ConvertInvokeArgs(args + isInstanceMethod, method, argDescs, __args);
 		ClearNativeReturnStorage(method, __ret, false);
 		Interpreter::Execute(method, args, __ret);
-		if (traceLinqLambda)
-		{
-			std::printf("[hotc233][InterpreterInvokeJoinProbe] exit %s.%s::%s ret=%p retAfter=%llu retI4=%d arg0StackPtr=%p arg0StackU64=%llu\n",
-				method->klass->namespaze ? method->klass->namespaze : "",
-				method->klass->name ? method->klass->name : "",
-				method->name,
-				__ret,
-				__ret ? (unsigned long long)*(uint64_t*)__ret : 0ULL,
-				__ret ? *(int32_t*)__ret : 0,
-				(void*)args[isInstanceMethod ? 1 : 0].ptr,
-				(unsigned long long)args[isInstanceMethod ? 1 : 0].u64);
-			std::fflush(stdout);
-		}
 	}
 
 	static void InterpreterDelegateInvoke(Il2CppMethodPointer methodPointer, const MethodInfo* method, void* __this, void** __args, void* __ret)
@@ -2381,19 +2344,6 @@ namespace interpreter
 		if (!actualRet && invokeMethod && !metadata::IsReturnVoidMethod(invokeMethod))
 		{
 			actualRet = __args[invokeMethod->parameters_count];
-			static int32_t s_invokerHiddenRetTraceCount = 0;
-			if (actualRet && s_invokerHiddenRetTraceCount < 64)
-			{
-				++s_invokerHiddenRetTraceCount;
-				std::printf("[hotc233][InvokerHiddenRetProbe] invoke=%s.%s::%s params=%u ret=%p retU64=%llu\n",
-					invokeMethod->klass ? invokeMethod->klass->namespaze : "<null>",
-					invokeMethod->klass ? invokeMethod->klass->name : "<null>",
-					invokeMethod->name,
-					invokeMethod->parameters_count,
-					actualRet,
-					(unsigned long long)*(uint64_t*)actualRet);
-				std::fflush(stdout);
-			}
 		}
 		Il2CppDelegate** firstSubDel;
 		int32_t subDelCount;
