@@ -188,6 +188,14 @@
 - **替代**：async/task 必须走状态机级通用机制：MoveNext typed lowering、awaiter/Task 聚合 callsite plan、delegate continuation cache 和可验证的 side-table；不要再为单个同步 helper 写 call fastpath 特判。
 - **状态**：withdrawn，代码已撤回。
 
+### WA-027 — 虚派发实例 `int -> int` affine 小叶子 fastpath（withdrawn）
+
+- **尝试**：把 `arg * const (+/-/^ const)` 返回 `int` 的实例小叶子方法分类为通用 fastpath，并只在 `CallInterpVirtual_ret` 中直接执行，目标覆盖自定义 class 虚派发的 `Tick(int)` 形状，不打开 static async/task 路径。
+- **实测**：单行过滤 `custom-class-dispatch` 从完整基线 60.3% 提到 68.9%，但仍低于 CE；宽过滤 `custom-class-dispatch,async-await-loop,task-whenall,coroutine-stepper,list-pool-rent-return,dictionary-config-lookup,event-multicast,callback-chain` 结果为 0/8 通过，Coroutine 15.1%、Event 19.5%、List 29.5%、Task 41.2%、Async 41.7%、Custom 68.9%、Dictionary 76.0%、Callback 86.9%。
+- **根因**：业务弱项主成本不在单个 `Tick` 小叶子的 4 条 opcode，而在调用者短循环、虚派发解析、状态机/delegate/container 固定成本和代码布局；小叶子 fastpath 局部改善不足以抵消整体路径风险。
+- **替代**：下一步不要继续堆单 leaf fastpath。做虚派发 inline cache、方法级 loop plan、MoveNext typed lowering、delegate/event invocation-list plan 与 List/Dictionary fused container plan。
+- **状态**：withdrawn，代码已撤回。
+
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
 - **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
