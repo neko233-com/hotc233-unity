@@ -124,6 +124,14 @@
 - **替代**：不要继续靠清理 `printf`/字符串探针追 CE；下一步必须做 transform-time business mechanism plan：typed container IR、delegate invocation plan、state-machine MoveNext typed path。
 - **状态**：withdrawn，提交已 revert。
 
+### WA-019 — CallCommon 绕路到 AOT container invoker（withdrawn）
+
+- **尝试**：在 transform 阶段让 `System.Collections.Generic.List<T>.Clear/get_Count/Add/get_Item`、`Stack<T>.Push/Pop/get_Count`、`Dictionary<int,T>.TryGetValue` 不再生成 `CallCommonNativeInstance_*`，改走已有 `Managed2NativeCallAotContainerInvoker` / Dictionary M2N fast path。
+- **实测**：过滤 10 条 business 口径，List 31.6%→22.2%、Coroutine 31.8%→25.6%、Dictionary 86.8%→81.8%、Custom 60.3%→68.9%、Callback 82.8%→103.7%、Struct 142.5%→126.7%；仍 8/10 低于 CE，整体不满足发布门禁。
+- **根因**：已有 AOT container invoker 仍是 M2N 包装层，只减少/改变 transform 路由，不能消除容器访问的栈 slot、泛型元素 ABI、fallback invoke 和短循环首调用成本；局部 callback 提升不能覆盖 List/Dictionary/Coroutine 回退。
+- **替代**：容器必须走 transform-time typed container IR：直接烘焙 `List<T>`/`Dictionary<TKey,TValue>` 字段 offset、元素 ABI、fallback callsite，并把 `get_Count/Clear/get_Item/Add/TryGetValue` 做成通用容器 IR 或 typed helper；旧 M2N 容器 fast path 只保正确性 fallback。
+- **状态**：withdrawn，代码已撤回；禁止继续把 `CallCommon` 改路到 M2N invoker 当作生产级优化。
+
 ### WA-012 — List/Stack 专用 M2N wrapper 分派（withdrawn）
 
 - **尝试**：在 `GetManaged2NativeMethodPointer` 中把 `List<T>.Clear/get_Count/Add/get_Item` 与 `Stack<T>.get_Count/Push/Pop` 分到专门 wrapper，减少每次 AOT 容器桥接的字符串分派。
