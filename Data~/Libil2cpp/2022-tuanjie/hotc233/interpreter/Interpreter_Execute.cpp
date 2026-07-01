@@ -3787,6 +3787,29 @@ namespace interpreter
 		return const_cast<MethodInfo*>(result);
 	}
 
+	IL2CPP_FORCE_INLINE uint64_t* GetVirtualCallsiteCache(const InterpMethodInfo* imi, uint32_t argIdxs, const MethodInfo* method)
+	{
+		uint32_t totalArgNum = (uint32_t)method->parameters_count + 1u;
+		uint32_t argSlotNum = (totalArgNum + 3u) / 4u;
+		return &imi->resolveDatas[argIdxs + argSlotNum];
+	}
+
+	IL2CPP_FORCE_INLINE MethodInfo* GetVirtualMethodCached(Il2CppObject* obj, const MethodInfo* method, uint64_t* cache)
+	{
+		CHECK_NOT_NULL_THROW(obj);
+		Il2CppClass* objClass = obj->klass;
+		if (cache[0] == (uint64_t)objClass && cache[1] != 0)
+		{
+			return (MethodInfo*)cache[1];
+		}
+		MethodInfo* actualMethod = GET_OBJECT_VIRTUAL_METHOD(obj, method);
+		cache[0] = (uint64_t)objClass;
+		cache[1] = (uint64_t)actualMethod;
+		cache[2] = 0;
+		cache[3] = 0;
+		return actualMethod;
+	}
+
 #define GET_OBJECT_INTERFACE_METHOD(obj, intfKlass, slot) (MethodInfo*)nullptr
 
 	inline void* HiUnbox(Il2CppObject* obj, Il2CppClass* klass)
@@ -10719,9 +10742,10 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint32_t __managed2NativeMethod = *(uint32_t*)(ip + 4);
 					uint32_t __methodInfo = *(uint32_t*)(ip + 8);
 					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
-				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
+					uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
 				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+					uint64_t* _virtualCache = GetVirtualCallsiteCache(imi, __argIdxs, _declaredMethod);
 					bool _hotc233TraceDictionarySetItem = false;
 					if (_hotc233TraceDictionarySetItem)
 					{
@@ -10735,7 +10759,7 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							(uint32_t)_argIdxData[2]);
 						std::fflush(stdout);
 					}
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, _declaredMethod);
+				    MethodInfo* _actualMethod = GetVirtualMethodCached(_objPtr->obj, _declaredMethod, _virtualCache);
 					if (_hotc233TraceDictionarySetItem)
 					{
 						std::printf("[hotc233][CallVirtualProbe] after actual=%s.%s::%s interp=%d method=%p\n",
@@ -10752,7 +10776,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
-				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        InterpMethodInfo* _actualImi = (InterpMethodInfo*)_virtualCache[2];
+						if (!_actualImi)
+						{
+				            _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+							_virtualCache[2] = (uint64_t)_actualImi;
+						}
 				        if (_actualImi)
 				        {
 				            CALL_INTERP_VOID((ip + 16), _actualMethod, _objPtr);
@@ -10764,13 +10793,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				            {
 				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				            }
-				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)_virtualCache[3];
+							if (!_actualM2N)
+							{
+				                _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
 #if HOTC233_UNITY_2021_OR_NEW
-				            if (_actualMethod->has_full_generic_sharing_signature)
-				            {
-				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
-				            }
+				                if (_actualMethod->has_full_generic_sharing_signature)
+				                {
+				                    _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				                }
 #endif
+								_virtualCache[3] = (uint64_t)_actualM2N;
+							}
 				            _actualM2N(_actualMethod, _argIdxData, localVarBase, nullptr);
 				            ip += 16;
 				        }
@@ -10792,13 +10826,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 							std::printf("[hotc233][CallVirtualProbe] before-m2n actual=%p\n", (void*)_actualMethod);
 							std::fflush(stdout);
 						}
-				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)_virtualCache[3];
+						if (!_actualM2N)
+						{
+				            _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
 #if HOTC233_UNITY_2021_OR_NEW
-				        if (_actualMethod->has_full_generic_sharing_signature)
-				        {
-				            _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
-				        }
+				            if (_actualMethod->has_full_generic_sharing_signature)
+				            {
+				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				            }
 #endif
+							_virtualCache[3] = (uint64_t)_actualM2N;
+						}
 				        _actualM2N(_actualMethod, _argIdxData, localVarBase, nullptr);
 						if (_hotc233TraceDictionarySetItem)
 						{
@@ -10819,7 +10858,8 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
 				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, _declaredMethod);
+					uint64_t* _virtualCache = GetVirtualCallsiteCache(imi, __argIdxs, _declaredMethod);
+				    MethodInfo* _actualMethod = GetVirtualMethodCached(_objPtr->obj, _declaredMethod, _virtualCache);
 				    void* _ret = (void*)(localVarBase + __ret);
 					bool _hotc233TraceNullableCompare = _actualMethod && _actualMethod->name && !std::strcmp(_actualMethod->name, "Compare") && _actualMethod->klass && _actualMethod->klass->name && std::strstr(_actualMethod->klass->name, "NullableComparer");
 					if (_hotc233TraceNullableCompare)
@@ -10863,7 +10903,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
-				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        InterpMethodInfo* _actualImi = (InterpMethodInfo*)_virtualCache[2];
+						if (!_actualImi)
+						{
+				            _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+							_virtualCache[2] = (uint64_t)_actualImi;
+						}
 				        if (_actualImi)
 				        {
 				            CALL_INTERP_RET_PREPARED((ip + 16), _actualMethod, _actualImi, _objPtr, _ret);
@@ -10875,13 +10920,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				            {
 				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				            }
-				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)_virtualCache[3];
+							if (!_actualM2N)
+							{
+				                _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
 #if HOTC233_UNITY_2021_OR_NEW
-				            if (_actualMethod->has_full_generic_sharing_signature)
-				            {
-				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
-				            }
+				                if (_actualMethod->has_full_generic_sharing_signature)
+				                {
+				                    _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				                }
 #endif
+								_virtualCache[3] = (uint64_t)_actualM2N;
+							}
 				            _actualM2N(_actualMethod, _argIdxData, localVarBase, _ret);
 				            ip += 16;
 				        }
@@ -10893,13 +10943,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				        {
 				            RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				        }
-				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)_virtualCache[3];
+						if (!_actualM2N)
+						{
+				            _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
 #if HOTC233_UNITY_2021_OR_NEW
-				        if (_actualMethod->has_full_generic_sharing_signature)
-				        {
-				            _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
-				        }
+				            if (_actualMethod->has_full_generic_sharing_signature)
+				            {
+				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				            }
 #endif
+							_virtualCache[3] = (uint64_t)_actualM2N;
+						}
 				        _actualM2N(_actualMethod, _argIdxData, localVarBase, _ret);
 				        ip += 16;
 				    }
@@ -10923,7 +10978,9 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 					uint8_t __retLocationType = *(uint8_t*)(ip + 2);
 				    uint16_t* _argIdxData = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _objPtr = localVarBase + _argIdxData[0];
-				    MethodInfo* _actualMethod = GET_OBJECT_VIRTUAL_METHOD(_objPtr->obj, ((MethodInfo*)imi->resolveDatas[__methodInfo]));
+				    MethodInfo* _declaredMethod = ((MethodInfo*)imi->resolveDatas[__methodInfo]);
+					uint64_t* _virtualCache = GetVirtualCallsiteCache(imi, __argIdxs, _declaredMethod);
+				    MethodInfo* _actualMethod = GetVirtualMethodCached(_objPtr->obj, _declaredMethod, _virtualCache);
 				    void* _ret = (void*)(localVarBase + __ret);
 				    if (IS_CLASS_VALUE_TYPE(_actualMethod->klass))
 				    {
@@ -10931,7 +10988,12 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				    }
 				    if (hotc233::metadata::IsInterpreterImplement(_actualMethod) && hotc233::metadata::IsInterpreterMethod(_actualMethod))
 				    {
-				        InterpMethodInfo* _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+				        InterpMethodInfo* _actualImi = (InterpMethodInfo*)_virtualCache[2];
+						if (!_actualImi)
+						{
+				            _actualImi = _actualMethod->interpData ? (InterpMethodInfo*)_actualMethod->interpData : InterpreterModule::GetInterpMethodInfo(_actualMethod);
+							_virtualCache[2] = (uint64_t)_actualImi;
+						}
 				        if (_actualImi)
 				        {
 				            CALL_INTERP_RET_PREPARED((ip + 24), _actualMethod, _actualImi, _objPtr, _ret);
@@ -10943,13 +11005,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				            {
 				                RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				            }
-				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+				            Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)_virtualCache[3];
+							if (!_actualM2N)
+							{
+				                _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
 #if HOTC233_UNITY_2021_OR_NEW
-				            if (_actualMethod->has_full_generic_sharing_signature)
-				            {
-				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
-				            }
+				                if (_actualMethod->has_full_generic_sharing_signature)
+				                {
+				                    _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				                }
 #endif
+								_virtualCache[3] = (uint64_t)_actualM2N;
+							}
 				            _actualM2N(_actualMethod, _argIdxData, localVarBase, _ret);
 				            ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
 				            ip += 24;
@@ -10962,13 +11029,18 @@ const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 				        {
 				            RaiseAOTGenericMethodNotInstantiatedException(_actualMethod);
 				        }
-				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
+				        Managed2NativeCallMethod _actualM2N = (Managed2NativeCallMethod)_virtualCache[3];
+						if (!_actualM2N)
+						{
+				            _actualM2N = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod];
 #if HOTC233_UNITY_2021_OR_NEW
-				        if (_actualMethod->has_full_generic_sharing_signature)
-				        {
-				            _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
-				        }
+				            if (_actualMethod->has_full_generic_sharing_signature)
+				            {
+				                _actualM2N = InterpreterModule::GetManaged2NativeMethodPointer(_actualMethod, false);
+				            }
 #endif
+							_virtualCache[3] = (uint64_t)_actualM2N;
+						}
 				        _actualM2N(_actualMethod, _argIdxData, localVarBase, _ret);
 				        ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
 				        ip += 24;
